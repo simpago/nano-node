@@ -148,10 +148,6 @@ target_link_libraries(
   Boost::property_tree
   Boost::stacktrace)
 
-if(NANO_STACKTRACE_BACKTRACE)
-  target_link_libraries(nano_lib backtrace)
-endif()
-
 target_compile_definitions(
   nano_lib
   PRIVATE -DMAJOR_VERSION_STRING=${CPACK_PACKAGE_VERSION_MAJOR}

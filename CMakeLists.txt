@@ -122,18 +122,6 @@ set(NANO_ROCKSDB_TOOLS
     OFF
     CACHE BOOL "")
 
-option(NANO_STACKTRACE_BACKTRACE
-       "Use BOOST_STACKTRACE_USE_BACKTRACE in stacktraces, for POSIX" OFF)
-
-if(NANO_STACKTRACE_BACKTRACE)
-  add_definitions(-DNANO_STACKTRACE_BACKTRACE)
-  add_definitions(-DBOOST_STACKTRACE_USE_BACKTRACE)
-  if(NANO_BACKTRACE_INCLUDE)
-    add_definitions(
-      -DBOOST_STACKTRACE_BACKTRACE_INCLUDE_FILE=${NANO_BACKTRACE_INCLUDE})
-  endif()
-endif()
-
 # Enable NANO_TRACING by default in Debug builds
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   option(NANO_TRACING "Enable trace logging" ON)
@@ -497,6 +485,17 @@ endforeach()
 include_directories(${BOOST_LIBRARY_INCLUDES})
 add_library(Boost::stacktrace ALIAS boost_stacktrace_basic)
 add_definitions(-DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
+
+if(WIN32)
+  # Windows-specific configuration
+  target_link_libraries(boost_stacktrace_basic PRIVATE dbghelp)
+else()
+  # Unix-like systems (Linux, macOS)
+  target_link_libraries(boost_stacktrace_basic PRIVATE dl)
+
+  # Add -rdynamic linker flag for better symbol resolution
+  target_link_options(boost_stacktrace_basic PRIVATE -rdynamic)
+endif()
 
 # Workaround for missing reference errata in the boost property_tree module
 target_link_libraries(boost_property_tree INTERFACE Boost::any)
