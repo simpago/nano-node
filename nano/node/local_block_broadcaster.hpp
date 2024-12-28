@@ -53,7 +53,7 @@ public:
 class local_block_broadcaster final
 {
 public:
-	local_block_broadcaster (local_block_broadcaster_config const &, nano::node &, nano::block_processor &, nano::network &, nano::confirming_set &, nano::stats &, nano::logger &, bool enabled = false);
+	local_block_broadcaster (local_block_broadcaster_config const &, nano::node &, nano::ledger_notifications &, nano::network &, nano::confirming_set &, nano::stats &, nano::logger &, bool enabled = false);
 	~local_block_broadcaster ();
 
 	void start ();
@@ -73,7 +73,7 @@ private:
 private: // Dependencies
 	local_block_broadcaster_config const & config;
 	nano::node & node;
-	nano::block_processor & block_processor;
+	nano::ledger_notifications & ledger_notifications;
 	nano::network & network;
 	nano::confirming_set & confirming_set;
 	nano::stats & stats;

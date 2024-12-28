@@ -2,18 +2,19 @@
 #include <nano/node/active_elections.hpp>
 #include <nano/node/bucketing.hpp>
 #include <nano/node/election.hpp>
+#include <nano/node/ledger_notifications.hpp>
 #include <nano/node/node.hpp>
 #include <nano/node/scheduler/priority.hpp>
 #include <nano/secure/ledger.hpp>
 #include <nano/secure/ledger_set_any.hpp>
 #include <nano/secure/ledger_set_confirmed.hpp>
 
-nano::scheduler::priority::priority (nano::node_config & node_config, nano::node & node_a, nano::ledger & ledger_a, nano::bucketing & bucketing_a, nano::block_processor & block_processor_a, nano::active_elections & active_a, nano::confirming_set & confirming_set_a, nano::stats & stats_a, nano::logger & logger_a) :
+nano::scheduler::priority::priority (nano::node_config & node_config, nano::node & node_a, nano::ledger & ledger_a, nano::ledger_notifications & ledger_notifications_a, nano::bucketing & bucketing_a, nano::active_elections & active_a, nano::confirming_set & confirming_set_a, nano::stats & stats_a, nano::logger & logger_a) :
 	config{ node_config.priority_scheduler },
 	node{ node_a },
 	ledger{ ledger_a },
+	ledger_notifications{ ledger_notifications_a },
 	bucketing{ bucketing_a },
-	block_processor{ block_processor_a },
 	active{ active_a },
 	confirming_set{ confirming_set_a },
 	stats{ stats_a },
@@ -25,7 +26,7 @@ nano::scheduler::priority::priority (nano::node_config & node_config, nano::node
 	}
 
 	// Activate accounts with fresh blocks
-	block_processor.batch_processed.add ([this] (auto const & batch) {
+	ledger_notifications.blocks_processed.add ([this] (auto const & batch) {
 		auto transaction = ledger.tx_begin_read ();
 		for (auto const & [result, context] : batch)
 		{

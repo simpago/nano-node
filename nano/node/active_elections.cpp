@@ -7,6 +7,7 @@
 #include <nano/node/confirmation_solicitor.hpp>
 #include <nano/node/confirming_set.hpp>
 #include <nano/node/election.hpp>
+#include <nano/node/ledger_notifications.hpp>
 #include <nano/node/node.hpp>
 #include <nano/node/online_reps.hpp>
 #include <nano/node/repcrawler.hpp>
@@ -21,11 +22,11 @@
 
 using namespace std::chrono;
 
-nano::active_elections::active_elections (nano::node & node_a, nano::confirming_set & confirming_set_a, nano::block_processor & block_processor_a) :
+nano::active_elections::active_elections (nano::node & node_a, nano::ledger_notifications & ledger_notifications_a, nano::confirming_set & confirming_set_a) :
 	config{ node_a.config.active_elections },
 	node{ node_a },
+	ledger_notifications{ ledger_notifications_a },
 	confirming_set{ confirming_set_a },
-	block_processor{ block_processor_a },
 	recently_confirmed{ config.confirmation_cache },
 	recently_cemented{ config.confirmation_history_size }
 {
@@ -55,7 +56,7 @@ nano::active_elections::active_elections (nano::node & node_a, nano::confirming_
 	});
 
 	// Notify elections about alternative (forked) blocks
-	block_processor.batch_processed.add ([this] (auto const & batch) {
+	ledger_notifications.blocks_processed.add ([this] (auto const & batch) {
 		for (auto const & [result, context] : batch)
 		{
 			if (result == nano::block_status::fork)
@@ -66,7 +67,7 @@ nano::active_elections::active_elections (nano::node & node_a, nano::confirming_
 	});
 
 	// Stop all rolled back active transactions except initial
-	block_processor.rolled_back.add ([this] (auto const & blocks, auto const & rollback_root) {
+	ledger_notifications.blocks_rolled_back.add ([this] (auto const & blocks, auto const & rollback_root) {
 		for (auto const & block : blocks)
 		{
 			if (block->qualified_root () != rollback_root)

@@ -4,6 +4,7 @@
 #include <nano/node/block_processor.hpp>
 #include <nano/node/bounded_backlog.hpp>
 #include <nano/node/confirming_set.hpp>
+#include <nano/node/ledger_notifications.hpp>
 #include <nano/node/node.hpp>
 #include <nano/node/scheduler/component.hpp>
 #include <nano/secure/common.hpp>
@@ -12,18 +13,17 @@
 #include <nano/secure/ledger_set_confirmed.hpp>
 #include <nano/secure/transaction.hpp>
 
-nano::bounded_backlog::bounded_backlog (nano::node_config const & config_a, nano::node & node_a, nano::ledger & ledger_a, nano::bucketing & bucketing_a, nano::backlog_scan & backlog_scan_a, nano::block_processor & block_processor_a, nano::confirming_set & confirming_set_a, nano::stats & stats_a, nano::logger & logger_a) :
+nano::bounded_backlog::bounded_backlog (nano::node_config const & config_a, nano::node & node_a, nano::ledger & ledger_a, nano::ledger_notifications & ledger_notifications_a, nano::bucketing & bucketing_a, nano::backlog_scan & backlog_scan_a, nano::block_processor & block_processor_a, nano::confirming_set & confirming_set_a, nano::stats & stats_a, nano::logger & logger_a) :
 	config{ config_a },
 	node{ node_a },
 	ledger{ ledger_a },
+	ledger_notifications{ ledger_notifications_a },
 	bucketing{ bucketing_a },
 	backlog_scan{ backlog_scan_a },
-	block_processor{ block_processor_a },
 	confirming_set{ confirming_set_a },
 	stats{ stats_a },
 	logger{ logger_a },
-	scan_limiter{ config.bounded_backlog.scan_rate },
-	workers{ 1, nano::thread_role::name::bounded_backlog_notifications }
+	scan_limiter{ config.bounded_backlog.scan_rate }
 {
 	// Activate accounts with unconfirmed blocks
 	backlog_scan.batch_activated.add ([this] (auto const & batch) {
@@ -47,7 +47,7 @@ nano::bounded_backlog::bounded_backlog (nano::node_config const & config_a, nano
 	});
 
 	// Track unconfirmed blocks
-	block_processor.batch_processed.add ([this] (auto const & batch) {
+	ledger_notifications.blocks_processed.add ([this] (auto const & batch) {
 		auto transaction = ledger.tx_begin_read ();
 		for (auto const & [result, context] : batch)
 		{
@@ -60,7 +60,7 @@ nano::bounded_backlog::bounded_backlog (nano::node_config const & config_a, nano
 	});
 
 	// Remove rolled back blocks from the backlog
-	block_processor.rolled_back.add ([this] (auto const & blocks, auto const & rollback_root) {
+	ledger_notifications.blocks_rolled_back.add ([this] (auto const & blocks, auto const & rollback_root) {
 		nano::lock_guard<nano::mutex> guard{ mutex };
 		for (auto const & block : blocks)
 		{
@@ -83,7 +83,6 @@ nano::bounded_backlog::~bounded_backlog ()
 	// Thread must be stopped before destruction
 	debug_assert (!thread.joinable ());
 	debug_assert (!scan_thread.joinable ());
-	debug_assert (!workers.alive ());
 }
 
 void nano::bounded_backlog::start ()
@@ -94,8 +93,6 @@ void nano::bounded_backlog::start ()
 	{
 		return;
 	}
-
-	workers.start ();
 
 	thread = std::thread{ [this] () {
 		nano::thread_role::set (nano::thread_role::name::bounded_backlog);
@@ -123,7 +120,6 @@ void nano::bounded_backlog::stop ()
 	{
 		scan_thread.join ();
 	}
-	workers.stop ();
 }
 
 size_t nano::bounded_backlog::index_size () const
@@ -206,16 +202,14 @@ void nano::bounded_backlog::run ()
 			return;
 		}
 
+		lock.unlock ();
+
 		// Wait until all notification about the previous rollbacks are processed
-		while (workers.queued_tasks () >= config.bounded_backlog.max_queued_notifications)
-		{
+		ledger_notifications.wait ([this] {
 			stats.inc (nano::stat::type::bounded_backlog, nano::stat::detail::cooldown);
-			condition.wait_for (lock, 100ms, [this] { return stopped.load (); });
-			if (stopped)
-			{
-				return;
-			}
-		}
+		});
+
+		lock.lock ();
 
 		stats.inc (nano::stat::type::bounded_backlog, nano::stat::detail::loop);
 
@@ -310,9 +304,8 @@ std::deque<nano::block_hash> nano::bounded_backlog::perform_rollbacks (std::dequ
 			}
 
 			// Notify observers of the rolled back blocks on a background thread, avoid dispatching notifications when holding ledger write transaction
-			workers.post ([this, rollback_list = std::move (rollback_list), root = block->qualified_root ()] {
-				// TODO: Calling block_processor's event here is not ideal, but duplicating these events is even worse
-				block_processor.rolled_back.notify (rollback_list, root);
+			ledger_notifications.notify_rolled_back (transaction, std::move (rollback_list), block->qualified_root (), [this] {
+				stats.inc (nano::stat::type::bounded_backlog, nano::stat::detail::notify_rolled_back);
 			});
 
 			// Return early if we reached the maximum number of rollbacks
@@ -420,7 +413,6 @@ nano::container_info nano::bounded_backlog::container_info () const
 	nano::lock_guard<nano::mutex> guard{ mutex };
 	nano::container_info info;
 	info.put ("backlog", index.size ());
-	info.put ("notifications", workers.queued_tasks ());
 	info.add ("index", index.container_info ());
 	return info;
 }
@@ -547,7 +539,6 @@ nano::error nano::bounded_backlog_config::serialize (nano::tomlconfig & toml) co
 {
 	toml.put ("enable", enable, "Enable the bounded backlog. \ntype:bool");
 	toml.put ("batch_size", batch_size, "Maximum number of blocks to rollback per iteration. \ntype:uint64");
-	toml.put ("max_queued_notifications", max_queued_notifications, "Maximum number of queued background tasks before cooldown. \ntype:uint64");
 	toml.put ("scan_rate", scan_rate, "Rate limit for refreshing the backlog index. \ntype:uint64");
 
 	return toml.get_error ();
@@ -557,7 +548,6 @@ nano::error nano::bounded_backlog_config::deserialize (nano::tomlconfig & toml)
 {
 	toml.get ("enable", enable);
 	toml.get ("batch_size", batch_size);
-	toml.get ("max_queued_notifications", max_queued_notifications);
 	toml.get ("scan_rate", scan_rate);
 
 	return toml.get_error ();

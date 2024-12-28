@@ -132,6 +132,8 @@ public:
 	nano::wallets & wallets;
 	std::unique_ptr<nano::ledger> ledger_impl;
 	nano::ledger & ledger;
+	std::unique_ptr<nano::ledger_notifications> ledger_notifications_impl;
+	nano::ledger_notifications & ledger_notifications;
 	std::unique_ptr<nano::bandwidth_limiter> outbound_limiter_impl;
 	nano::bandwidth_limiter & outbound_limiter;
 	std::unique_ptr<nano::message_processor> message_processor_impl;

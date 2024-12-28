@@ -88,6 +88,8 @@ add_library(
   ipc/ipc_server.cpp
   json_handler.hpp
   json_handler.cpp
+  ledger_notifications.hpp
+  ledger_notifications.cpp
   local_block_broadcaster.cpp
   local_block_broadcaster.hpp
   local_vote_history.cpp

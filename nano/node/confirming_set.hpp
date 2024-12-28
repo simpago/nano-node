@@ -52,7 +52,7 @@ class confirming_set final
 	friend class confirmation_height_pruned_source_Test;
 
 public:
-	confirming_set (confirming_set_config const &, nano::ledger &, nano::block_processor &, nano::stats &, nano::logger &);
+	confirming_set (confirming_set_config const &, nano::ledger &, nano::ledger_notifications &, nano::stats &, nano::logger &);
 	~confirming_set ();
 
 	void start ();
@@ -83,7 +83,7 @@ public: // Events
 private: // Dependencies
 	confirming_set_config const & config;
 	nano::ledger & ledger;
-	nano::block_processor & block_processor;
+	nano::ledger_notifications & ledger_notifications;
 	nano::stats & stats;
 	nano::logger & logger;
 

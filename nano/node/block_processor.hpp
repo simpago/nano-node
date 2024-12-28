@@ -25,6 +25,8 @@ public:
 	nano::error serialize (nano::tomlconfig & toml) const;
 
 public:
+	size_t batch_size{ 256 };
+
 	// Maximum number of blocks to queue from network peers
 	size_t max_peer_queue{ 128 };
 	// Maximum number of blocks to queue from system components (local RPC, bootstrap)
@@ -35,9 +37,6 @@ public:
 	size_t priority_bootstrap{ 8 };
 	size_t priority_local{ 16 };
 	size_t priority_system{ 32 };
-
-	size_t batch_size{ 256 };
-	size_t max_queued_notifications{ 8 };
 };
 
 /**
@@ -47,7 +46,7 @@ public:
 class block_processor final
 {
 public:
-	block_processor (nano::node_config const &, nano::ledger &, nano::unchecked_map &, nano::stats &, nano::logger &);
+	block_processor (nano::node_config const &, nano::ledger &, nano::ledger_notifications &, nano::unchecked_map &, nano::stats &, nano::logger &);
 	~block_processor ();
 
 	void start ();
@@ -63,20 +62,11 @@ public:
 
 	std::atomic<bool> flushing{ false };
 
-public: // Events
-	// All processed blocks including forks, rejected etc
-	using processed_batch_t = std::deque<std::pair<nano::block_status, nano::block_context>>;
-	using processed_batch_event_t = nano::observer_set<processed_batch_t>;
-	processed_batch_event_t batch_processed;
-
-	// Rolled back blocks <rolled back blocks, root of rollback>
-	using rolled_back_event_t = nano::observer_set<std::deque<std::shared_ptr<nano::block>>, nano::qualified_root>;
-	rolled_back_event_t rolled_back;
-
 private: // Dependencies
 	block_processor_config const & config;
 	nano::network_params const & network_params;
 	nano::ledger & ledger;
+	nano::ledger_notifications & ledger_notifications;
 	nano::unchecked_map & unchecked;
 	nano::stats & stats;
 	nano::logger & logger;
@@ -84,9 +74,9 @@ private: // Dependencies
 private:
 	void run ();
 	// Roll back block in the ledger that conflicts with 'block'
-	void rollback_competitor (secure::write_transaction const &, nano::block const & block);
+	void rollback_competitor (secure::write_transaction &, nano::block const & block);
 	nano::block_status process_one (secure::write_transaction const &, nano::block_context const &, bool forced = false);
-	processed_batch_t process_batch (nano::unique_lock<nano::mutex> &);
+	void process_batch (nano::unique_lock<nano::mutex> &);
 	std::deque<nano::block_context> next_batch (size_t max_count);
 	nano::block_context next ();
 	bool add_impl (nano::block_context, std::shared_ptr<nano::transport::channel> const & channel = nullptr);
@@ -98,7 +88,5 @@ private:
 	nano::condition_variable condition;
 	mutable nano::mutex mutex{ mutex_identifier (mutexes::block_processor) };
 	std::thread thread;
-
-	nano::thread_pool workers;
 };
 }

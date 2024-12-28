@@ -6,6 +6,7 @@
 #include <nano/node/block_processor.hpp>
 #include <nano/node/bootstrap/bootstrap_service.hpp>
 #include <nano/node/bootstrap/crawlers.hpp>
+#include <nano/node/ledger_notifications.hpp>
 #include <nano/node/network.hpp>
 #include <nano/node/nodeconfig.hpp>
 #include <nano/node/transport/transport.hpp>
@@ -18,11 +19,13 @@
 
 using namespace std::chrono_literals;
 
-nano::bootstrap_service::bootstrap_service (nano::node_config const & node_config_a, nano::block_processor & block_processor_a, nano::ledger & ledger_a, nano::network & network_a, nano::stats & stat_a, nano::logger & logger_a) :
+nano::bootstrap_service::bootstrap_service (nano::node_config const & node_config_a, nano::ledger & ledger_a, nano::ledger_notifications & ledger_notifications_a,
+nano::block_processor & block_processor_a, nano::network & network_a, nano::stats & stat_a, nano::logger & logger_a) :
 	config{ node_config_a.bootstrap },
 	network_constants{ node_config_a.network_params.network },
-	block_processor{ block_processor_a },
 	ledger{ ledger_a },
+	ledger_notifications{ ledger_notifications_a },
+	block_processor{ block_processor_a },
 	network{ network_a },
 	stats{ stat_a },
 	logger{ logger_a },
@@ -36,7 +39,8 @@ nano::bootstrap_service::bootstrap_service (nano::node_config const & node_confi
 	frontiers_limiter{ config.frontier_rate_limit },
 	workers{ 1, nano::thread_role::name::bootstrap_worker }
 {
-	block_processor.batch_processed.add ([this] (auto const & batch) {
+	// Inspect all processed blocks
+	ledger_notifications.blocks_processed.add ([this] (auto const & batch) {
 		{
 			nano::lock_guard<nano::mutex> lock{ mutex };
 
@@ -51,7 +55,7 @@ nano::bootstrap_service::bootstrap_service (nano::node_config const & node_confi
 	});
 
 	// Unblock rolled back accounts as the dependency is no longer valid
-	block_processor.rolled_back.add ([this] (auto const & blocks, auto const & rollback_root) {
+	ledger_notifications.blocks_rolled_back.add ([this] (auto const & blocks, auto const & rollback_root) {
 		nano::lock_guard<nano::mutex> lock{ mutex };
 		for (auto const & block : blocks)
 		{

@@ -325,7 +325,6 @@ TEST (toml_config, daemon_config_deserialize_defaults)
 
 	ASSERT_EQ (conf.node.bounded_backlog.enable, defaults.node.bounded_backlog.enable);
 	ASSERT_EQ (conf.node.bounded_backlog.batch_size, defaults.node.bounded_backlog.batch_size);
-	ASSERT_EQ (conf.node.bounded_backlog.max_queued_notifications, defaults.node.bounded_backlog.max_queued_notifications);
 	ASSERT_EQ (conf.node.bounded_backlog.scan_rate, defaults.node.bounded_backlog.scan_rate);
 
 	ASSERT_EQ (conf.node.websocket_config.enabled, defaults.node.websocket_config.enabled);
@@ -743,7 +742,6 @@ TEST (toml_config, daemon_config_deserialize_no_defaults)
 
 	ASSERT_NE (conf.node.bounded_backlog.enable, defaults.node.bounded_backlog.enable);
 	ASSERT_NE (conf.node.bounded_backlog.batch_size, defaults.node.bounded_backlog.batch_size);
-	ASSERT_NE (conf.node.bounded_backlog.max_queued_notifications, defaults.node.bounded_backlog.max_queued_notifications);
 	ASSERT_NE (conf.node.bounded_backlog.scan_rate, defaults.node.bounded_backlog.scan_rate);
 
 	ASSERT_NE (conf.node.websocket_config.enabled, defaults.node.websocket_config.enabled);

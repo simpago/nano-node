@@ -6,6 +6,7 @@
 #include <nano/node/active_elections.hpp>
 #include <nano/node/confirming_set.hpp>
 #include <nano/node/election.hpp>
+#include <nano/node/ledger_notifications.hpp>
 #include <nano/node/make_store.hpp>
 #include <nano/node/online_reps.hpp>
 #include <nano/node/scheduler/component.hpp>
@@ -1144,9 +1145,9 @@ TEST (confirmation_height, many_accounts_send_receive_self_no_elections)
 
 	nano::node_config node_config;
 	nano::unchecked_map unchecked{ 0, stats, false };
-	nano::block_processor block_processor{ node_config, ledger, unchecked, stats, logger };
+	nano::ledger_notifications ledger_notifications{ node_config, stats, logger };
 	nano::confirming_set_config confirming_set_config{};
-	nano::confirming_set confirming_set{ confirming_set_config, ledger, block_processor, stats, logger };
+	nano::confirming_set confirming_set{ confirming_set_config, ledger, ledger_notifications, stats, logger };
 
 	auto const num_accounts = 100000;
 

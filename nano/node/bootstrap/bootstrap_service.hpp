@@ -30,7 +30,7 @@ namespace nano
 class bootstrap_service
 {
 public:
-	bootstrap_service (nano::node_config const &, nano::block_processor &, nano::ledger &, nano::network &, nano::stats &, nano::logger &);
+	bootstrap_service (nano::node_config const &, nano::ledger &, nano::ledger_notifications &, nano::block_processor &, nano::network &, nano::stats &, nano::logger &);
 	~bootstrap_service ();
 
 	void start ();
@@ -55,8 +55,9 @@ public:
 private: // Dependencies
 	bootstrap_config const & config;
 	nano::network_constants const & network_constants;
-	nano::block_processor & block_processor;
 	nano::ledger & ledger;
+	nano::ledger_notifications & ledger_notifications;
+	nano::block_processor & block_processor;
 	nano::network & network;
 	nano::stats & stats;
 	nano::logger & logger;

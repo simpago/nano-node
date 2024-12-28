@@ -3,6 +3,7 @@
 #include <nano/lib/utility.hpp>
 #include <nano/node/block_processor.hpp>
 #include <nano/node/confirming_set.hpp>
+#include <nano/node/ledger_notifications.hpp>
 #include <nano/node/local_block_broadcaster.hpp>
 #include <nano/node/network.hpp>
 #include <nano/node/node.hpp>
@@ -10,10 +11,10 @@
 
 #include <boost/range/iterator_range.hpp>
 
-nano::local_block_broadcaster::local_block_broadcaster (local_block_broadcaster_config const & config_a, nano::node & node_a, nano::block_processor & block_processor_a, nano::network & network_a, nano::confirming_set & confirming_set_a, nano::stats & stats_a, nano::logger & logger_a, bool enabled_a) :
+nano::local_block_broadcaster::local_block_broadcaster (local_block_broadcaster_config const & config_a, nano::node & node_a, nano::ledger_notifications & ledger_notifications_a, nano::network & network_a, nano::confirming_set & confirming_set_a, nano::stats & stats_a, nano::logger & logger_a, bool enabled_a) :
 	config{ config_a },
 	node{ node_a },
-	block_processor{ block_processor_a },
+	ledger_notifications{ ledger_notifications_a },
 	network{ network_a },
 	confirming_set{ confirming_set_a },
 	stats{ stats_a },
@@ -26,7 +27,7 @@ nano::local_block_broadcaster::local_block_broadcaster (local_block_broadcaster_
 		return;
 	}
 
-	block_processor.batch_processed.add ([this] (auto const & batch) {
+	ledger_notifications.blocks_processed.add ([this] (auto const & batch) {
 		bool should_notify = false;
 		for (auto const & [result, context] : batch)
 		{
@@ -56,7 +57,7 @@ nano::local_block_broadcaster::local_block_broadcaster (local_block_broadcaster_
 		}
 	});
 
-	block_processor.rolled_back.add ([this] (auto const & blocks, auto const & rollback_root) {
+	ledger_notifications.blocks_rolled_back.add ([this] (auto const & blocks, auto const & rollback_root) {
 		nano::lock_guard<nano::mutex> guard{ mutex };
 		for (auto const & block : blocks)
 		{

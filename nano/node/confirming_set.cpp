@@ -4,16 +4,17 @@
 #include <nano/lib/thread_roles.hpp>
 #include <nano/node/block_processor.hpp>
 #include <nano/node/confirming_set.hpp>
+#include <nano/node/ledger_notifications.hpp>
 #include <nano/secure/ledger.hpp>
 #include <nano/secure/ledger_set_any.hpp>
 #include <nano/secure/ledger_set_confirmed.hpp>
 #include <nano/store/component.hpp>
 #include <nano/store/write_queue.hpp>
 
-nano::confirming_set::confirming_set (confirming_set_config const & config_a, nano::ledger & ledger_a, nano::block_processor & block_processor_a, nano::stats & stats_a, nano::logger & logger_a) :
+nano::confirming_set::confirming_set (confirming_set_config const & config_a, nano::ledger & ledger_a, nano::ledger_notifications & ledger_notifications_a, nano::stats & stats_a, nano::logger & logger_a) :
 	config{ config_a },
 	ledger{ ledger_a },
-	block_processor{ block_processor_a },
+	ledger_notifications{ ledger_notifications_a },
 	stats{ stats_a },
 	logger{ logger_a },
 	workers{ 1, nano::thread_role::name::confirmation_height_notifications }
@@ -26,7 +27,7 @@ nano::confirming_set::confirming_set (confirming_set_config const & config_a, na
 	});
 
 	// Requeue blocks that failed to cement immediately due to missing ledger blocks
-	block_processor.batch_processed.add ([this] (auto const & batch) {
+	ledger_notifications.blocks_processed.add ([this] (auto const & batch) {
 		bool should_notify = false;
 		{
 			std::lock_guard lock{ mutex };
