@@ -485,26 +485,32 @@ void nano::test::system::generate_activity (nano::node & node_a, std::vector<nan
 	auto what (random_pool::generate_byte ());
 	if (what < 0x1)
 	{
+		logger.debug (nano::log::type::test, "Random activity: rollback");
 		generate_rollback (node_a, accounts_a);
 	}
 	else if (what < 0x10)
 	{
+		logger.debug (nano::log::type::test, "Random activity: change known");
 		generate_change_known (node_a, accounts_a);
 	}
 	else if (what < 0x20)
 	{
+		logger.debug (nano::log::type::test, "Random activity: change unknown");
 		generate_change_unknown (node_a, accounts_a);
 	}
 	else if (what < 0x70)
 	{
+		logger.debug (nano::log::type::test, "Random activity: receive");
 		generate_receive (node_a);
 	}
 	else if (what < 0xc0)
 	{
+		logger.debug (nano::log::type::test, "Random activity: send existing");
 		generate_send_existing (node_a, accounts_a);
 	}
 	else
 	{
+		logger.debug (nano::log::type::test, "Random activity: send new");
 		generate_send_new (node_a, accounts_a);
 	}
 }
