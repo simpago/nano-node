@@ -50,6 +50,8 @@ void nano::pruning::ongoing_ledger_pruning ()
 
 void nano::pruning::ledger_pruning (uint64_t const batch_size_a, bool bootstrap_weight_reached_a)
 {
+	stats.inc (nano::stat::type::pruning, nano::stat::detail::ledger_pruning);
+
 	uint64_t const max_depth (config.max_pruning_depth != 0 ? config.max_pruning_depth : std::numeric_limits<uint64_t>::max ());
 	uint64_t const cutoff_time (bootstrap_weight_reached_a ? nano::seconds_since_epoch () - config.max_pruning_age.count () : std::numeric_limits<uint64_t>::max ());
 	uint64_t pruned_count (0);
@@ -62,6 +64,7 @@ void nano::pruning::ledger_pruning (uint64_t const batch_size_a, bool bootstrap_
 		// Search pruning targets
 		while (pruning_targets.size () < batch_size_a && !target_finished && !stopped)
 		{
+			stats.inc (nano::stat::type::pruning, nano::stat::detail::collect_targets);
 			target_finished = collect_ledger_pruning_targets (pruning_targets, last_account, batch_size_a * 2, max_depth, cutoff_time);
 		}
 		// Pruning write operation
@@ -71,10 +74,14 @@ void nano::pruning::ledger_pruning (uint64_t const batch_size_a, bool bootstrap_
 			auto write_transaction = ledger.tx_begin_write (nano::store::writer::pruning);
 			while (!pruning_targets.empty () && transaction_write_count < batch_size_a && !stopped)
 			{
+				stats.inc (nano::stat::type::pruning, nano::stat::detail::pruning_target);
+
 				auto const & pruning_hash (pruning_targets.front ());
 				auto account_pruned_count (ledger.pruning_action (write_transaction, pruning_hash, batch_size_a));
 				transaction_write_count += account_pruned_count;
 				pruning_targets.pop_front ();
+
+				stats.add (nano::stat::type::pruning, nano::stat::detail::pruned_count, account_pruned_count);
 			}
 			pruned_count += transaction_write_count;
 
