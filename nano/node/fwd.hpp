@@ -29,6 +29,7 @@ class node_config;
 class node_flags;
 class node_observers;
 class online_reps;
+class pruning;
 class recently_cemented_cache;
 class recently_confirmed_cache;
 class rep_crawler;

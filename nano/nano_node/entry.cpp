@@ -16,6 +16,7 @@
 #include <nano/node/json_handler.hpp>
 #include <nano/node/node.hpp>
 #include <nano/node/online_reps.hpp>
+#include <nano/node/pruning.hpp>
 #include <nano/node/transport/inproc.hpp>
 #include <nano/secure/ledger.hpp>
 #include <nano/secure/ledger_set_any.hpp>
@@ -1923,7 +1924,7 @@ int main (int argc, char * const * argv)
 			nano::update_flags (node_flags, vm);
 			nano::inactive_node inactive_node (data_path, node_flags);
 			auto node = inactive_node.node;
-			node->ledger_pruning (node_flags.block_processor_batch_size != 0 ? node_flags.block_processor_batch_size : 16 * 1024, true);
+			node->pruning.ledger_pruning (node_flags.block_processor_batch_size != 0 ? node_flags.block_processor_batch_size : 16 * 1024, true);
 		}
 		else if (vm.count ("debug_stacktrace"))
 		{

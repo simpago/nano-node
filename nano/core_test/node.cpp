@@ -10,6 +10,7 @@
 #include <nano/node/make_store.hpp>
 #include <nano/node/online_reps.hpp>
 #include <nano/node/portmapping.hpp>
+#include <nano/node/pruning.hpp>
 #include <nano/node/scheduler/component.hpp>
 #include <nano/node/scheduler/manual.hpp>
 #include <nano/node/scheduler/priority.hpp>
@@ -3456,13 +3457,13 @@ TEST (node, DISABLED_pruning_age)
 	ASSERT_EQ (3, node1.ledger.block_count ());
 
 	// Pruning with default age 1 day
-	node1.ledger_pruning (1, true);
+	node1.pruning.ledger_pruning (1, true);
 	ASSERT_EQ (0, node1.ledger.pruned_count ());
 	ASSERT_EQ (3, node1.ledger.block_count ());
 
 	// Pruning with max age 0
 	node1.config.max_pruning_age = std::chrono::seconds{ 0 };
-	node1.ledger_pruning (1, true);
+	node1.pruning.ledger_pruning (1, true);
 	ASSERT_EQ (1, node1.ledger.pruned_count ());
 	ASSERT_EQ (3, node1.ledger.block_count ());
 
@@ -3517,13 +3518,13 @@ TEST (node, DISABLED_pruning_depth)
 	ASSERT_EQ (3, node1.ledger.block_count ());
 
 	// Pruning with default depth (unlimited)
-	node1.ledger_pruning (1, true);
+	node1.pruning.ledger_pruning (1, true);
 	ASSERT_EQ (0, node1.ledger.pruned_count ());
 	ASSERT_EQ (3, node1.ledger.block_count ());
 
 	// Pruning with max depth 1
 	node1.config.max_pruning_depth = 1;
-	node1.ledger_pruning (1, true);
+	node1.pruning.ledger_pruning (1, true);
 	ASSERT_EQ (1, node1.ledger.pruned_count ());
 	ASSERT_EQ (3, node1.ledger.block_count ());
 
