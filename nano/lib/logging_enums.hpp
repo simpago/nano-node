@@ -59,7 +59,7 @@ enum class type
 	tcp_server,
 	tcp_listener,
 	tcp_channels,
-	prunning,
+	pruning,
 	conf_processor_bounded,
 	conf_processor_unbounded,
 	distributed_work,

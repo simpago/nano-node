@@ -78,11 +78,11 @@ void nano::pruning::ledger_pruning (uint64_t const batch_size_a, bool bootstrap_
 			}
 			pruned_count += transaction_write_count;
 
-			logger.debug (nano::log::type::prunning, "Pruned blocks: {}", pruned_count);
+			logger.debug (nano::log::type::pruning, "Pruned blocks: {}", pruned_count);
 		}
 	}
 
-	logger.debug (nano::log::type::prunning, "Total recently pruned block count: {}", pruned_count);
+	logger.debug (nano::log::type::pruning, "Total recently pruned block count: {}", pruned_count);
 }
 
 bool nano::pruning::collect_ledger_pruning_targets (std::deque<nano::block_hash> & pruning_targets_a, nano::account & last_account_a, uint64_t const batch_read_size_a, uint64_t const max_depth_a, uint64_t const cutoff_time_a)
