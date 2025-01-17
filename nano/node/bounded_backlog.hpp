@@ -101,14 +101,13 @@ public:
 public:
 	bool enable{ true };
 	size_t batch_size{ 32 };
-	size_t max_queued_notifications{ 128 };
 	size_t scan_rate{ 64 };
 };
 
 class bounded_backlog
 {
 public:
-	bounded_backlog (nano::node_config const &, nano::node &, nano::ledger &, nano::bucketing &, nano::backlog_scan &, nano::block_processor &, nano::confirming_set &, nano::stats &, nano::logger &);
+	bounded_backlog (nano::node_config const &, nano::node &, nano::ledger &, nano::ledger_notifications &, nano::bucketing &, nano::backlog_scan &, nano::block_processor &, nano::confirming_set &, nano::stats &, nano::logger &);
 	~bounded_backlog ();
 
 	void start ();
@@ -124,9 +123,9 @@ private: // Dependencies
 	nano::node_config const & config;
 	nano::node & node;
 	nano::ledger & ledger;
+	nano::ledger_notifications & ledger_notifications;
 	nano::bucketing & bucketing;
 	nano::backlog_scan & backlog_scan;
-	nano::block_processor & block_processor;
 	nano::confirming_set & confirming_set;
 	nano::stats & stats;
 	nano::logger & logger;
@@ -155,7 +154,5 @@ private:
 	mutable nano::mutex mutex;
 	std::thread thread;
 	std::thread scan_thread;
-
-	nano::thread_pool workers;
 };
 }

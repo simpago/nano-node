@@ -20,8 +20,11 @@ add_library(
   backlog_scan.cpp
   bandwidth_limiter.hpp
   bandwidth_limiter.cpp
+  block_context.hpp
   block_processor.hpp
   block_processor.cpp
+  block_source.hpp
+  block_source.cpp
   bucketing.hpp
   bucketing.cpp
   bounded_backlog.hpp
@@ -85,6 +88,8 @@ add_library(
   ipc/ipc_server.cpp
   json_handler.hpp
   json_handler.cpp
+  ledger_notifications.hpp
+  ledger_notifications.cpp
   local_block_broadcaster.cpp
   local_block_broadcaster.hpp
   local_vote_history.cpp

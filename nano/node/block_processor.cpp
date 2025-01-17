@@ -5,6 +5,7 @@
 #include <nano/lib/timer.hpp>
 #include <nano/node/active_elections.hpp>
 #include <nano/node/block_processor.hpp>
+#include <nano/node/ledger_notifications.hpp>
 #include <nano/node/local_vote_history.hpp>
 #include <nano/node/node.hpp>
 #include <nano/node/unchecked_map.hpp>
@@ -18,14 +19,14 @@
  * block_processor
  */
 
-nano::block_processor::block_processor (nano::node_config const & node_config, nano::ledger & ledger_a, nano::unchecked_map & unchecked_a, nano::stats & stats_a, nano::logger & logger_a) :
+nano::block_processor::block_processor (nano::node_config const & node_config, nano::ledger & ledger_a, nano::ledger_notifications & ledger_notifications_a, nano::unchecked_map & unchecked_a, nano::stats & stats_a, nano::logger & logger_a) :
 	config{ node_config.block_processor },
 	network_params{ node_config.network_params },
 	ledger{ ledger_a },
+	ledger_notifications{ ledger_notifications_a },
 	unchecked{ unchecked_a },
 	stats{ stats_a },
-	logger{ logger_a },
-	workers{ 1, nano::thread_role::name::block_processing_notifications }
+	logger{ logger_a }
 {
 	queue.max_size_query = [this] (auto const & origin) {
 		switch (origin.source)
@@ -65,14 +66,11 @@ nano::block_processor::~block_processor ()
 {
 	// Thread must be stopped before destruction
 	debug_assert (!thread.joinable ());
-	debug_assert (!workers.alive ());
 }
 
 void nano::block_processor::start ()
 {
 	debug_assert (!thread.joinable ());
-
-	workers.start ();
 
 	thread = std::thread ([this] () {
 		nano::thread_role::set (nano::thread_role::name::block_processing);
@@ -91,7 +89,6 @@ void nano::block_processor::stop ()
 	{
 		thread.join ();
 	}
-	workers.stop ();
 }
 
 // TODO: Remove and replace all checks with calls to size (block_source)
@@ -121,7 +118,7 @@ bool nano::block_processor::add (std::shared_ptr<nano::block> const & block, blo
 	to_string (source),
 	channel ? channel->to_string () : "<unknown>"); // TODO: Lazy eval
 
-	return add_impl (context{ block, source, std::move (callback) }, channel);
+	return add_impl ({ block, source, std::move (callback) }, channel);
 }
 
 std::optional<nano::block_status> nano::block_processor::add_blocking (std::shared_ptr<nano::block> const & block, block_source const source)
@@ -129,7 +126,7 @@ std::optional<nano::block_status> nano::block_processor::add_blocking (std::shar
 	stats.inc (nano::stat::type::block_processor, nano::stat::detail::process_blocking);
 	logger.debug (nano::log::type::block_processor, "Processing block (blocking): {} (source: {})", block->hash ().to_string (), to_string (source));
 
-	context ctx{ block, source };
+	nano::block_context ctx{ block, source };
 	auto future = ctx.get_future ();
 	add_impl (std::move (ctx));
 
@@ -152,10 +149,10 @@ void nano::block_processor::force (std::shared_ptr<nano::block> const & block_a)
 	stats.inc (nano::stat::type::block_processor, nano::stat::detail::force);
 	logger.debug (nano::log::type::block_processor, "Forcing block: {}", block_a->hash ().to_string ());
 
-	add_impl (context{ block_a, block_source::forced });
+	add_impl ({ block_a, block_source::forced });
 }
 
-bool nano::block_processor::add_impl (context ctx, std::shared_ptr<nano::transport::channel> const & channel)
+bool nano::block_processor::add_impl (nano::block_context ctx, std::shared_ptr<nano::transport::channel> const & channel)
 {
 	auto const source = ctx.source;
 	bool added = false;
@@ -175,7 +172,7 @@ bool nano::block_processor::add_impl (context ctx, std::shared_ptr<nano::transpo
 	return added;
 }
 
-void nano::block_processor::rollback_competitor (secure::write_transaction const & transaction, nano::block const & fork_block)
+void nano::block_processor::rollback_competitor (secure::write_transaction & transaction, nano::block const & fork_block)
 {
 	auto const hash = fork_block.hash ();
 	auto const successor_hash = ledger.any.block_successor (transaction, fork_block.qualified_root ());
@@ -197,10 +194,13 @@ void nano::block_processor::rollback_competitor (secure::write_transaction const
 			logger.debug (nano::log::type::block_processor, "Blocks rolled back: {}", rollback_list.size ());
 		}
 
-		// Notify observers of the rolled back blocks on a background thread while not holding the ledger write lock
-		workers.post ([this, rollback_list = std::move (rollback_list), root = fork_block.qualified_root ()] () {
-			rolled_back.notify (rollback_list, root);
-		});
+		if (!rollback_list.empty ())
+		{
+			// Notify observers of the rolled back blocks on a background thread while not holding the ledger write lock
+			ledger_notifications.notify_rolled_back (transaction, std::move (rollback_list), fork_block.qualified_root (), [this] {
+				stats.inc (nano::stat::type::block_processor, nano::stat::detail::notify_rolled_back);
+			});
+		}
 	}
 }
 
@@ -210,19 +210,26 @@ void nano::block_processor::run ()
 	nano::unique_lock<nano::mutex> lock{ mutex };
 	while (!stopped)
 	{
+		condition.wait (lock, [this] {
+			return stopped || !queue.empty ();
+		});
+
+		if (stopped)
+		{
+			return;
+		}
+
+		lock.unlock ();
+
+		// It's possible that ledger processing happens faster than the notifications can be processed by other components, cooldown here
+		ledger_notifications.wait ([this] {
+			stats.inc (nano::stat::type::block_processor, nano::stat::detail::cooldown);
+		});
+
+		lock.lock ();
+
 		if (!queue.empty ())
 		{
-			// It's possible that ledger processing happens faster than the notifications can be processed by other components, cooldown here
-			while (workers.queued_tasks () >= config.max_queued_notifications)
-			{
-				stats.inc (nano::stat::type::block_processor, nano::stat::detail::cooldown);
-				condition.wait_for (lock, 100ms, [this] { return stopped; });
-				if (stopped)
-				{
-					return;
-				}
-			}
-
 			if (log_interval.elapse (15s))
 			{
 				logger.info (nano::log::type::block_processor, "{} blocks (+ {} forced) in processing queue",
@@ -230,35 +237,14 @@ void nano::block_processor::run ()
 				queue.size ({ nano::block_source::forced }));
 			}
 
-			auto processed = process_batch (lock);
+			process_batch (lock);
 			debug_assert (!lock.owns_lock ());
 			lock.lock ();
-
-			// Queue notifications to be dispatched in the background
-			workers.post ([this, processed = std::move (processed)] () mutable {
-				stats.inc (nano::stat::type::block_processor, nano::stat::detail::notify);
-				// Set results for futures when not holding the lock
-				for (auto & [result, context] : processed)
-				{
-					if (context.callback)
-					{
-						context.callback (result);
-					}
-					context.set_result (result);
-				}
-				batch_processed.notify (processed);
-			});
-		}
-		else
-		{
-			condition.wait (lock, [this] {
-				return stopped || !queue.empty ();
-			});
 		}
 	}
 }
 
-auto nano::block_processor::next () -> context
+auto nano::block_processor::next () -> nano::block_context
 {
 	debug_assert (!mutex.try_lock ());
 	debug_assert (!queue.empty ()); // This should be checked before calling next
@@ -273,14 +259,14 @@ auto nano::block_processor::next () -> context
 	release_assert (false, "next() called when no blocks are ready");
 }
 
-auto nano::block_processor::next_batch (size_t max_count) -> std::deque<context>
+auto nano::block_processor::next_batch (size_t max_count) -> std::deque<nano::block_context>
 {
 	debug_assert (!mutex.try_lock ());
 	debug_assert (!queue.empty ());
 
 	queue.periodic_update ();
 
-	std::deque<context> results;
+	std::deque<nano::block_context> results;
 	while (!queue.empty () && results.size () < max_count)
 	{
 		results.push_back (next ());
@@ -288,7 +274,7 @@ auto nano::block_processor::next_batch (size_t max_count) -> std::deque<context>
 	return results;
 }
 
-auto nano::block_processor::process_batch (nano::unique_lock<nano::mutex> & lock) -> processed_batch_t
+void nano::block_processor::process_batch (nano::unique_lock<nano::mutex> & lock)
 {
 	debug_assert (lock.owns_lock ());
 	debug_assert (!mutex.try_lock ());
@@ -307,7 +293,8 @@ auto nano::block_processor::process_batch (nano::unique_lock<nano::mutex> & lock
 	size_t number_of_blocks_processed = 0;
 	size_t number_of_forced_processed = 0;
 
-	processed_batch_t processed;
+	std::deque<std::pair<nano::block_status, nano::block_context>> processed;
+
 	for (auto & ctx : batch)
 	{
 		auto const hash = ctx.block->hash ();
@@ -332,10 +319,13 @@ auto nano::block_processor::process_batch (nano::unique_lock<nano::mutex> & lock
 		logger.debug (nano::log::type::block_processor, "Processed {} blocks ({} forced) in {} {}", number_of_blocks_processed, number_of_forced_processed, timer.value ().count (), timer.unit ());
 	}
 
-	return processed;
+	// Queue notifications to be dispatched in the background
+	ledger_notifications.notify_processed (transaction, std::move (processed), [this] {
+		stats.inc (nano::stat::type::block_processor, nano::stat::detail::notify_processed);
+	});
 }
 
-nano::block_status nano::block_processor::process_one (secure::write_transaction const & transaction_a, context const & context, bool const forced_a)
+nano::block_status nano::block_processor::process_one (secure::write_transaction const & transaction_a, nano::block_context const & context, bool const forced_a)
 {
 	auto block = context.block;
 	auto const hash = block->hash ();
@@ -451,30 +441,7 @@ nano::container_info nano::block_processor::container_info () const
 	info.put ("blocks", queue.size ());
 	info.put ("forced", queue.size ({ nano::block_source::forced }));
 	info.add ("queue", queue.container_info ());
-	info.add ("workers", workers.container_info ());
 	return info;
-}
-
-/*
- * block_processor::context
- */
-
-nano::block_processor::context::context (std::shared_ptr<nano::block> block, nano::block_source source_a, callback_t callback_a) :
-	block{ std::move (block) },
-	source{ source_a },
-	callback{ std::move (callback_a) }
-{
-	debug_assert (source != nano::block_source::unknown);
-}
-
-auto nano::block_processor::context::get_future () -> std::future<result_t>
-{
-	return promise.get_future ();
-}
-
-void nano::block_processor::context::set_result (result_t const & result)
-{
-	promise.set_value (result);
 }
 
 /*
@@ -505,18 +472,4 @@ nano::error nano::block_processor_config::deserialize (nano::tomlconfig & toml)
 	toml.get ("priority_local", priority_local);
 
 	return toml.get_error ();
-}
-
-/*
- *
- */
-
-std::string_view nano::to_string (nano::block_source source)
-{
-	return nano::enum_util::name (source);
-}
-
-nano::stat::detail nano::to_stat_detail (nano::block_source type)
-{
-	return nano::enum_util::cast<nano::stat::detail> (type);
 }

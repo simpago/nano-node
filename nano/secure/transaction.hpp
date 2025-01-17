@@ -3,6 +3,7 @@
 #include <nano/store/transaction.hpp>
 #include <nano/store/write_queue.hpp>
 
+#include <future>
 #include <utility>
 
 namespace nano::secure
@@ -38,14 +39,28 @@ class write_transaction final : public transaction
 	nano::store::write_transaction txn;
 	std::chrono::steady_clock::time_point start;
 
+	// Future to signal transaction got committed
+	std::promise<void> promise;
+	std::shared_future<void> future{ promise.get_future () };
+
 public:
-	explicit write_transaction (nano::store::write_transaction && txn_a, nano::store::write_guard && guard_a) noexcept :
+	write_transaction (nano::store::write_transaction && txn_a, nano::store::write_guard && guard_a) noexcept :
 		guard{ std::move (guard_a) },
-		txn{ std::move (txn_a) }
+		txn{ std::move (txn_a) },
+		start{ std::chrono::steady_clock::now () }
 	{
-		debug_assert (guard.is_owned ());
-		start = std::chrono::steady_clock::now ();
+		debug_assert (active ());
 	}
+
+	~write_transaction () override
+	{
+		if (active ())
+		{
+			commit ();
+		}
+	}
+
+	write_transaction (write_transaction && other) = default;
 
 	// Override to return a reference to the encapsulated write_transaction
 	const nano::store::transaction & base_txn () const override
@@ -57,6 +72,7 @@ public:
 	{
 		txn.commit ();
 		guard.release ();
+		promise.set_value ();
 	}
 
 	void renew ()
@@ -64,6 +80,8 @@ public:
 		guard.renew ();
 		txn.renew ();
 		start = std::chrono::steady_clock::now ();
+		promise = {};
+		future = { promise.get_future () };
 	}
 
 	void refresh ()
@@ -86,6 +104,16 @@ public:
 	auto timestamp () const
 	{
 		return txn.timestamp ();
+	}
+
+	bool active () const
+	{
+		return guard.is_owned ();
+	}
+
+	std::shared_future<void> get_future ()
+	{
+		return future; // Give a copy of the shared future
 	}
 
 	// Conversion operator to const nano::store::transaction&

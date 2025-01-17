@@ -134,6 +134,7 @@ public:
 	nano::rocksdb_config rocksdb_config;
 	nano::lmdb_config lmdb_config;
 	bool enable_upnp{ true };
+	std::size_t max_ledger_notifications{ 8 };
 
 public:
 	nano::vote_cache_config vote_cache;

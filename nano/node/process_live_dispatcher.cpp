@@ -19,32 +19,12 @@ nano::process_live_dispatcher::process_live_dispatcher (nano::ledger & ledger, n
 
 void nano::process_live_dispatcher::connect (nano::block_processor & block_processor)
 {
-	block_processor.batch_processed.add ([this] (auto const & batch) {
-		auto const transaction = ledger.tx_begin_read ();
-		for (auto const & [result, context] : batch)
-		{
-			debug_assert (context.block != nullptr);
-			inspect (result, *context.block, transaction);
-		}
-	});
 }
 
 void nano::process_live_dispatcher::inspect (nano::block_status const & result, nano::block const & block, secure::transaction const & transaction)
 {
-	switch (result)
-	{
-		case nano::block_status::progress:
-			process_live (block, transaction);
-			break;
-		default:
-			break;
-	}
 }
 
 void nano::process_live_dispatcher::process_live (nano::block const & block, secure::transaction const & transaction)
 {
-	if (websocket.server && websocket.server->any_subscriber (nano::websocket::topic::new_unconfirmed_block))
-	{
-		websocket.server->broadcast (nano::websocket::message_builder ().new_block_arrived (block));
-	}
 }

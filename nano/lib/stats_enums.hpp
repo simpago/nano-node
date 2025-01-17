@@ -17,6 +17,7 @@ enum class type
 	message,
 	block,
 	ledger,
+	ledger_notifications,
 	rollback,
 	network,
 	vote,
@@ -576,6 +577,10 @@ enum class detail
 	tier_1,
 	tier_2,
 	tier_3,
+
+	// ledger_notifications
+	notify_processed,
+	notify_rolled_back,
 
 	// confirming_set
 	notify_cemented,

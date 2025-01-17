@@ -40,8 +40,8 @@ std::string nano::thread_role::get_string (nano::thread_role::name role)
 		case nano::thread_role::name::block_processing:
 			thread_role_name_string = "Blck processing";
 			break;
-		case nano::thread_role::name::block_processing_notifications:
-			thread_role_name_string = "Blck proc notif";
+		case nano::thread_role::name::ledger_notifications:
+			thread_role_name_string = "Ledger notif";
 			break;
 		case nano::thread_role::name::request_loop:
 			thread_role_name_string = "Request loop";
@@ -105,9 +105,6 @@ std::string nano::thread_role::get_string (nano::thread_role::name role)
 			break;
 		case nano::thread_role::name::bounded_backlog_scan:
 			thread_role_name_string = "Bounded b scan";
-			break;
-		case nano::thread_role::name::bounded_backlog_notifications:
-			thread_role_name_string = "Bounded b notif";
 			break;
 		case nano::thread_role::name::vote_generator_queue:
 			thread_role_name_string = "Voting que";
