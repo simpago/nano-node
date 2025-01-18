@@ -593,6 +593,9 @@ bool nano::bootstrap_service::request_info (nano::block_hash hash, std::shared_p
 	tag.source = source;
 	tag.start = hash;
 	tag.hash = hash;
+
+	logger.debug (nano::log::type::bootstrap, "Requesting account info for: {}", hash.to_string ()); // TODO: Lazy eval
+
 	return send (channel, tag);
 }
 
@@ -602,6 +605,9 @@ bool nano::bootstrap_service::request_frontiers (nano::account start, std::share
 	tag.type = query_type::frontiers;
 	tag.source = source;
 	tag.start = start;
+
+	logger.debug (nano::log::type::bootstrap, "Requesting frontiers starting from: {}", start.to_account ()); // TODO: Lazy eval
+
 	return send (channel, tag);
 }
 
