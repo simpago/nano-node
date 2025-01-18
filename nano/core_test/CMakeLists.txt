@@ -11,6 +11,7 @@ add_executable(
   block_store.cpp
   block_processor.cpp
   bootstrap.cpp
+  bootstrap_frontier_scan.cpp
   bootstrap_server.cpp
   bucketing.cpp
   cli.cpp
