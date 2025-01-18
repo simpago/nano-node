@@ -130,6 +130,8 @@ add_library(
   portmapping.cpp
   process_live_dispatcher.cpp
   process_live_dispatcher.hpp
+  pruning.hpp
+  pruning.cpp
   recently_cemented_cache.cpp
   recently_cemented_cache.hpp
   recently_confirmed_cache.cpp

@@ -68,6 +68,7 @@ enum class name
 	online_reps,
 	monitor,
 	http_callbacks,
+	pruning,
 };
 
 std::string_view to_string (name);

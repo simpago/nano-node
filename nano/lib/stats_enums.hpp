@@ -116,6 +116,7 @@ enum class type
 	message_processor_type,
 	process_confirmed,
 	online_reps,
+	pruning,
 
 	_last // Must be the last enum
 };
@@ -647,6 +648,12 @@ enum class detail
 	// http_callbacks
 	block_confirmed,
 	large_backlog,
+
+	// pruning
+	ledger_pruning,
+	pruning_target,
+	pruned_count,
+	collect_targets,
 
 	_last // Must be the last enum
 };

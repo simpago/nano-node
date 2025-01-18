@@ -61,9 +61,6 @@ public:
 	nano::uint128_t minimum_principal_weight ();
 	void backup_wallet ();
 	void search_receivable_all ();
-	bool collect_ledger_pruning_targets (std::deque<nano::block_hash> &, nano::account &, uint64_t const, uint64_t const, uint64_t const);
-	void ledger_pruning (uint64_t const, bool);
-	void ongoing_ledger_pruning ();
 	// The default difficulty updates to base only when the first epoch_2 block is processed
 	uint64_t default_difficulty (nano::work_version const) const;
 	uint64_t default_receive_difficulty (nano::work_version const) const;
@@ -204,6 +201,8 @@ public:
 	nano::monitor & monitor;
 	std::unique_ptr<nano::http_callbacks> http_callbacks_impl;
 	nano::http_callbacks & http_callbacks;
+	std::unique_ptr<nano::pruning> pruning_impl;
+	nano::pruning & pruning;
 
 public:
 	std::chrono::steady_clock::time_point const startup_time;
