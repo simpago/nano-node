@@ -26,7 +26,7 @@ class frontier_scan_config final
 public:
 	// TODO: Serialize & deserialize
 
-	unsigned head_parallelistm{ 128 };
+	unsigned head_parallelism{ 128 };
 	unsigned consideration_count{ 4 };
 	std::size_t candidates{ 1000 };
 	std::chrono::milliseconds cooldown{ 1000 * 5 };
