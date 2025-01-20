@@ -27,6 +27,7 @@ impl LedgerNotifications {
         (notifications, notifier)
     }
 
+    #[allow(dead_code)]
     pub fn on_block_processed(
         &self,
         observer: Box<dyn Fn(BlockStatus, &BlockContext) + Send + Sync>,
@@ -60,13 +61,6 @@ impl LedgerNotifications {
             .unwrap()
             .rollback_observers
             .push(Box::new(callback));
-    }
-
-    pub fn notify_rollback(&self, rolled_back: &[SavedBlock], root: QualifiedRoot) {
-        let guard = self.callbacks.read().unwrap();
-        for callback in guard.rollback_observers.iter() {
-            callback(rolled_back, root.clone());
-        }
     }
 }
 
@@ -105,7 +99,7 @@ impl LedgerNotifier {
     }
 }
 
-enum Event {
+pub(crate) enum Event {
     BatchProcessed(Vec<(BlockStatus, Arc<BlockContext>)>),
     RolledBack(Vec<SavedBlock>, QualifiedRoot),
 }
@@ -156,12 +150,19 @@ impl LedgerNotificationQueue {
     }
 
     fn push_event(&self, event: Event) {
+        if self.stopped.load(Ordering::SeqCst) {
+            return;
+        }
         self.events.lock().unwrap().push_back(event);
         self.changed.notify_one();
     }
 
     fn stop(&self) {
-        self.stopped.store(true, Ordering::SeqCst);
+        {
+            let mut guard = self.events.lock().unwrap();
+            guard.clear();
+            self.stopped.store(true, Ordering::SeqCst);
+        }
         self.changed.notify_one();
     }
 }

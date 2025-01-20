@@ -27,7 +27,7 @@ impl ProcessLiveDispatcher {
     }
 }
 
-pub trait ProcessLiveDispatcherExt {
+pub(crate) trait ProcessLiveDispatcherExt {
     fn connect(&self, notifications: &LedgerNotifications);
 }
 

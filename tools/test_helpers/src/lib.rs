@@ -173,8 +173,20 @@ impl System {
 
     fn stop(&mut self) {
         for mut node in self.nodes.drain(..) {
-            let node = Arc::get_mut(&mut node).expect("no exclusive access to node!");
-            node.stop();
+            let exclusive_node;
+            let start = Instant::now();
+            loop {
+                let n = Arc::get_mut(&mut node);
+                if let Some(n) = n {
+                    exclusive_node = n;
+                    break;
+                }
+                if start.elapsed() > Duration::from_secs(5) {
+                    panic!("Could not get exclusive access to node!")
+                }
+                std::thread::yield_now();
+            }
+            exclusive_node.stop();
             std::fs::remove_dir_all(&node.data_path).expect("Could not delete node data dir");
         }
         self.work.stop();

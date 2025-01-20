@@ -1,12 +1,11 @@
 use super::{
     backlog_index::{BacklogEntry, BacklogIndex},
     backlog_scan::ActivatedInfo,
-    BlockContext, LedgerNotifications,
+    BlockContext, BlockProcessor,
 };
 use crate::{
     consensus::Bucketing,
     stats::{DetailType, StatType, Stats},
-    utils::{ThreadPool, ThreadPoolImpl},
 };
 use rsnano_core::{
     utils::ContainerInfo, Account, AccountInfo, BlockHash, ConfirmationHeightInfo, SavedBlock,
@@ -49,11 +48,11 @@ pub struct BoundedBacklog {
 }
 
 impl BoundedBacklog {
-    pub fn new(
+    pub(crate) fn new(
         bucketing: Bucketing,
         config: BoundedBacklogConfig,
         ledger: Arc<Ledger>,
-        notifications: LedgerNotifications,
+        block_processor: Arc<BlockProcessor>,
         stats: Arc<Stats>,
     ) -> Self {
         let backlog_impl = Arc::new(BoundedBacklogImpl {
@@ -66,11 +65,10 @@ impl BoundedBacklog {
                 bucket_count: bucketing.bucket_count(),
                 scan_limiter: RateLimiter::new(config.scan_rate),
             }),
-            workers: ThreadPoolImpl::create(1, "Bounded b notif".to_string()),
             config,
             stats,
             ledger,
-            notifications,
+            block_processor,
             can_rollback: RwLock::new(Box::new(|_| true)),
         });
 
@@ -113,7 +111,6 @@ impl BoundedBacklog {
         if let Some(handle) = handle {
             handle.join().unwrap();
         }
-        self.backlog_impl.workers.stop();
     }
 
     // Give other components a chance to veto a rollback
@@ -240,11 +237,10 @@ impl Drop for BoundedBacklog {
 struct BoundedBacklogImpl {
     mutex: Mutex<BacklogData>,
     condition: Condvar,
-    workers: ThreadPoolImpl,
     config: BoundedBacklogConfig,
     stats: Arc<Stats>,
     ledger: Arc<Ledger>,
-    notifications: LedgerNotifications,
+    block_processor: Arc<BlockProcessor>,
     can_rollback: RwLock<Box<dyn Fn(&BlockHash) -> bool + Send + Sync>>,
 }
 
@@ -265,7 +261,9 @@ impl BoundedBacklogImpl {
             }
 
             // Wait until all notification about the previous rollbacks are processed
-            while self.workers.num_queued_tasks() >= self.config.max_queued_notifications {
+            while self.block_processor.notification_queue_len()
+                >= self.config.max_queued_notifications
+            {
                 self.stats
                     .inc(StatType::BoundedBacklog, DetailType::Cooldown);
                 guard = self
@@ -363,11 +361,8 @@ impl BoundedBacklogImpl {
                 }
 
                 // Notify observers of the rolled back blocks on a background thread, avoid dispatching notifications when holding ledger write transaction
-                let notifications = self.notifications.clone();
-                self.workers.post(Box::new(move || {
-                    // TODO: Calling block_processor's event here is not ideal, but duplicating these events is even worse
-                    notifications.notify_rollback(&rollback_list, block.qualified_root());
-                }));
+                self.block_processor
+                    .notify_rollback(rollback_list, block.qualified_root());
 
                 // Return early if we reached the maximum number of rollbacks
                 if processed.len() >= max_rollbacks {

@@ -1,12 +1,11 @@
 use super::{
-    ledger_notifications::LedgerNotifications, BlockContext, BlockProcessorCallback, BlockSource,
-    LedgerNotificationQueue, UncheckedMap,
+    BlockContext, BlockProcessorCallback, BlockSource, LedgerNotificationQueue, UncheckedMap,
 };
 use crate::stats::{DetailType, StatType, Stats};
 use rsnano_core::{
     utils::{ContainerInfo, FairQueue, FairQueueInfo},
     work::WorkThresholds,
-    Block, BlockType, Epoch, Networks, SavedBlock, UncheckedInfo,
+    Block, BlockType, Epoch, Networks, QualifiedRoot, SavedBlock, UncheckedInfo,
 };
 use rsnano_ledger::{BlockStatus, Ledger, Writer};
 use rsnano_network::{ChannelId, DeadChannelCleanupStep};
@@ -189,6 +188,16 @@ impl BlockProcessor {
 
     pub fn force(&self, block: Block) {
         self.processor_loop.force(block);
+    }
+
+    pub fn notification_queue_len(&self) -> usize {
+        self.processor_loop.notifier.len()
+    }
+
+    pub fn notify_rollback(&self, rolled_back: Vec<SavedBlock>, root: QualifiedRoot) {
+        self.processor_loop
+            .notifier
+            .notify_rollback(rolled_back, root);
     }
 
     pub fn info(&self) -> FairQueueInfo<BlockSource> {

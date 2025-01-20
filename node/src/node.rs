@@ -1,8 +1,7 @@
 use crate::{
     block_processing::{
         BacklogScan, BlockProcessor, BlockProcessorCleanup, BlockSource, BoundedBacklog,
-        LedgerNotificationThread, LedgerNotifications, LocalBlockBroadcaster,
-        LocalBlockBroadcasterExt, UncheckedMap,
+        LedgerNotificationThread, LocalBlockBroadcaster, LocalBlockBroadcasterExt, UncheckedMap,
     },
     bootstrap::{BootstrapExt, BootstrapServer, BootstrapServerCleanup, BootstrapService},
     cementation::ConfirmingSet,
@@ -725,7 +724,7 @@ impl Node {
             election_schedulers.priority.bucketing().clone(),
             config.bounded_backlog.clone(),
             ledger.clone(),
-            ledger_notifications.clone(),
+            block_processor.clone(),
             stats.clone(),
         ));
 
@@ -1468,7 +1467,6 @@ impl Node {
             self.vote_processor.start();
         }
         self.vote_cache_processor.start();
-        self.ledger_notification_thread.start();
         self.block_processor.start();
         self.active.start();
         self.vote_generators.start();
@@ -1494,6 +1492,7 @@ impl Node {
         };
         self.peer_cache_updater
             .start_delayed(peer_cache_update_interval);
+        self.ledger_notification_thread.start();
 
         if !self.network_params.network.merge_period.is_zero() {
             self.peer_cache_connector
@@ -1519,6 +1518,7 @@ impl Node {
         info!("Node stopping...");
 
         self.tcp_listener.stop();
+        self.ledger_notification_thread.stop();
         self.online_weight_calculation.stop();
         self.vote_router.stop();
         self.peer_connector.stop();
@@ -1535,7 +1535,6 @@ impl Node {
         self.unchecked.stop();
         self.block_processor.stop();
         self.request_aggregator.stop();
-        self.ledger_notification_thread.stop();
         self.vote_cache_processor.stop();
         self.vote_processor.stop();
         self.rep_tiers.stop();
