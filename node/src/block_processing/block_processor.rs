@@ -1,4 +1,7 @@
-use super::{BlockContext, BlockProcessorCallback, BlockSource, UncheckedMap};
+use super::{
+    ledger_notifications::LedgerNotifications, BlockContext, BlockProcessorCallback, BlockSource,
+    UncheckedMap,
+};
 use crate::{
     stats::{DetailType, StatType, Stats},
     utils::{ThreadPool, ThreadPoolImpl},
@@ -77,6 +80,7 @@ impl BlockProcessor {
         ledger: Arc<Ledger>,
         unchecked_map: Arc<UncheckedMap>,
         stats: Arc<Stats>,
+        notifications: Arc<LedgerNotifications>,
     ) -> Self {
         let config_l = config.clone();
         let max_size_query = move |origin: &(BlockSource, ChannelId)| match origin.0 {
@@ -110,8 +114,7 @@ impl BlockProcessor {
                 stats,
                 workers: ThreadPoolImpl::create(1, "Blck proc notif"),
                 roll_back_observers: Arc::new(RwLock::new(Vec::new())),
-                block_processed: RwLock::new(Vec::new()),
-                batch_processed: RwLock::new(Vec::new()),
+                notifications,
             }),
             thread: Mutex::new(None),
         }
@@ -123,6 +126,7 @@ impl BlockProcessor {
             ledger,
             Arc::new(UncheckedMap::default()),
             Arc::new(Stats::default()),
+            Arc::new(LedgerNotifications::new()),
         )
     }
 
@@ -165,14 +169,18 @@ impl BlockProcessor {
         &self,
         observer: Box<dyn Fn(BlockStatus, &BlockContext) + Send + Sync>,
     ) {
-        self.processor_loop.on_block_processed(observer);
+        self.processor_loop
+            .notifications
+            .on_block_processed(observer);
     }
 
     pub fn on_batch_processed(
         &self,
         observer: Box<dyn Fn(&[(BlockStatus, Arc<BlockContext>)]) + Send + Sync>,
     ) {
-        self.processor_loop.on_batch_processed(observer);
+        self.processor_loop
+            .notifications
+            .on_batch_processed(observer);
     }
 
     pub fn add(&self, block: Block, source: BlockSource, channel_id: ChannelId) -> bool {
@@ -247,9 +255,7 @@ pub(crate) struct BlockProcessorLoopImpl {
 
     /// Rolled back blocks <rolled back block, root of rollback>
     roll_back_observers: Arc<RwLock<Vec<Box<dyn Fn(&[SavedBlock], QualifiedRoot) + Send + Sync>>>>,
-    block_processed: RwLock<Vec<Box<dyn Fn(BlockStatus, &BlockContext) + Send + Sync>>>,
-    /// All processed blocks including forks, rejected etc
-    batch_processed: RwLock<Vec<Box<dyn Fn(&[(BlockStatus, Arc<BlockContext>)]) + Send + Sync>>>,
+    notifications: Arc<LedgerNotifications>,
 }
 
 trait BlockProcessorLoop {
@@ -289,6 +295,7 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
                 // Queue notifications to be dispatched in the background
                 let stats = self.stats.clone();
                 let self_l = Arc::clone(self);
+
                 self.workers.post(Box::new(move || {
                     stats.inc(StatType::BlockProcessor, DetailType::Notify);
                     // Set results for futures when not holding the lock
@@ -298,7 +305,7 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
                         }
                         context.set_result(*result);
                     }
-                    self_l.notify_batch_processed(&processed);
+                    self_l.notifications.notify_batch_processed(&processed);
                 }));
             } else {
                 guard = self
@@ -311,37 +318,6 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
 }
 
 impl BlockProcessorLoopImpl {
-    fn notify_batch_processed(&self, blocks: &Vec<(BlockStatus, Arc<BlockContext>)>) {
-        {
-            let guard = self.block_processed.read().unwrap();
-            for observer in guard.iter() {
-                for (status, context) in blocks {
-                    observer(*status, context);
-                }
-            }
-        }
-        {
-            let guard = self.batch_processed.read().unwrap();
-            for observer in guard.iter() {
-                observer(&blocks);
-            }
-        }
-    }
-
-    pub fn on_block_processed(
-        &self,
-        observer: Box<dyn Fn(BlockStatus, &BlockContext) + Send + Sync>,
-    ) {
-        self.block_processed.write().unwrap().push(observer);
-    }
-
-    pub fn on_batch_processed(
-        &self,
-        observer: Box<dyn Fn(&[(BlockStatus, Arc<BlockContext>)]) + Send + Sync>,
-    ) {
-        self.batch_processed.write().unwrap().push(observer);
-    }
-
     pub fn on_blocks_rolled_back(
         &self,
         callback: impl Fn(&[SavedBlock], QualifiedRoot) + Send + Sync + 'static,
@@ -739,7 +715,9 @@ mod tests {
         let ledger = Arc::new(Ledger::new_null());
         let unchecked = Arc::new(UncheckedMap::default());
         let stats = Arc::new(Stats::default());
-        let block_processor = BlockProcessor::new(config, ledger, unchecked, stats.clone());
+        let notifications = Arc::new(LedgerNotifications::new());
+        let block_processor =
+            BlockProcessor::new(config, ledger, unchecked, stats.clone(), notifications);
 
         let mut block = Block::new_test_instance();
         block.set_work(3);

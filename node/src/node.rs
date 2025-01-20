@@ -1,7 +1,7 @@
 use crate::{
     block_processing::{
         BacklogScan, BlockProcessor, BlockProcessorCleanup, BlockSource, BoundedBacklog,
-        LocalBlockBroadcaster, LocalBlockBroadcasterExt, UncheckedMap,
+        LedgerNotifications, LocalBlockBroadcaster, LocalBlockBroadcasterExt, UncheckedMap,
     },
     bootstrap::{BootstrapExt, BootstrapServer, BootstrapServerCleanup, BootstrapService},
     cementation::ConfirmingSet,
@@ -397,11 +397,14 @@ impl Node {
             config.active_elections.confirmation_cache,
         ));
 
+        let ledger_notifications = Arc::new(LedgerNotifications::new());
+
         let block_processor = Arc::new(BlockProcessor::new(
             global_config.into(),
             ledger.clone(),
             unchecked.clone(),
             stats.clone(),
+            ledger_notifications,
         ));
         dead_channel_cleanup.add_step(BlockProcessorCleanup::new(
             block_processor.processor_loop.clone(),
