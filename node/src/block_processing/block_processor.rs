@@ -5,7 +5,7 @@ use crate::stats::{DetailType, StatType, Stats};
 use rsnano_core::{
     utils::{ContainerInfo, FairQueue, FairQueueInfo},
     work::WorkThresholds,
-    Block, BlockType, Epoch, Networks, QualifiedRoot, SavedBlock, UncheckedInfo,
+    Block, BlockHash, BlockType, Epoch, Networks, QualifiedRoot, SavedBlock, UncheckedInfo,
 };
 use rsnano_ledger::{BlockStatus, Ledger, Writer};
 use rsnano_network::{ChannelId, DeadChannelCleanupStep};
@@ -13,7 +13,7 @@ use rsnano_store_lmdb::LmdbWriteTransaction;
 use std::{
     collections::VecDeque,
     mem::size_of,
-    sync::{Arc, Condvar, Mutex, MutexGuard},
+    sync::{Arc, Condvar, Mutex, MutexGuard, RwLock},
     thread::JoinHandle,
     time::{Duration, Instant},
 };
@@ -97,7 +97,8 @@ impl BlockProcessor {
         Self {
             processor_loop: Arc::new(BlockProcessorLoopImpl {
                 mutex: Mutex::new(BlockProcessorImpl {
-                    queue: FairQueue::new(max_size_query, priority_query),
+                    add_queue: FairQueue::new(max_size_query, priority_query),
+                    rollback_queue: VecDeque::new(),
                     last_log: None,
                     stopped: false,
                 }),
@@ -107,6 +108,7 @@ impl BlockProcessor {
                 config,
                 stats,
                 notifier,
+                can_roll_back: RwLock::new(Box::new(|_| true)),
             }),
             thread: Mutex::new(None),
         }
@@ -125,6 +127,11 @@ impl BlockProcessor {
 
     pub fn new_null() -> Self {
         Self::new_test_instance(Arc::new(Ledger::new_null()))
+    }
+
+    // Give other components a chance to veto a rollback
+    pub fn on_rolling_back(&self, f: impl Fn(&BlockHash) -> bool + Send + Sync + 'static) {
+        *self.processor_loop.can_roll_back.write().unwrap() = Box::new(f);
     }
 
     pub fn start(&self) {
@@ -180,6 +187,15 @@ impl BlockProcessor {
         self.processor_loop.add_blocking(block, source)
     }
 
+    pub fn roll_back_blocking(
+        &self,
+        targets: Vec<BlockHash>,
+        max_rollbacks: usize,
+    ) -> Vec<BlockHash> {
+        self.processor_loop
+            .roll_back_blocking(targets, max_rollbacks)
+    }
+
     pub fn process_active(&self, block: Block) {
         self.processor_loop.process_active(block);
     }
@@ -222,6 +238,7 @@ pub(crate) struct BlockProcessorLoopImpl {
     config: BlockProcessorConfig,
     stats: Arc<Stats>,
     notifier: Arc<LedgerNotificationQueue>,
+    can_roll_back: RwLock<Box<dyn Fn(&BlockHash) -> bool + Send + Sync>>,
 }
 
 trait BlockProcessorLoop {
@@ -232,29 +249,28 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
     fn run(&self) {
         let mut guard = self.mutex.lock().unwrap();
         while !guard.stopped {
-            if !guard.queue.is_empty() {
-                // It's possible that ledger processing happens faster than the
-                // notifications can be processed by other components, cooldown here
-                while self.notifier.should_cool_down() {
-                    self.stats
-                        .inc(StatType::BlockProcessor, DetailType::Cooldown);
-                    guard = self
-                        .condition
-                        .wait_timeout_while(guard, Duration::from_millis(100), |i| !i.stopped)
-                        .unwrap()
-                        .0;
+            if !guard.rollback_queue.is_empty() {
+                guard = self.cool_down(guard);
+                if guard.stopped {
+                    return;
+                }
 
-                    if guard.stopped {
-                        return;
-                    }
+                let request = guard.rollback_queue.pop_front().unwrap();
+                drop(guard);
+                self.process_rollback(request);
+                guard = self.mutex.lock().unwrap();
+            } else if !guard.add_queue.is_empty() {
+                guard = self.cool_down(guard);
+                if guard.stopped {
+                    return;
                 }
 
                 if guard.should_log() {
                     info!(
                         "{} blocks (+ {} forced) in processing_queue",
-                        guard.queue.len(),
+                        guard.add_queue.len(),
                         guard
-                            .queue
+                            .add_queue
                             .queue_len(&(BlockSource::Forced, ChannelId::LOOPBACK))
                     );
                 }
@@ -266,7 +282,7 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
             } else {
                 guard = self
                     .condition
-                    .wait_while(guard, |i| !i.stopped && i.queue.is_empty())
+                    .wait_while(guard, |i| !i.stopped && i.add_queue.is_empty())
                     .unwrap();
             }
         }
@@ -274,6 +290,28 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
 }
 
 impl BlockProcessorLoopImpl {
+    /// It's possible that ledger processing happens faster than the
+    /// notifications can be processed by other components, cooldown here
+    fn cool_down<'a, 'b>(
+        &'a self,
+        mut guard: MutexGuard<'b, BlockProcessorImpl>,
+    ) -> MutexGuard<'b, BlockProcessorImpl> {
+        while self.notifier.should_cool_down() {
+            self.stats
+                .inc(StatType::BlockProcessor, DetailType::Cooldown);
+            guard = self
+                .condition
+                .wait_timeout_while(guard, Duration::from_millis(100), |i| !i.stopped)
+                .unwrap()
+                .0;
+
+            if guard.stopped {
+                return guard;
+            }
+        }
+        guard
+    }
+
     pub fn process_active(&self, block: Block) {
         self.add(block, BlockSource::Live, ChannelId::LOOPBACK, None);
     }
@@ -336,6 +374,24 @@ impl BlockProcessorLoopImpl {
         }
     }
 
+    fn roll_back_blocking(&self, targets: Vec<BlockHash>, max_rollbacks: usize) -> Vec<BlockHash> {
+        let result = Arc::new(RollbackResult::new());
+        {
+            let mut guard = self.mutex.lock().unwrap();
+
+            let request = RollbackRequest {
+                targets,
+                max_rollbacks,
+                result: result.clone(),
+            };
+            guard.rollback_queue.push_back(request);
+        }
+
+        let mut guard = result.rolled_back.lock().unwrap();
+        guard = result.done.wait_while(guard, |i| i.is_none()).unwrap();
+        guard.take().unwrap()
+    }
+
     pub fn force(&self, block: Block) {
         self.stats.inc(StatType::BlockProcessor, DetailType::Force);
         debug!("Forcing block: {}", block.hash());
@@ -345,14 +401,14 @@ impl BlockProcessorLoopImpl {
 
     // TODO: Remove and replace all checks with calls to size (block_source)
     pub fn total_queue_len(&self) -> usize {
-        self.mutex.lock().unwrap().queue.len()
+        self.mutex.lock().unwrap().add_queue.len()
     }
 
     pub fn queue_len(&self, source: BlockSource) -> usize {
         self.mutex
             .lock()
             .unwrap()
-            .queue
+            .add_queue
             .sum_queue_len((source, ChannelId::MIN)..=(source, ChannelId::MAX))
     }
 
@@ -361,7 +417,7 @@ impl BlockProcessorLoopImpl {
         let added;
         {
             let mut guard = self.mutex.lock().unwrap();
-            added = guard.queue.push((source, channel_id), context);
+            added = guard.add_queue.push((source, channel_id), context);
         }
         if added {
             self.condition.notify_all();
@@ -380,10 +436,78 @@ impl BlockProcessorLoopImpl {
         max_count: usize,
     ) -> VecDeque<Arc<BlockContext>> {
         let mut results = VecDeque::new();
-        while !data.queue.is_empty() && results.len() < max_count {
+        while !data.add_queue.is_empty() && results.len() < max_count {
             results.push_back(data.next());
         }
         results
+    }
+
+    fn process_rollback(&self, request: RollbackRequest) {
+        self.stats
+            .inc(StatType::BoundedBacklog, DetailType::PerformingRollbacks);
+
+        let mut rolled_back_count = 0;
+        let mut processed = Vec::new();
+        let mut processed_hashes = Vec::new();
+        {
+            let can_roll_back = self.can_roll_back.read().unwrap();
+            let _guard = self.ledger.write_queue.wait(Writer::BoundedBacklog);
+            let mut tx = self.ledger.rw_txn();
+
+            for hash in &request.targets {
+                // Skip the rollback if the block is being used by the node, this should be race free as it's checked while holding the ledger write lock
+                if !can_roll_back(hash) {
+                    self.stats
+                        .inc(StatType::BoundedBacklog, DetailType::RollbackSkipped);
+                    continue;
+                }
+
+                // Here we check that the block is still OK to rollback, there could be a delay between gathering the targets and performing the rollbacks
+                if let Some(block) = self.ledger.any().get_block(&tx, hash) {
+                    debug!(
+                        "Rolling back: {}, account: {}",
+                        hash,
+                        block.account().encode_account()
+                    );
+
+                    let rollback_list = match self.ledger.rollback(&mut tx, &block.hash()) {
+                        Ok(rollback_list) => {
+                            self.stats
+                                .inc(StatType::BoundedBacklog, DetailType::Rollback);
+                            rollback_list
+                        }
+                        Err((_, rollback_list)) => {
+                            self.stats
+                                .inc(StatType::BoundedBacklog, DetailType::RollbackFailed);
+                            rollback_list
+                        }
+                    };
+
+                    rolled_back_count += rollback_list.len();
+                    for b in &rollback_list {
+                        processed_hashes.push(b.hash());
+                    }
+                    processed.push((rollback_list, block.qualified_root()));
+
+                    // Return early if we reached the maximum number of rollbacks
+                    if rolled_back_count >= request.max_rollbacks {
+                        break;
+                    }
+                } else {
+                    self.stats
+                        .inc(StatType::BoundedBacklog, DetailType::RollbackMissingBlock);
+                    rolled_back_count += 1;
+                    processed_hashes.push(*hash);
+                }
+            }
+        }
+
+        for (rolled_back, root) in processed {
+            self.notifier.notify_rollback(rolled_back, root);
+        }
+
+        *request.result.rolled_back.lock().unwrap() = Some(processed_hashes);
+        request.result.done.notify_all();
     }
 
     fn process_batch(
@@ -578,30 +702,31 @@ impl BlockProcessorLoopImpl {
     pub fn container_info(&self) -> ContainerInfo {
         let guard = self.mutex.lock().unwrap();
         ContainerInfo::builder()
-            .leaf("blocks", guard.queue.len(), size_of::<Arc<Block>>())
+            .leaf("blocks", guard.add_queue.len(), size_of::<Arc<Block>>())
             .leaf(
                 "forced",
                 guard
-                    .queue
+                    .add_queue
                     .queue_len(&(BlockSource::Forced, ChannelId::LOOPBACK)),
                 size_of::<Arc<Block>>(),
             )
-            .node("queue", guard.queue.container_info())
+            .node("queue", guard.add_queue.container_info())
             .finish()
     }
 }
 
 struct BlockProcessorImpl {
-    pub queue: FairQueue<(BlockSource, ChannelId), Arc<BlockContext>>,
-    pub last_log: Option<Instant>,
+    add_queue: FairQueue<(BlockSource, ChannelId), Arc<BlockContext>>,
+    rollback_queue: VecDeque<RollbackRequest>,
+    last_log: Option<Instant>,
     stopped: bool,
 }
 
 impl BlockProcessorImpl {
     fn next(&mut self) -> Arc<BlockContext> {
-        debug_assert!(!self.queue.is_empty()); // This should be checked before calling next
-        if !self.queue.is_empty() {
-            let ((source, _), request) = self.queue.next().unwrap();
+        debug_assert!(!self.add_queue.is_empty()); // This should be checked before calling next
+        if !self.add_queue.is_empty() {
+            let ((source, _), request) = self.add_queue.next().unwrap();
             assert!(source != BlockSource::Forced || request.source == BlockSource::Forced);
             return request;
         }
@@ -621,7 +746,7 @@ impl BlockProcessorImpl {
     }
 
     pub fn info(&self) -> FairQueueInfo<BlockSource> {
-        self.queue.compacted_info(|(source, _)| *source)
+        self.add_queue.compacted_info(|(source, _)| *source)
     }
 }
 
@@ -638,8 +763,28 @@ impl DeadChannelCleanupStep for BlockProcessorCleanup {
         let mut guard = self.0.mutex.lock().unwrap();
         for channel_id in dead_channel_ids {
             for source in BlockSource::iter() {
-                guard.queue.remove(&(source, *channel_id))
+                guard.add_queue.remove(&(source, *channel_id))
             }
+        }
+    }
+}
+
+pub struct RollbackRequest {
+    targets: Vec<BlockHash>,
+    max_rollbacks: usize,
+    result: Arc<RollbackResult>,
+}
+
+struct RollbackResult {
+    rolled_back: Mutex<Option<Vec<BlockHash>>>,
+    done: Condvar,
+}
+
+impl RollbackResult {
+    fn new() -> Self {
+        Self {
+            rolled_back: Mutex::new(None),
+            done: Condvar::new(),
         }
     }
 }

@@ -10,7 +10,7 @@ use crate::{
 use rsnano_core::{
     utils::ContainerInfo, Account, AccountInfo, BlockHash, ConfirmationHeightInfo, SavedBlock,
 };
-use rsnano_ledger::{BlockStatus, Ledger, Writer};
+use rsnano_ledger::{BlockStatus, Ledger};
 use rsnano_network::bandwidth_limiter::RateLimiter;
 use rsnano_store_lmdb::{LmdbReadTransaction, Transaction};
 use std::{
@@ -19,7 +19,6 @@ use std::{
     thread::JoinHandle,
     time::Duration,
 };
-use tracing::debug;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoundedBacklogConfig {
@@ -295,7 +294,9 @@ impl BoundedBacklogImpl {
                     DetailType::GatheredTargets,
                     targets.len() as u64,
                 );
-                let processed = self.perform_rollbacks(&targets, target_count);
+                let processed = self
+                    .block_processor
+                    .roll_back_blocking(targets, target_count);
                 guard = self.mutex.lock().unwrap();
 
                 // Erase rolled back blocks from the index
@@ -313,65 +314,6 @@ impl BoundedBacklogImpl {
                     .0;
             }
         }
-    }
-
-    fn perform_rollbacks(&self, targets: &[BlockHash], max_rollbacks: usize) -> Vec<BlockHash> {
-        self.stats
-            .inc(StatType::BoundedBacklog, DetailType::PerformingRollbacks);
-
-        let _guard = self.ledger.write_queue.wait(Writer::BoundedBacklog);
-        let mut tx = self.ledger.rw_txn();
-
-        let mut processed = Vec::new();
-        for hash in targets {
-            // Skip the rollback if the block is being used by the node, this should be race free as it's checked while holding the ledger write lock
-            if !(self.can_rollback.read().unwrap())(hash) {
-                self.stats
-                    .inc(StatType::BoundedBacklog, DetailType::RollbackSkipped);
-                continue;
-            }
-
-            // Here we check that the block is still OK to rollback, there could be a delay between gathering the targets and performing the rollbacks
-            if let Some(block) = self.ledger.any().get_block(&tx, hash) {
-                debug!(
-                    "Rolling back: {}, account: {}",
-                    hash,
-                    block.account().encode_account()
-                );
-
-                let rollback_list = match self.ledger.rollback(&mut tx, &block.hash()) {
-                    Ok(rollback_list) => {
-                        self.stats
-                            .inc(StatType::BoundedBacklog, DetailType::Rollback);
-                        rollback_list
-                    }
-                    Err((_, rollback_list)) => {
-                        self.stats
-                            .inc(StatType::BoundedBacklog, DetailType::RollbackFailed);
-                        rollback_list
-                    }
-                };
-
-                for rollback in &rollback_list {
-                    processed.push(rollback.hash());
-                }
-
-                // Notify observers of the rolled back blocks on a background thread, avoid dispatching notifications when holding ledger write transaction
-                self.block_processor
-                    .notify_rollback(rollback_list, block.qualified_root());
-
-                // Return early if we reached the maximum number of rollbacks
-                if processed.len() >= max_rollbacks {
-                    break;
-                }
-            } else {
-                self.stats
-                    .inc(StatType::BoundedBacklog, DetailType::RollbackMissingBlock);
-                processed.push(*hash);
-            }
-        }
-
-        processed
     }
 
     fn run_scan(&self) {

@@ -796,7 +796,54 @@ impl Node {
         let scheduler_w = Arc::downgrade(&election_schedulers);
         let confirming_set_w = Arc::downgrade(&confirming_set);
         let local_block_broadcaster_w = Arc::downgrade(&local_block_broadcaster);
+
+        // TODO: remove the duplication of the on_rolling_back event
         bounded_backlog.on_rolling_back(move |hash| {
+            if let Some(i) = vote_cache_w.upgrade() {
+                if i.lock().unwrap().contains(hash) {
+                    return false;
+                }
+            }
+
+            if let Some(i) = vote_router_w.upgrade() {
+                if i.contains(hash) {
+                    return false;
+                }
+            }
+
+            if let Some(i) = recently_confirmed_w.upgrade() {
+                if i.hash_exists(hash) {
+                    return false;
+                }
+            }
+
+            if let Some(i) = scheduler_w.upgrade() {
+                if i.contains(hash) {
+                    return false;
+                }
+            }
+
+            if let Some(i) = confirming_set_w.upgrade() {
+                if i.contains(hash) {
+                    return false;
+                }
+            }
+
+            if let Some(i) = local_block_broadcaster_w.upgrade() {
+                if i.contains(hash) {
+                    return false;
+                }
+            }
+            true
+        });
+
+        let vote_cache_w = Arc::downgrade(&vote_cache);
+        let vote_router_w = Arc::downgrade(&vote_router);
+        let recently_confirmed_w = Arc::downgrade(&recently_confirmed);
+        let scheduler_w = Arc::downgrade(&election_schedulers);
+        let confirming_set_w = Arc::downgrade(&confirming_set);
+        let local_block_broadcaster_w = Arc::downgrade(&local_block_broadcaster);
+        block_processor.on_rolling_back(move |hash| {
             if let Some(i) = vote_cache_w.upgrade() {
                 if i.lock().unwrap().contains(hash) {
                     return false;
