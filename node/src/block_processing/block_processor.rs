@@ -252,6 +252,7 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
             if !guard.rollback_queue.is_empty() {
                 guard = self.cool_down(guard);
                 if guard.stopped {
+                    // TODO call result callbacks!
                     return;
                 }
 
