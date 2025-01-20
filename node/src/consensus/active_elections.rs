@@ -87,7 +87,7 @@ pub struct ActiveElections {
     pub recently_confirmed: Arc<RecentlyConfirmedCache>,
     /// Helper container for storing recently cemented elections (a block from election might be confirmed but not yet cemented by confirmation height processor)
     recently_cemented: Arc<Mutex<BoundedVecDeque<ElectionStatus>>>,
-    notifications: Arc<LedgerNotifications>,
+    notifications: LedgerNotifications,
     vote_generators: Arc<VoteGenerators>,
     network_filter: Arc<NetworkFilter>,
     network: Arc<RwLock<Network>>,
@@ -113,7 +113,7 @@ impl ActiveElections {
         node_config: NodeConfig,
         ledger: Arc<Ledger>,
         confirming_set: Arc<ConfirmingSet>,
-        notifications: Arc<LedgerNotifications>,
+        notifications: LedgerNotifications,
         vote_generators: Arc<VoteGenerators>,
         network_filter: Arc<NetworkFilter>,
         network: Arc<RwLock<Network>>,

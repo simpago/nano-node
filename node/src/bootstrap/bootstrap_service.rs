@@ -44,7 +44,7 @@ enum VerifyResult {
 
 pub struct BootstrapService {
     block_processor: Arc<BlockProcessor>,
-    notifications: Arc<LedgerNotifications>,
+    notifications: LedgerNotifications,
     ledger: Arc<Ledger>,
     stats: Arc<Stats>,
     message_sender: Mutex<MessageSender>,
@@ -72,7 +72,7 @@ struct Threads {
 impl BootstrapService {
     pub(crate) fn new(
         block_processor: Arc<BlockProcessor>,
-        notifications: Arc<LedgerNotifications>,
+        notifications: LedgerNotifications,
         ledger: Arc<Ledger>,
         stats: Arc<Stats>,
         network: Arc<RwLock<Network>>,

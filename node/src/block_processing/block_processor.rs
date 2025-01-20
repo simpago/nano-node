@@ -80,7 +80,7 @@ impl BlockProcessor {
         ledger: Arc<Ledger>,
         unchecked_map: Arc<UncheckedMap>,
         stats: Arc<Stats>,
-        notifications: Arc<LedgerNotifications>,
+        notifications: LedgerNotifications,
     ) -> Self {
         let config_l = config.clone();
         let max_size_query = move |origin: &(BlockSource, ChannelId)| match origin.0 {
@@ -125,7 +125,7 @@ impl BlockProcessor {
             ledger,
             Arc::new(UncheckedMap::default()),
             Arc::new(Stats::default()),
-            Arc::new(LedgerNotifications::new()),
+            LedgerNotifications::new().0,
         )
     }
 
@@ -219,7 +219,7 @@ pub(crate) struct BlockProcessorLoopImpl {
     config: BlockProcessorConfig,
     stats: Arc<Stats>,
     workers: ThreadPoolImpl,
-    notifications: Arc<LedgerNotifications>,
+    notifications: LedgerNotifications,
 }
 
 trait BlockProcessorLoop {
@@ -666,7 +666,7 @@ mod tests {
         let ledger = Arc::new(Ledger::new_null());
         let unchecked = Arc::new(UncheckedMap::default());
         let stats = Arc::new(Stats::default());
-        let notifications = Arc::new(LedgerNotifications::new());
+        let (notifications, _) = LedgerNotifications::new();
         let block_processor =
             BlockProcessor::new(config, ledger, unchecked, stats.clone(), notifications);
 

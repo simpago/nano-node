@@ -397,7 +397,7 @@ impl Node {
             config.active_elections.confirmation_cache,
         ));
 
-        let ledger_notifications = Arc::new(LedgerNotifications::new());
+        let (ledger_notifications, _ledger_notifier) = LedgerNotifications::new();
 
         let block_processor = Arc::new(BlockProcessor::new(
             global_config.into(),

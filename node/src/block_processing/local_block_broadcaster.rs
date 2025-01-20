@@ -62,7 +62,7 @@ impl Default for LocalBlockBroadcasterConfig {
 /// Tracks local blocks for more aggressive propagation
 pub struct LocalBlockBroadcaster {
     config: LocalBlockBroadcasterConfig,
-    notifications: Arc<LedgerNotifications>,
+    notifications: LedgerNotifications,
     stats: Arc<Stats>,
     ledger: Arc<Ledger>,
     confirming_set: Arc<ConfirmingSet>,
@@ -77,7 +77,7 @@ pub struct LocalBlockBroadcaster {
 impl LocalBlockBroadcaster {
     pub(crate) fn new(
         config: LocalBlockBroadcasterConfig,
-        notifications: Arc<LedgerNotifications>,
+        notifications: LedgerNotifications,
         stats: Arc<Stats>,
         ledger: Arc<Ledger>,
         confirming_set: Arc<ConfirmingSet>,

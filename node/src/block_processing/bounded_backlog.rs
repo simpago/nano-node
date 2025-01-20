@@ -53,7 +53,7 @@ impl BoundedBacklog {
         bucketing: Bucketing,
         config: BoundedBacklogConfig,
         ledger: Arc<Ledger>,
-        notifications: Arc<LedgerNotifications>,
+        notifications: LedgerNotifications,
         stats: Arc<Stats>,
     ) -> Self {
         let backlog_impl = Arc::new(BoundedBacklogImpl {
@@ -244,7 +244,7 @@ struct BoundedBacklogImpl {
     config: BoundedBacklogConfig,
     stats: Arc<Stats>,
     ledger: Arc<Ledger>,
-    notifications: Arc<LedgerNotifications>,
+    notifications: LedgerNotifications,
     can_rollback: RwLock<Box<dyn Fn(&BlockHash) -> bool + Send + Sync>>,
 }
 
