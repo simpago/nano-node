@@ -154,6 +154,11 @@ impl BlockProcessor {
         if let Some(join_handle) = join_handle {
             join_handle.join().unwrap();
         }
+        let mut guard = self.processor_loop.mutex.lock().unwrap();
+        for req in guard.rollback_queue.drain(..) {
+            *req.result.rolled_back.lock().unwrap() = Some(Vec::new());
+            req.result.done.notify_all();
+        }
     }
 
     pub fn total_queue_len(&self) -> usize {
@@ -252,7 +257,6 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
             if !guard.rollback_queue.is_empty() {
                 guard = self.cool_down(guard);
                 if guard.stopped {
-                    // TODO call result callbacks!
                     return;
                 }
 
@@ -283,7 +287,9 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
             } else {
                 guard = self
                     .condition
-                    .wait_while(guard, |i| !i.stopped && i.add_queue.is_empty())
+                    .wait_while(guard, |i| {
+                        !i.stopped && i.add_queue.is_empty() && i.rollback_queue.is_empty()
+                    })
                     .unwrap();
             }
         }
@@ -379,6 +385,9 @@ impl BlockProcessorLoopImpl {
         let result = Arc::new(RollbackResult::new());
         {
             let mut guard = self.mutex.lock().unwrap();
+            if guard.stopped {
+                return Vec::new();
+            }
 
             let request = RollbackRequest {
                 targets,
@@ -387,6 +396,7 @@ impl BlockProcessorLoopImpl {
             };
             guard.rollback_queue.push_back(request);
         }
+        self.condition.notify_all();
 
         let mut guard = result.rolled_back.lock().unwrap();
         guard = result.done.wait_while(guard, |i| i.is_none()).unwrap();
