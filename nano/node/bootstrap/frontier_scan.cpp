@@ -9,13 +9,13 @@ nano::bootstrap::frontier_scan::frontier_scan (frontier_scan_config const & conf
 {
 	// Divide nano::account numeric range into consecutive and equal ranges
 	nano::uint256_t max_account = std::numeric_limits<nano::uint256_t>::max ();
-	nano::uint256_t range_size = max_account / config.head_parallelistm;
+	nano::uint256_t range_size = max_account / config.head_parallelism;
 
-	for (unsigned i = 0; i < config.head_parallelistm; ++i)
+	for (unsigned i = 0; i < config.head_parallelism; ++i)
 	{
 		// Start at 1 to avoid the burn account
 		nano::uint256_t start = (i == 0) ? 1 : i * range_size;
-		nano::uint256_t end = (i == config.head_parallelistm - 1) ? max_account : start + range_size;
+		nano::uint256_t end = (i == config.head_parallelism - 1) ? max_account : start + range_size;
 
 		heads.emplace_back (frontier_head{ nano::account{ start }, nano::account{ end } });
 	}

@@ -1387,7 +1387,7 @@ TEST (node, bootstrap_fork_open)
 	nano::test::system system;
 	nano::node_config node_config (system.get_available_port ());
 	node_config.bootstrap.account_sets.cooldown = 100ms; // Reduce cooldown to speed up fork resolution
-	node_config.bootstrap.frontier_scan.head_parallelistm = 3; // Make sure we can process the full account number range
+	node_config.bootstrap.frontier_scan.head_parallelism = 3; // Make sure we can process the full account number range
 	node_config.bootstrap.frontier_rate_limit = 0; // Disable rate limiting to speed up the scan
 	// Disable automatic election activation
 	node_config.backlog_scan.enable = false;
