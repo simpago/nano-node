@@ -18,7 +18,6 @@ impl From<&GlobalConfig> for BlockProcessorConfig {
             ),
             full_size: value.flags.block_processor_full_size,
             batch_size: 256,
-            max_queued_notifications: 8,
             work_thresholds: value.network_params.work.clone(),
         }
     }

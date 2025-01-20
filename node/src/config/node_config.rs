@@ -102,6 +102,7 @@ pub struct NodeConfig {
     pub backlog_scan: BacklogScanConfig,
     pub bounded_backlog: BoundedBacklogConfig,
     pub network_duplicate_filter_cutoff: u64,
+    pub max_ledger_notifications: usize,
 }
 
 static DEFAULT_LIVE_PEER_NETWORK: Lazy<String> =
@@ -322,6 +323,7 @@ impl NodeConfig {
             backlog_scan: Default::default(),
             bounded_backlog: Default::default(),
             network_duplicate_filter_cutoff: 60,
+            max_ledger_notifications: 8,
         }
     }
 

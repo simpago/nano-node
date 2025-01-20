@@ -821,10 +821,6 @@ mod tests {
             default_cfg.node.bounded_backlog.batch_size
         );
         assert_ne!(
-            deserialized.node.bounded_backlog.max_queued_notifications,
-            default_cfg.node.bounded_backlog.max_queued_notifications
-        );
-        assert_ne!(
             deserialized.node.bounded_backlog.scan_rate,
             default_cfg.node.bounded_backlog.scan_rate
         );

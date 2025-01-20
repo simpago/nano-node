@@ -399,7 +399,7 @@ impl Node {
         ));
 
         let (ledger_notification_thread, ledger_notification_queue, ledger_notifications) =
-            LedgerNotificationThread::new(stats.clone());
+            LedgerNotificationThread::new(config.max_ledger_notifications, stats.clone());
 
         let block_processor = Arc::new(BlockProcessor::new(
             global_config.into(),

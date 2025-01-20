@@ -36,7 +36,6 @@ pub struct BlockProcessorConfig {
     pub batch_max_time: Duration,
     pub full_size: usize,
     pub batch_size: usize,
-    pub max_queued_notifications: usize,
     pub work_thresholds: WorkThresholds,
 }
 
@@ -56,7 +55,6 @@ impl BlockProcessorConfig {
             batch_max_time: Duration::from_millis(500),
             full_size: Self::DEFAULT_FULL_SIZE,
             batch_size: 256,
-            max_queued_notifications: 8,
         }
     }
 
@@ -115,7 +113,7 @@ impl BlockProcessor {
     }
 
     pub fn new_test_instance(ledger: Arc<Ledger>) -> Self {
-        let (queue, _, _) = LedgerNotificationQueue::new();
+        let (queue, _, _) = LedgerNotificationQueue::new(8);
         BlockProcessor::new(
             BlockProcessorConfig::new_for(Networks::NanoDevNetwork),
             ledger,
@@ -190,8 +188,8 @@ impl BlockProcessor {
         self.processor_loop.force(block);
     }
 
-    pub fn notification_queue_len(&self) -> usize {
-        self.processor_loop.notifier.len()
+    pub fn should_cool_down_notifications(&self) -> bool {
+        self.processor_loop.notifier.should_cool_down()
     }
 
     pub fn notify_rollback(&self, rolled_back: Vec<SavedBlock>, root: QualifiedRoot) {
@@ -237,7 +235,7 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
             if !guard.queue.is_empty() {
                 // It's possible that ledger processing happens faster than the
                 // notifications can be processed by other components, cooldown here
-                if self.notifier.len() >= self.config.max_queued_notifications {
+                while self.notifier.should_cool_down() {
                     self.stats
                         .inc(StatType::BlockProcessor, DetailType::Cooldown);
                     guard = self
@@ -245,6 +243,10 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
                         .wait_timeout_while(guard, Duration::from_millis(100), |i| !i.stopped)
                         .unwrap()
                         .0;
+
+                    if guard.stopped {
+                        return;
+                    }
                 }
 
                 if guard.should_log() {
@@ -653,7 +655,7 @@ mod tests {
         let ledger = Arc::new(Ledger::new_null());
         let unchecked = Arc::new(UncheckedMap::default());
         let stats = Arc::new(Stats::default());
-        let (notifier, _, _) = LedgerNotificationQueue::new();
+        let (notifier, _, _) = LedgerNotificationQueue::new(8);
         let block_processor =
             BlockProcessor::new(config, ledger, unchecked, stats.clone(), notifier.into());
 

@@ -25,7 +25,6 @@ use tracing::debug;
 pub struct BoundedBacklogConfig {
     pub max_backlog: usize,
     pub batch_size: usize,
-    pub max_queued_notifications: usize,
     pub scan_rate: usize,
 }
 
@@ -34,7 +33,6 @@ impl Default for BoundedBacklogConfig {
         Self {
             max_backlog: 100_000,
             batch_size: 32,
-            max_queued_notifications: 128,
             scan_rate: 64,
         }
     }
@@ -261,9 +259,7 @@ impl BoundedBacklogImpl {
             }
 
             // Wait until all notification about the previous rollbacks are processed
-            while self.block_processor.notification_queue_len()
-                >= self.config.max_queued_notifications
-            {
+            while self.block_processor.should_cool_down_notifications() {
                 self.stats
                     .inc(StatType::BoundedBacklog, DetailType::Cooldown);
                 guard = self

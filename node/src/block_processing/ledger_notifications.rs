@@ -108,15 +108,17 @@ pub(crate) struct LedgerNotificationQueue {
     events: Arc<Mutex<VecDeque<Event>>>,
     changed: Condvar,
     stopped: AtomicBool,
+    max_size: usize,
 }
 
 impl LedgerNotificationQueue {
-    pub(crate) fn new() -> (Self, LedgerNotifications, LedgerNotifier) {
+    pub(crate) fn new(max_size: usize) -> (Self, LedgerNotifications, LedgerNotifier) {
         let (notifications, notifier) = LedgerNotifications::new();
         let queue = Self {
             events: Arc::new(Mutex::new(VecDeque::new())),
             changed: Condvar::new(),
             stopped: AtomicBool::new(false),
+            max_size,
         };
         (queue, notifications, notifier)
     }
@@ -135,6 +137,10 @@ impl LedgerNotificationQueue {
             return None;
         }
         guard.pop_front()
+    }
+
+    pub fn should_cool_down(&self) -> bool {
+        self.len() >= self.max_size
     }
 
     pub fn len(&self) -> usize {
@@ -175,9 +181,10 @@ pub(crate) struct LedgerNotificationProcessor {
 
 impl LedgerNotificationProcessor {
     pub(crate) fn new(
+        max_queue_len: usize,
         stats: Arc<Stats>,
     ) -> (Self, Arc<LedgerNotificationQueue>, LedgerNotifications) {
-        let (queue, notifications, notifier) = LedgerNotificationQueue::new();
+        let (queue, notifications, notifier) = LedgerNotificationQueue::new(max_queue_len);
         let queue = Arc::new(queue);
         let processor = Self {
             queue: queue.clone(),
@@ -224,9 +231,11 @@ pub(crate) struct LedgerNotificationThread {
 
 impl LedgerNotificationThread {
     pub(crate) fn new(
+        max_queue_len: usize,
         stats: Arc<Stats>,
     ) -> (Self, Arc<LedgerNotificationQueue>, LedgerNotifications) {
-        let (processor, queue, notifications) = LedgerNotificationProcessor::new(stats);
+        let (processor, queue, notifications) =
+            LedgerNotificationProcessor::new(max_queue_len, stats);
         let thread = Self {
             processor: Arc::new(processor),
             handle: None,
@@ -272,13 +281,13 @@ mod tests {
 
     #[test]
     fn empty() {
-        let (queue, _, _) = LedgerNotificationQueue::new();
+        let (queue, _, _) = LedgerNotificationQueue::new(8);
         assert_eq!(queue.len(), 0);
     }
 
     #[test]
     fn enqueue_batch_processed() {
-        let (queue, notifications, _) = LedgerNotificationQueue::new();
+        let (queue, notifications, _) = LedgerNotificationQueue::new(8);
         let notified = Arc::new(AtomicBool::new(false));
         let notified2 = notified.clone();
         notifications.on_batch_processed(Box::new(move |_| {
@@ -293,7 +302,7 @@ mod tests {
 
     #[test]
     fn enqueue_rolled_back() {
-        let (queue, _, _) = LedgerNotificationQueue::new();
+        let (queue, _, _) = LedgerNotificationQueue::new(8);
         queue.notify_rollback(vec![], QualifiedRoot::new_test_instance());
         assert_eq!(queue.len(), 1);
     }
@@ -301,7 +310,7 @@ mod tests {
     #[test]
     fn process_event() {
         let (processor, queue, notifications) =
-            LedgerNotificationProcessor::new(Arc::new(Stats::default()));
+            LedgerNotificationProcessor::new(8, Arc::new(Stats::default()));
 
         let notified = Arc::new(AtomicBool::new(false));
         let notified2 = notified.clone();
@@ -323,7 +332,7 @@ mod tests {
     #[test]
     fn notification_thread() {
         let (mut thread, queue, notifications) =
-            LedgerNotificationThread::new(Arc::new(Stats::default()));
+            LedgerNotificationThread::new(8, Arc::new(Stats::default()));
 
         let notified = Arc::new((Condvar::new(), Mutex::new(0)));
         let notified2 = notified.clone();
