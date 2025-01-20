@@ -9,7 +9,7 @@ use crate::{
 use rsnano_core::{
     utils::{ContainerInfo, FairQueue, FairQueueInfo},
     work::WorkThresholds,
-    Block, BlockType, Epoch, Networks, QualifiedRoot, SavedBlock, UncheckedInfo,
+    Block, BlockType, Epoch, Networks, SavedBlock, UncheckedInfo,
 };
 use rsnano_ledger::{BlockStatus, Ledger, Writer};
 use rsnano_network::{ChannelId, DeadChannelCleanupStep};
@@ -191,15 +191,6 @@ impl BlockProcessor {
         self.processor_loop.process_active(block);
     }
 
-    pub fn on_blocks_rolled_back(
-        &self,
-        callback: impl Fn(&[SavedBlock], QualifiedRoot) + Send + Sync + 'static,
-    ) {
-        self.processor_loop
-            .notifications
-            .on_blocks_rolled_back(callback);
-    }
-
     pub fn force(&self, block: Block) {
         self.processor_loop.force(block);
     }
@@ -228,7 +219,6 @@ pub(crate) struct BlockProcessorLoopImpl {
     config: BlockProcessorConfig,
     stats: Arc<Stats>,
     workers: ThreadPoolImpl,
-
     notifications: Arc<LedgerNotifications>,
 }
 
