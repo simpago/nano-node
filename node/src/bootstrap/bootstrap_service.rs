@@ -9,7 +9,7 @@ use super::{
     AccountSetsConfig,
 };
 use crate::{
-    block_processing::{BlockContext, BlockProcessor, BlockSource},
+    block_processing::{BlockContext, BlockProcessor, BlockSource, LedgerNotifications},
     bootstrap::BootstrapServer,
     stats::{DetailType, Direction, Sample, StatType, Stats},
     transport::MessageSender,
@@ -44,6 +44,7 @@ enum VerifyResult {
 
 pub struct BootstrapService {
     block_processor: Arc<BlockProcessor>,
+    notifications: Arc<LedgerNotifications>,
     ledger: Arc<Ledger>,
     stats: Arc<Stats>,
     message_sender: Mutex<MessageSender>,
@@ -71,6 +72,7 @@ struct Threads {
 impl BootstrapService {
     pub(crate) fn new(
         block_processor: Arc<BlockProcessor>,
+        notifications: Arc<LedgerNotifications>,
         ledger: Arc<Ledger>,
         stats: Arc<Stats>,
         network: Arc<RwLock<Network>>,
@@ -80,6 +82,7 @@ impl BootstrapService {
     ) -> Self {
         Self {
             block_processor,
+            notifications,
             threads: Mutex::new(None),
             mutex: Arc::new(Mutex::new(BootstrapLogic {
                 stopped: false,
@@ -949,7 +952,7 @@ pub trait BootstrapExt {
 impl BootstrapExt for Arc<BootstrapService> {
     fn initialize(&self, genesis_account: &Account) {
         let self_w = Arc::downgrade(self);
-        self.block_processor
+        self.notifications
             .on_batch_processed(Box::new(move |batch| {
                 if let Some(self_l) = self_w.upgrade() {
                     self_l.batch_processed(batch);
@@ -958,7 +961,7 @@ impl BootstrapExt for Arc<BootstrapService> {
 
         // Unblock rolled back accounts as the dependency is no longer valid
         let self_w = Arc::downgrade(self);
-        self.block_processor
+        self.notifications
             .on_blocks_rolled_back(move |blocks, _rollback_root| {
                 let Some(self_l) = self_w.upgrade() else {
                     return;

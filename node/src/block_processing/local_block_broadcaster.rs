@@ -1,4 +1,4 @@
-use super::{BlockProcessor, BlockSource};
+use super::{BlockSource, LedgerNotifications};
 use crate::{
     cementation::ConfirmingSet,
     stats::{DetailType, Direction, StatType, Stats},
@@ -62,7 +62,7 @@ impl Default for LocalBlockBroadcasterConfig {
 /// Tracks local blocks for more aggressive propagation
 pub struct LocalBlockBroadcaster {
     config: LocalBlockBroadcasterConfig,
-    block_processor: Arc<BlockProcessor>,
+    notifications: Arc<LedgerNotifications>,
     stats: Arc<Stats>,
     ledger: Arc<Ledger>,
     confirming_set: Arc<ConfirmingSet>,
@@ -77,7 +77,7 @@ pub struct LocalBlockBroadcaster {
 impl LocalBlockBroadcaster {
     pub(crate) fn new(
         config: LocalBlockBroadcasterConfig,
-        block_processor: Arc<BlockProcessor>,
+        notifications: Arc<LedgerNotifications>,
         stats: Arc<Stats>,
         ledger: Arc<Ledger>,
         confirming_set: Arc<ConfirmingSet>,
@@ -90,7 +90,7 @@ impl LocalBlockBroadcaster {
                 config.broadcast_rate_burst_ratio,
             ),
             config,
-            block_processor,
+            notifications,
             stats,
             ledger,
             confirming_set,
@@ -284,7 +284,7 @@ impl LocalBlockBroadcasterExt for Arc<LocalBlockBroadcaster> {
         }
 
         let self_w = Arc::downgrade(self);
-        self.block_processor
+        self.notifications
             .on_batch_processed(Box::new(move |batch| {
                 let Some(self_l) = self_w.upgrade() else {
                     return;
@@ -321,7 +321,7 @@ impl LocalBlockBroadcasterExt for Arc<LocalBlockBroadcaster> {
             }));
 
         let self_w = Arc::downgrade(self);
-        self.block_processor
+        self.notifications
             .on_blocks_rolled_back(move |blocks, _rollback_root| {
                 let Some(self_l) = self_w.upgrade() else {
                     return;

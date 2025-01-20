@@ -209,18 +209,6 @@ impl BlockProcessor {
             .on_blocks_rolled_back(callback);
     }
 
-    pub fn notify_blocks_rolled_back(&self, blocks: &[SavedBlock], root: QualifiedRoot) {
-        let guard = self
-            .processor_loop
-            .notifications
-            .roll_back_observers
-            .read()
-            .unwrap();
-        for callback in &*guard {
-            callback(blocks, root.clone())
-        }
-    }
-
     pub fn force(&self, block: Block) {
         self.processor_loop.force(block);
     }

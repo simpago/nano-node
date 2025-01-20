@@ -10,8 +10,7 @@ pub struct LedgerNotifications {
     batch_processed: RwLock<Vec<Box<dyn Fn(&[(BlockStatus, Arc<BlockContext>)]) + Send + Sync>>>,
 
     /// Rolled back blocks <rolled back block, root of rollback>
-    pub roll_back_observers:
-        Arc<RwLock<Vec<Box<dyn Fn(&[SavedBlock], QualifiedRoot) + Send + Sync>>>>,
+    roll_back_observers: Arc<RwLock<Vec<Box<dyn Fn(&[SavedBlock], QualifiedRoot) + Send + Sync>>>>,
 }
 
 impl LedgerNotifications {

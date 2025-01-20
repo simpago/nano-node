@@ -722,7 +722,7 @@ impl Node {
             election_schedulers.priority.bucketing().clone(),
             config.bounded_backlog.clone(),
             ledger.clone(),
-            ledger_notifications,
+            ledger_notifications.clone(),
             stats.clone(),
         ));
 
@@ -768,6 +768,7 @@ impl Node {
 
         let bootstrap = Arc::new(BootstrapService::new(
             block_processor.clone(),
+            ledger_notifications.clone(),
             ledger.clone(),
             stats.clone(),
             network.clone(),
@@ -778,7 +779,7 @@ impl Node {
 
         let local_block_broadcaster = Arc::new(LocalBlockBroadcaster::new(
             config.local_block_broadcaster.clone(),
-            block_processor.clone(),
+            ledger_notifications.clone(),
             stats.clone(),
             ledger.clone(),
             confirming_set.clone(),
