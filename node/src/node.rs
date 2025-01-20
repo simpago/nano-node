@@ -1,7 +1,8 @@
 use crate::{
     block_processing::{
         BacklogScan, BlockProcessor, BlockProcessorCleanup, BlockSource, BoundedBacklog,
-        LedgerNotifications, LocalBlockBroadcaster, LocalBlockBroadcasterExt, UncheckedMap,
+        LedgerNotificationThread, LedgerNotifications, LocalBlockBroadcaster,
+        LocalBlockBroadcasterExt, UncheckedMap,
     },
     bootstrap::{BootstrapExt, BootstrapServer, BootstrapServerCleanup, BootstrapService},
     cementation::ConfirmingSet,
@@ -132,6 +133,7 @@ pub struct Node {
     wallet_backup: WalletBackup,
     receivable_search: ReceivableSearch,
     block_flooder: BlockFlooder,
+    ledger_notification_thread: LedgerNotificationThread,
 }
 
 pub(crate) struct NodeArgs {
@@ -397,14 +399,15 @@ impl Node {
             config.active_elections.confirmation_cache,
         ));
 
-        let (ledger_notifications, ledger_notifier) = LedgerNotifications::new();
+        let (ledger_notification_thread, ledger_notification_queue, ledger_notifications) =
+            LedgerNotificationThread::new(stats.clone());
 
         let block_processor = Arc::new(BlockProcessor::new(
             global_config.into(),
             ledger.clone(),
             unchecked.clone(),
             stats.clone(),
-            ledger_notifier,
+            ledger_notification_queue,
         ));
         dead_channel_cleanup.add_step(BlockProcessorCleanup::new(
             block_processor.processor_loop.clone(),
@@ -1201,6 +1204,7 @@ impl Node {
             wallet_backup,
             receivable_search,
             block_flooder,
+            ledger_notification_thread,
         }
     }
 
@@ -1464,6 +1468,7 @@ impl Node {
             self.vote_processor.start();
         }
         self.vote_cache_processor.start();
+        self.ledger_notification_thread.start();
         self.block_processor.start();
         self.active.start();
         self.vote_generators.start();
@@ -1530,6 +1535,7 @@ impl Node {
         self.unchecked.stop();
         self.block_processor.stop();
         self.request_aggregator.stop();
+        self.ledger_notification_thread.stop();
         self.vote_cache_processor.stop();
         self.vote_processor.stop();
         self.rep_tiers.stop();

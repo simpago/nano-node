@@ -11,6 +11,8 @@ pub use backlog_scan::{BacklogScan, BacklogScanConfig};
 pub use block_context::*;
 pub use block_processor::*;
 pub use bounded_backlog::*;
-pub use ledger_notifications::LedgerNotifications;
+pub(crate) use ledger_notifications::{
+    LedgerNotificationQueue, LedgerNotificationThread, LedgerNotifications,
+};
 pub use local_block_broadcaster::*;
 pub use unchecked_map::*;

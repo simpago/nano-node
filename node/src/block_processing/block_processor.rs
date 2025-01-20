@@ -1,11 +1,8 @@
 use super::{
-    ledger_notifications::{LedgerNotifications, LedgerNotifier},
-    BlockContext, BlockProcessorCallback, BlockSource, UncheckedMap,
+    ledger_notifications::LedgerNotifications, BlockContext, BlockProcessorCallback, BlockSource,
+    LedgerNotificationQueue, UncheckedMap,
 };
-use crate::{
-    stats::{DetailType, StatType, Stats},
-    utils::{ThreadPool, ThreadPoolImpl},
-};
+use crate::stats::{DetailType, StatType, Stats};
 use rsnano_core::{
     utils::{ContainerInfo, FairQueue, FairQueueInfo},
     work::WorkThresholds,
@@ -80,7 +77,7 @@ impl BlockProcessor {
         ledger: Arc<Ledger>,
         unchecked_map: Arc<UncheckedMap>,
         stats: Arc<Stats>,
-        notifier: LedgerNotifier,
+        notifier: Arc<LedgerNotificationQueue>,
     ) -> Self {
         let config_l = config.clone();
         let max_size_query = move |origin: &(BlockSource, ChannelId)| match origin.0 {
@@ -112,7 +109,6 @@ impl BlockProcessor {
                 unchecked: unchecked_map,
                 config,
                 stats,
-                workers: ThreadPoolImpl::create(1, "Blck proc notif"),
                 notifier,
             }),
             thread: Mutex::new(None),
@@ -120,13 +116,13 @@ impl BlockProcessor {
     }
 
     pub fn new_test_instance(ledger: Arc<Ledger>) -> Self {
-        let (_, notifier) = LedgerNotifications::new();
+        let (queue, _, _) = LedgerNotificationQueue::new();
         BlockProcessor::new(
             BlockProcessorConfig::new_for(Networks::NanoDevNetwork),
             ledger,
             Arc::new(UncheckedMap::default()),
             Arc::new(Stats::default()),
-            notifier,
+            Arc::new(queue),
         )
     }
 
@@ -154,7 +150,6 @@ impl BlockProcessor {
         if let Some(join_handle) = join_handle {
             join_handle.join().unwrap();
         }
-        self.processor_loop.workers.stop();
     }
 
     pub fn total_queue_len(&self) -> usize {
@@ -219,8 +214,7 @@ pub(crate) struct BlockProcessorLoopImpl {
     unchecked: Arc<UncheckedMap>,
     config: BlockProcessorConfig,
     stats: Arc<Stats>,
-    workers: ThreadPoolImpl,
-    notifier: LedgerNotifier,
+    notifier: Arc<LedgerNotificationQueue>,
 }
 
 trait BlockProcessorLoop {
@@ -234,7 +228,7 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
             if !guard.queue.is_empty() {
                 // It's possible that ledger processing happens faster than the
                 // notifications can be processed by other components, cooldown here
-                if self.workers.num_queued_tasks() >= self.config.max_queued_notifications {
+                if self.notifier.len() >= self.config.max_queued_notifications {
                     self.stats
                         .inc(StatType::BlockProcessor, DetailType::Cooldown);
                     guard = self
@@ -254,24 +248,10 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
                     );
                 }
 
-                let mut processed = self.process_batch(guard);
+                let processed = self.process_batch(guard);
                 guard = self.mutex.lock().unwrap();
 
-                // Queue notifications to be dispatched in the background
-                let stats = self.stats.clone();
-                let self_l = Arc::clone(self);
-
-                self.workers.post(Box::new(move || {
-                    stats.inc(StatType::BlockProcessor, DetailType::Notify);
-                    // Set results for futures when not holding the lock
-                    for (result, context) in processed.iter_mut() {
-                        if let Some(cb) = &context.callback {
-                            cb(*result);
-                        }
-                        context.set_result(*result);
-                    }
-                    self_l.notifier.notify_batch_processed(&processed);
-                }));
+                self.notifier.notify_batch_processed(processed);
             } else {
                 guard = self
                     .condition
@@ -573,11 +553,8 @@ impl BlockProcessorLoopImpl {
                 };
 
                 // Notify observers of the rolled back blocks on a background thread while not holding the ledger write lock
-                let notifier = self.notifier.clone();
-                let fork_block = fork_block.clone();
-                self.workers.post(Box::new(move || {
-                    notifier.notify_rollback(&rollback_list, fork_block.qualified_root());
-                }));
+                self.notifier
+                    .notify_rollback(rollback_list, fork_block.qualified_root());
             }
         }
     }
@@ -667,9 +644,9 @@ mod tests {
         let ledger = Arc::new(Ledger::new_null());
         let unchecked = Arc::new(UncheckedMap::default());
         let stats = Arc::new(Stats::default());
-        let (_, notifier) = LedgerNotifications::new();
+        let (notifier, _, _) = LedgerNotificationQueue::new();
         let block_processor =
-            BlockProcessor::new(config, ledger, unchecked, stats.clone(), notifier);
+            BlockProcessor::new(config, ledger, unchecked, stats.clone(), notifier.into());
 
         let mut block = Block::new_test_instance();
         block.set_work(3);

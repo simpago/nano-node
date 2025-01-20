@@ -1,3 +1,5 @@
+use crate::stats::{DetailType, StatType, Stats};
+
 use super::BlockContext;
 use rsnano_core::{QualifiedRoot, SavedBlock};
 use rsnano_ledger::BlockStatus;
@@ -11,7 +13,7 @@ use std::{
 };
 
 #[derive(Clone)]
-pub struct LedgerNotifications {
+pub(crate) struct LedgerNotifications {
     callbacks: Arc<RwLock<Callbacks>>,
 }
 
@@ -167,15 +169,19 @@ impl LedgerNotificationQueue {
 pub(crate) struct LedgerNotificationProcessor {
     queue: Arc<LedgerNotificationQueue>,
     notifier: LedgerNotifier,
+    stats: Arc<Stats>,
 }
 
 impl LedgerNotificationProcessor {
-    pub(crate) fn new() -> (Self, Arc<LedgerNotificationQueue>, LedgerNotifications) {
+    pub(crate) fn new(
+        stats: Arc<Stats>,
+    ) -> (Self, Arc<LedgerNotificationQueue>, LedgerNotifications) {
         let (queue, notifications, notifier) = LedgerNotificationQueue::new();
         let queue = Arc::new(queue);
         let processor = Self {
             queue: queue.clone(),
             notifier,
+            stats,
         };
         (processor, queue, notifications)
     }
@@ -186,7 +192,17 @@ impl LedgerNotificationProcessor {
         };
 
         match event {
-            Event::BatchProcessed(batch) => self.notifier.notify_batch_processed(&batch),
+            Event::BatchProcessed(mut batch) => {
+                self.stats.inc(StatType::BlockProcessor, DetailType::Notify);
+                // Set results for futures when not holding the lock
+                for (result, context) in batch.iter_mut() {
+                    if let Some(cb) = &context.callback {
+                        cb(*result);
+                    }
+                    context.set_result(*result);
+                }
+                self.notifier.notify_batch_processed(&batch)
+            }
             Event::RolledBack(rolled_back, root) => {
                 self.notifier.notify_rollback(&rolled_back, root)
             }
@@ -206,8 +222,10 @@ pub(crate) struct LedgerNotificationThread {
 }
 
 impl LedgerNotificationThread {
-    pub(crate) fn new() -> (Self, Arc<LedgerNotificationQueue>, LedgerNotifications) {
-        let (processor, queue, notifications) = LedgerNotificationProcessor::new();
+    pub(crate) fn new(
+        stats: Arc<Stats>,
+    ) -> (Self, Arc<LedgerNotificationQueue>, LedgerNotifications) {
+        let (processor, queue, notifications) = LedgerNotificationProcessor::new(stats);
         let thread = Self {
             processor: Arc::new(processor),
             handle: None,
@@ -281,7 +299,8 @@ mod tests {
 
     #[test]
     fn process_event() {
-        let (processor, queue, notifications) = LedgerNotificationProcessor::new();
+        let (processor, queue, notifications) =
+            LedgerNotificationProcessor::new(Arc::new(Stats::default()));
 
         let notified = Arc::new(AtomicBool::new(false));
         let notified2 = notified.clone();
@@ -302,7 +321,8 @@ mod tests {
 
     #[test]
     fn notification_thread() {
-        let (mut thread, queue, notifications) = LedgerNotificationThread::new();
+        let (mut thread, queue, notifications) =
+            LedgerNotificationThread::new(Arc::new(Stats::default()));
 
         let notified = Arc::new((Condvar::new(), Mutex::new(0)));
         let notified2 = notified.clone();
