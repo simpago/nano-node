@@ -80,7 +80,6 @@ impl BlockProcessor {
         ledger: Arc<Ledger>,
         unchecked_map: Arc<UncheckedMap>,
         stats: Arc<Stats>,
-        notifications: LedgerNotifications,
         notifier: LedgerNotifier,
     ) -> Self {
         let config_l = config.clone();
@@ -114,7 +113,6 @@ impl BlockProcessor {
                 config,
                 stats,
                 workers: ThreadPoolImpl::create(1, "Blck proc notif"),
-                notifications,
                 notifier,
             }),
             thread: Mutex::new(None),
@@ -122,13 +120,12 @@ impl BlockProcessor {
     }
 
     pub fn new_test_instance(ledger: Arc<Ledger>) -> Self {
-        let (notifications, notifier) = LedgerNotifications::new();
+        let (_, notifier) = LedgerNotifications::new();
         BlockProcessor::new(
             BlockProcessorConfig::new_for(Networks::NanoDevNetwork),
             ledger,
             Arc::new(UncheckedMap::default()),
             Arc::new(Stats::default()),
-            notifications,
             notifier,
         )
     }
@@ -223,7 +220,6 @@ pub(crate) struct BlockProcessorLoopImpl {
     config: BlockProcessorConfig,
     stats: Arc<Stats>,
     workers: ThreadPoolImpl,
-    notifications: LedgerNotifications,
     notifier: LedgerNotifier,
 }
 
@@ -671,15 +667,9 @@ mod tests {
         let ledger = Arc::new(Ledger::new_null());
         let unchecked = Arc::new(UncheckedMap::default());
         let stats = Arc::new(Stats::default());
-        let (notifications, notifier) = LedgerNotifications::new();
-        let block_processor = BlockProcessor::new(
-            config,
-            ledger,
-            unchecked,
-            stats.clone(),
-            notifications,
-            notifier,
-        );
+        let (_, notifier) = LedgerNotifications::new();
+        let block_processor =
+            BlockProcessor::new(config, ledger, unchecked, stats.clone(), notifier);
 
         let mut block = Block::new_test_instance();
         block.set_work(3);

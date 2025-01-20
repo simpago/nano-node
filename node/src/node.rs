@@ -404,7 +404,6 @@ impl Node {
             ledger.clone(),
             unchecked.clone(),
             stats.clone(),
-            ledger_notifications.clone(),
             ledger_notifier,
         ));
         dead_channel_cleanup.add_step(BlockProcessorCleanup::new(
