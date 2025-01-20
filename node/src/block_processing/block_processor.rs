@@ -17,7 +17,7 @@ use rsnano_store_lmdb::LmdbWriteTransaction;
 use std::{
     collections::VecDeque,
     mem::size_of,
-    sync::{Arc, Condvar, Mutex, MutexGuard, RwLock},
+    sync::{Arc, Condvar, Mutex, MutexGuard},
     thread::JoinHandle,
     time::{Duration, Instant},
 };
@@ -113,7 +113,6 @@ impl BlockProcessor {
                 config,
                 stats,
                 workers: ThreadPoolImpl::create(1, "Blck proc notif"),
-                roll_back_observers: Arc::new(RwLock::new(Vec::new())),
                 notifications,
             }),
             thread: Mutex::new(None),
@@ -165,15 +164,6 @@ impl BlockProcessor {
         self.processor_loop.queue_len(source)
     }
 
-    pub fn on_block_processed(
-        &self,
-        observer: Box<dyn Fn(BlockStatus, &BlockContext) + Send + Sync>,
-    ) {
-        self.processor_loop
-            .notifications
-            .on_block_processed(observer);
-    }
-
     pub fn on_batch_processed(
         &self,
         observer: Box<dyn Fn(&[(BlockStatus, Arc<BlockContext>)]) + Send + Sync>,
@@ -214,11 +204,18 @@ impl BlockProcessor {
         &self,
         callback: impl Fn(&[SavedBlock], QualifiedRoot) + Send + Sync + 'static,
     ) {
-        self.processor_loop.on_blocks_rolled_back(callback);
+        self.processor_loop
+            .notifications
+            .on_blocks_rolled_back(callback);
     }
 
     pub fn notify_blocks_rolled_back(&self, blocks: &[SavedBlock], root: QualifiedRoot) {
-        let guard = self.processor_loop.roll_back_observers.read().unwrap();
+        let guard = self
+            .processor_loop
+            .notifications
+            .roll_back_observers
+            .read()
+            .unwrap();
         for callback in &*guard {
             callback(blocks, root.clone())
         }
@@ -253,8 +250,6 @@ pub(crate) struct BlockProcessorLoopImpl {
     stats: Arc<Stats>,
     workers: ThreadPoolImpl,
 
-    /// Rolled back blocks <rolled back block, root of rollback>
-    roll_back_observers: Arc<RwLock<Vec<Box<dyn Fn(&[SavedBlock], QualifiedRoot) + Send + Sync>>>>,
     notifications: Arc<LedgerNotifications>,
 }
 
@@ -318,16 +313,6 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
 }
 
 impl BlockProcessorLoopImpl {
-    pub fn on_blocks_rolled_back(
-        &self,
-        callback: impl Fn(&[SavedBlock], QualifiedRoot) + Send + Sync + 'static,
-    ) {
-        self.roll_back_observers
-            .write()
-            .unwrap()
-            .push(Box::new(callback));
-    }
-
     pub fn process_active(&self, block: Block) {
         self.add(block, BlockSource::Live, ChannelId::LOOPBACK, None);
     }
@@ -618,13 +603,10 @@ impl BlockProcessorLoopImpl {
                 };
 
                 // Notify observers of the rolled back blocks on a background thread while not holding the ledger write lock
-                let observers = self.roll_back_observers.clone();
+                let notifications = self.notifications.clone();
                 let fork_block = fork_block.clone();
                 self.workers.post(Box::new(move || {
-                    let callback_guard = observers.read().unwrap();
-                    for callback in &*callback_guard {
-                        callback(&rollback_list, fork_block.qualified_root());
-                    }
+                    notifications.notify_rollback(&rollback_list, fork_block.qualified_root());
                 }));
             }
         }

@@ -1,7 +1,7 @@
 use super::{
     backlog_index::{BacklogEntry, BacklogIndex},
     backlog_scan::ActivatedInfo,
-    BlockContext, BlockProcessor,
+    BlockContext, LedgerNotifications,
 };
 use crate::{
     consensus::Bucketing,
@@ -53,7 +53,7 @@ impl BoundedBacklog {
         bucketing: Bucketing,
         config: BoundedBacklogConfig,
         ledger: Arc<Ledger>,
-        block_processor: Arc<BlockProcessor>,
+        notifications: Arc<LedgerNotifications>,
         stats: Arc<Stats>,
     ) -> Self {
         let backlog_impl = Arc::new(BoundedBacklogImpl {
@@ -70,7 +70,7 @@ impl BoundedBacklog {
             config,
             stats,
             ledger,
-            block_processor,
+            notifications,
             can_rollback: RwLock::new(Box::new(|_| true)),
         });
 
@@ -244,7 +244,7 @@ struct BoundedBacklogImpl {
     config: BoundedBacklogConfig,
     stats: Arc<Stats>,
     ledger: Arc<Ledger>,
-    block_processor: Arc<BlockProcessor>,
+    notifications: Arc<LedgerNotifications>,
     can_rollback: RwLock<Box<dyn Fn(&BlockHash) -> bool + Send + Sync>>,
 }
 
@@ -363,11 +363,10 @@ impl BoundedBacklogImpl {
                 }
 
                 // Notify observers of the rolled back blocks on a background thread, avoid dispatching notifications when holding ledger write transaction
-                let block_processor = self.block_processor.clone();
+                let notifications = self.notifications.clone();
                 self.workers.post(Box::new(move || {
                     // TODO: Calling block_processor's event here is not ideal, but duplicating these events is even worse
-                    block_processor
-                        .notify_blocks_rolled_back(&rollback_list, block.qualified_root());
+                    notifications.notify_rollback(&rollback_list, block.qualified_root());
                 }));
 
                 // Return early if we reached the maximum number of rollbacks

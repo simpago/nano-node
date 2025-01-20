@@ -404,7 +404,7 @@ impl Node {
             ledger.clone(),
             unchecked.clone(),
             stats.clone(),
-            ledger_notifications,
+            ledger_notifications.clone(),
         ));
         dead_channel_cleanup.add_step(BlockProcessorCleanup::new(
             block_processor.processor_loop.clone(),
@@ -722,7 +722,7 @@ impl Node {
             election_schedulers.priority.bucketing().clone(),
             config.bounded_backlog.clone(),
             ledger.clone(),
-            block_processor.clone(),
+            ledger_notifications,
             stats.clone(),
         ));
 

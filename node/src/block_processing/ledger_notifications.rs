@@ -1,20 +1,25 @@
 use super::BlockContext;
+use rsnano_core::{QualifiedRoot, SavedBlock};
 use rsnano_ledger::BlockStatus;
 use std::sync::{Arc, RwLock};
 
-pub(crate) struct LedgerNotifications {
-    pub block_processed: RwLock<Vec<Box<dyn Fn(BlockStatus, &BlockContext) + Send + Sync>>>,
+pub struct LedgerNotifications {
+    block_processed: RwLock<Vec<Box<dyn Fn(BlockStatus, &BlockContext) + Send + Sync>>>,
 
     /// All processed blocks including forks, rejected etc
-    pub batch_processed:
-        RwLock<Vec<Box<dyn Fn(&[(BlockStatus, Arc<BlockContext>)]) + Send + Sync>>>,
+    batch_processed: RwLock<Vec<Box<dyn Fn(&[(BlockStatus, Arc<BlockContext>)]) + Send + Sync>>>,
+
+    /// Rolled back blocks <rolled back block, root of rollback>
+    pub roll_back_observers:
+        Arc<RwLock<Vec<Box<dyn Fn(&[SavedBlock], QualifiedRoot) + Send + Sync>>>>,
 }
 
 impl LedgerNotifications {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             block_processed: RwLock::new(Vec::new()),
             batch_processed: RwLock::new(Vec::new()),
+            roll_back_observers: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -32,6 +37,16 @@ impl LedgerNotifications {
         self.batch_processed.write().unwrap().push(observer);
     }
 
+    pub fn on_blocks_rolled_back(
+        &self,
+        callback: impl Fn(&[SavedBlock], QualifiedRoot) + Send + Sync + 'static,
+    ) {
+        self.roll_back_observers
+            .write()
+            .unwrap()
+            .push(Box::new(callback));
+    }
+
     pub fn notify_batch_processed(&self, blocks: &Vec<(BlockStatus, Arc<BlockContext>)>) {
         {
             let guard = self.block_processed.read().unwrap();
@@ -46,6 +61,13 @@ impl LedgerNotifications {
             for observer in guard.iter() {
                 observer(&blocks);
             }
+        }
+    }
+
+    pub fn notify_rollback(&self, rolled_back: &[SavedBlock], root: QualifiedRoot) {
+        let guard = self.roll_back_observers.read().unwrap();
+        for callback in &*guard {
+            callback(rolled_back, root.clone());
         }
     }
 }
