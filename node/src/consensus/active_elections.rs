@@ -4,7 +4,7 @@ use super::{
     VoteCache, VoteCacheProcessor, VoteGenerators, VoteRouter, NEXT_ELECTION_ID,
 };
 use crate::{
-    block_processing::BlockProcessor,
+    block_processing::LedgerNotifications,
     cementation::ConfirmingSet,
     config::{NodeConfig, NodeFlags},
     consensus::VoteApplierExt,
@@ -87,7 +87,7 @@ pub struct ActiveElections {
     pub recently_confirmed: Arc<RecentlyConfirmedCache>,
     /// Helper container for storing recently cemented elections (a block from election might be confirmed but not yet cemented by confirmation height processor)
     recently_cemented: Arc<Mutex<BoundedVecDeque<ElectionStatus>>>,
-    block_processor: Arc<BlockProcessor>,
+    notifications: Arc<LedgerNotifications>,
     vote_generators: Arc<VoteGenerators>,
     network_filter: Arc<NetworkFilter>,
     network: Arc<RwLock<Network>>,
@@ -113,7 +113,7 @@ impl ActiveElections {
         node_config: NodeConfig,
         ledger: Arc<Ledger>,
         confirming_set: Arc<ConfirmingSet>,
-        block_processor: Arc<BlockProcessor>,
+        notifications: Arc<LedgerNotifications>,
         vote_generators: Arc<VoteGenerators>,
         network_filter: Arc<NetworkFilter>,
         network: Arc<RwLock<Network>>,
@@ -148,7 +148,7 @@ impl ActiveElections {
             ))),
             config: node_config.active_elections.clone(),
             node_config,
-            block_processor,
+            notifications,
             vote_generators,
             network_filter,
             network,
@@ -1142,7 +1142,7 @@ impl ActiveElectionsExt for Arc<ActiveElections> {
 
         let self_w = Arc::downgrade(self);
         // Notify elections about alternative (forked) blocks
-        self.block_processor
+        self.notifications
             .on_batch_processed(Box::new(move |batch| {
                 if let Some(active) = self_w.upgrade() {
                     for (status, context) in batch {

@@ -164,15 +164,6 @@ impl BlockProcessor {
         self.processor_loop.queue_len(source)
     }
 
-    pub fn on_batch_processed(
-        &self,
-        observer: Box<dyn Fn(&[(BlockStatus, Arc<BlockContext>)]) + Send + Sync>,
-    ) {
-        self.processor_loop
-            .notifications
-            .on_batch_processed(observer);
-    }
-
     pub fn add(&self, block: Block, source: BlockSource, channel_id: ChannelId) -> bool {
         self.processor_loop.add(block, source, channel_id, None)
     }

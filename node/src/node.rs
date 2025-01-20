@@ -411,7 +411,7 @@ impl Node {
         ));
 
         let confirming_set_w = Arc::downgrade(&confirming_set);
-        block_processor.on_batch_processed(Box::new(move |batch| {
+        ledger_notifications.on_batch_processed(Box::new(move |batch| {
             if let Some(confirming) = confirming_set_w.upgrade() {
                 confirming.requeue_blocks(batch)
             }
@@ -520,7 +520,7 @@ impl Node {
             config.clone(),
             ledger.clone(),
             confirming_set.clone(),
-            block_processor.clone(),
+            ledger_notifications.clone(),
             vote_generators.clone(),
             network_filter.clone(),
             network.clone(),
@@ -552,7 +552,7 @@ impl Node {
         let schedulers_w = Arc::downgrade(&election_schedulers);
         let ledger_l = ledger.clone();
         // Activate accounts with fresh blocks
-        block_processor.on_batch_processed(Box::new(move |batch| {
+        ledger_notifications.on_batch_processed(Box::new(move |batch| {
             let Some(schedulers) = schedulers_w.upgrade() else {
                 return;
             };
@@ -744,7 +744,7 @@ impl Node {
 
         // Track unconfirmed blocks
         let backlog_w = Arc::downgrade(&bounded_backlog);
-        block_processor.on_batch_processed(Box::new(move |batch| {
+        ledger_notifications.on_batch_processed(Box::new(move |batch| {
             if let Some(backlog) = backlog_w.upgrade() {
                 backlog.insert_batch(batch);
             }
@@ -752,7 +752,7 @@ impl Node {
 
         // Remove rolled back blocks from the backlog
         let backlog_w = Arc::downgrade(&bounded_backlog);
-        block_processor.on_blocks_rolled_back(move |blocks, _rollback_root| {
+        ledger_notifications.on_blocks_rolled_back(move |blocks, _rollback_root| {
             if let Some(backlog) = backlog_w.upgrade() {
                 backlog.erase_hashes(blocks.iter().map(|b| b.hash()));
             }
@@ -919,7 +919,7 @@ impl Node {
             }
         });
 
-        process_live_dispatcher.connect(&block_processor);
+        process_live_dispatcher.connect(&ledger_notifications);
 
         // Requeue blocks that could not be immediately processed
         let block_processor_w = Arc::downgrade(&block_processor);

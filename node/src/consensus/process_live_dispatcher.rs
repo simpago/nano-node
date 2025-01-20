@@ -1,4 +1,4 @@
-use crate::block_processing::BlockProcessor;
+use crate::block_processing::LedgerNotifications;
 use rsnano_core::SavedBlock;
 use rsnano_ledger::BlockStatus;
 use std::sync::{Arc, RwLock};
@@ -28,13 +28,13 @@ impl ProcessLiveDispatcher {
 }
 
 pub trait ProcessLiveDispatcherExt {
-    fn connect(&self, block_processor: &BlockProcessor);
+    fn connect(&self, notifications: &LedgerNotifications);
 }
 
 impl ProcessLiveDispatcherExt for Arc<ProcessLiveDispatcher> {
-    fn connect(&self, block_processor: &BlockProcessor) {
+    fn connect(&self, notifications: &LedgerNotifications) {
         let self_w = Arc::downgrade(self);
-        block_processor.on_batch_processed(Box::new(move |batch| {
+        notifications.on_batch_processed(Box::new(move |batch| {
             if let Some(self_l) = self_w.upgrade() {
                 for (result, context) in batch {
                     if *result == BlockStatus::Progress {
