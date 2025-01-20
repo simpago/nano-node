@@ -397,7 +397,7 @@ impl Node {
             config.active_elections.confirmation_cache,
         ));
 
-        let (ledger_notifications, _ledger_notifier) = LedgerNotifications::new();
+        let (ledger_notifications, ledger_notifier) = LedgerNotifications::new();
 
         let block_processor = Arc::new(BlockProcessor::new(
             global_config.into(),
@@ -405,6 +405,7 @@ impl Node {
             unchecked.clone(),
             stats.clone(),
             ledger_notifications.clone(),
+            ledger_notifier,
         ));
         dead_channel_cleanup.add_step(BlockProcessorCleanup::new(
             block_processor.processor_loop.clone(),

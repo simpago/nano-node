@@ -53,6 +53,29 @@ impl LedgerNotifications {
             .push(Box::new(callback));
     }
 
+    pub fn notify_rollback(&self, rolled_back: &[SavedBlock], root: QualifiedRoot) {
+        let guard = self.callbacks.read().unwrap();
+        for callback in guard.rollback_observers.iter() {
+            callback(rolled_back, root.clone());
+        }
+    }
+}
+
+#[derive(Default)]
+struct Callbacks {
+    block_processed: Vec<Box<dyn Fn(BlockStatus, &BlockContext) + Send + Sync>>,
+    batch_processed: Vec<Box<dyn Fn(&[(BlockStatus, Arc<BlockContext>)]) + Send + Sync>>,
+    rollback_observers: Vec<Box<dyn Fn(&[SavedBlock], QualifiedRoot) + Send + Sync>>,
+}
+
+/// publishes ledger notifications
+// TODO: Remove clone!
+#[derive(Clone)]
+pub(crate) struct LedgerNotifier {
+    callbacks: Arc<RwLock<Callbacks>>,
+}
+
+impl LedgerNotifier {
     pub fn notify_batch_processed(&self, blocks: &Vec<(BlockStatus, Arc<BlockContext>)>) {
         let guard = self.callbacks.read().unwrap();
         for observer in guard.block_processed.iter() {
@@ -71,16 +94,4 @@ impl LedgerNotifications {
             callback(rolled_back, root.clone());
         }
     }
-}
-
-#[derive(Default)]
-struct Callbacks {
-    block_processed: Vec<Box<dyn Fn(BlockStatus, &BlockContext) + Send + Sync>>,
-    batch_processed: Vec<Box<dyn Fn(&[(BlockStatus, Arc<BlockContext>)]) + Send + Sync>>,
-    rollback_observers: Vec<Box<dyn Fn(&[SavedBlock], QualifiedRoot) + Send + Sync>>,
-}
-
-// publishes ledger notifications
-pub(crate) struct LedgerNotifier {
-    callbacks: Arc<RwLock<Callbacks>>,
 }
