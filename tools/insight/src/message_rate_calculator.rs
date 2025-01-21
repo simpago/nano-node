@@ -2,14 +2,14 @@ use crate::{message_collection::RecordedMessage, rate_calculator::RateCalculator
 use rsnano_network::ChannelDirection;
 use rsnano_nullable_clock::Timestamp;
 use std::{
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicI64, Ordering},
     time::Duration,
 };
 
 #[derive(Default)]
 pub(crate) struct MessageRates {
-    pub send_rate: AtomicU64,
-    pub receive_rate: AtomicU64,
+    pub send_rate: AtomicI64,
+    pub receive_rate: AtomicI64,
 }
 
 #[derive(Default)]
@@ -55,7 +55,7 @@ struct MessageRateCalculator {
 }
 
 impl MessageRateCalculator {
-    fn message_processed(&mut self, should_sample: bool, now: Timestamp, result: &AtomicU64) {
+    fn message_processed(&mut self, should_sample: bool, now: Timestamp, result: &AtomicI64) {
         self.processed += 1;
         if should_sample {
             self.rate_calculator.sample(self.processed, now);

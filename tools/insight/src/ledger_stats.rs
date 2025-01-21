@@ -27,11 +27,11 @@ impl LedgerStats {
         self.bps_rate.sample(self.total_blocks, now);
     }
 
-    pub(crate) fn blocks_per_second(&self) -> u64 {
+    pub(crate) fn blocks_per_second(&self) -> i64 {
         self.bps_rate.rate()
     }
 
-    pub(crate) fn confirmations_per_second(&self) -> u64 {
+    pub(crate) fn confirmations_per_second(&self) -> i64 {
         self.cps_rate.rate()
     }
 }

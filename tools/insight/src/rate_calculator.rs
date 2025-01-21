@@ -15,15 +15,15 @@ impl RateCalculator {
         }
     }
 
-    pub(crate) fn rate(&self) -> u64 {
+    pub(crate) fn rate(&self) -> i64 {
         if self.values.len() < 2 {
             0
         } else {
             let (val_a, time_a) = *self.values.front().unwrap();
             let (val_b, time_b) = *self.values.back().unwrap();
-            let change = val_b - val_a;
+            let change = val_b as i64 - val_a as i64;
             let time = time_b - time_a;
-            (change as f64 / time.as_secs_f64()) as u64
+            (change as f64 / time.as_secs_f64()) as i64
         }
     }
 
@@ -92,5 +92,15 @@ mod tests {
         rate.sample(10000, ts);
         assert_eq!(rate.values.len(), 60);
         assert_eq!(rate.rate(), 335);
+    }
+
+    #[test]
+    fn negative_bps() {
+        let mut rate = RateCalculator::new();
+        let ts = Timestamp::new_test_instance();
+        rate.sample(200, ts);
+        rate.sample(300, ts + Duration::from_millis(1000));
+        rate.sample(150, ts + Duration::from_millis(2000));
+        assert_eq!(rate.rate(), -25);
     }
 }

@@ -1,6 +1,6 @@
 use crate::message_recorder::MessageRecorder;
 use num_format::{Locale, ToFormattedString};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 
 pub(crate) struct MessageStatsViewModel<'a> {
     msg_recorder: &'a MessageRecorder,
@@ -19,7 +19,7 @@ impl<'a> MessageStatsViewModel<'a> {
         Self::to_string(&self.msg_recorder.rates.receive_rate)
     }
 
-    fn to_string(value: &AtomicU64) -> String {
+    fn to_string(value: &AtomicI64) -> String {
         value
             .load(Ordering::SeqCst)
             .to_formatted_string(&Locale::en)
