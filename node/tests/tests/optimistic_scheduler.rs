@@ -1,7 +1,7 @@
 use rsnano_core::DEV_GENESIS_KEY;
 use rsnano_node::consensus::ElectionBehavior;
 use std::time::Duration;
-use test_helpers::{assert_never, assert_timely2, setup_chains, System};
+use test_helpers::{assert_never, assert_timely, assert_timely2, setup_chains, System};
 
 /*
  * Ensure account gets activated for a single unconfirmed account chain
@@ -95,7 +95,7 @@ pub fn activate_many() {
     );
 
     // Ensure all unconfirmed accounts head block gets activated
-    assert_timely2(|| {
+    assert_timely(Duration::from_secs(10), || {
         chains.iter().all(|(_, blocks)| {
             let block = blocks.last().unwrap();
             node.vote_router.active(&block.hash())
