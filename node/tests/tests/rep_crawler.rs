@@ -84,9 +84,8 @@ fn rep_weight() {
     let node3 = system.make_node();
     let key_non_pr = PrivateKey::new();
     let key_pr = PrivateKey::new();
-    let amount_pr = node.online_reps.lock().unwrap().minimum_principal_weight() + Amount::raw(100);
-    let amount_not_pr =
-        node.online_reps.lock().unwrap().minimum_principal_weight() - Amount::raw(100);
+    let amount_pr = Amount::nano(600_000);
+    let amount_not_pr = Amount::nano(10_000);
 
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let send_non_pr = lattice.genesis().send(&key_non_pr, amount_not_pr);
