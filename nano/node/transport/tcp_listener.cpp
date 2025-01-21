@@ -58,7 +58,7 @@ void nano::transport::tcp_listener::start ()
 			local = acceptor.local_endpoint ();
 		}
 
-		logger.debug (nano::log::type::tcp_listener, "Listening for incoming connections on: {}", fmt::streamed (acceptor.local_endpoint ()));
+		logger.debug (nano::log::type::tcp_listener, "Listening for incoming connections on: {}", acceptor.local_endpoint ());
 	}
 	catch (boost::system::system_error const & ex)
 	{
@@ -286,7 +286,7 @@ auto nano::transport::tcp_listener::connect_impl (asio::ip::tcp::endpoint endpoi
 		if (result.result == accept_result::accepted)
 		{
 			stats.inc (nano::stat::type::tcp_listener, nano::stat::detail::connect_success, nano::stat::dir::out);
-			logger.debug (nano::log::type::tcp_listener, "Successfully connected to: {}", fmt::streamed (endpoint));
+			logger.debug (nano::log::type::tcp_listener, "Successfully connected to: {}", endpoint);
 
 			release_assert (result.server);
 			result.server->initiate_handshake ();
@@ -300,7 +300,7 @@ auto nano::transport::tcp_listener::connect_impl (asio::ip::tcp::endpoint endpoi
 	catch (boost::system::system_error const & ex)
 	{
 		stats.inc (nano::stat::type::tcp_listener, nano::stat::detail::connect_error, nano::stat::dir::out);
-		logger.log (nano::log::level::debug, nano::log::type::tcp_listener, "Error connecting to: {} ({})", fmt::streamed (endpoint), ex.what ());
+		logger.log (nano::log::level::debug, nano::log::type::tcp_listener, "Error connecting to: {} ({})", endpoint, ex.what ());
 	}
 }
 
@@ -387,7 +387,7 @@ auto nano::transport::tcp_listener::accept_one (asio::ip::tcp::socket raw_socket
 	if (auto result = check_limits (remote_endpoint.address (), type); result != accept_result::accepted)
 	{
 		stats.inc (nano::stat::type::tcp_listener, nano::stat::detail::accept_rejected, to_stat_dir (type));
-		logger.debug (nano::log::type::tcp_listener, "Rejected connection from: {} ({})", fmt::streamed (remote_endpoint), to_string (type));
+		logger.debug (nano::log::type::tcp_listener, "Rejected connection from: {} ({})", remote_endpoint, to_string (type));
 		// Rejection reason should be logged earlier
 
 		try
@@ -406,7 +406,7 @@ auto nano::transport::tcp_listener::accept_one (asio::ip::tcp::socket raw_socket
 	}
 
 	stats.inc (nano::stat::type::tcp_listener, nano::stat::detail::accept_success, to_stat_dir (type));
-	logger.debug (nano::log::type::tcp_listener, "Accepted connection: {} ({})", fmt::streamed (remote_endpoint), to_string (type));
+	logger.debug (nano::log::type::tcp_listener, "Accepted connection: {} ({})", remote_endpoint, to_string (type));
 
 	auto socket = std::make_shared<nano::transport::tcp_socket> (node, std::move (raw_socket), remote_endpoint, local_endpoint, to_socket_endpoint (type));
 	auto server = std::make_shared<nano::transport::tcp_server> (socket, node.shared (), true);

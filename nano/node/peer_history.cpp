@@ -92,7 +92,7 @@ void nano::peer_history::run_one ()
 		if (!exists)
 		{
 			stats.inc (nano::stat::type::peer_history, nano::stat::detail::inserted);
-			logger.debug (nano::log::type::peer_history, "Saved new peer: {}", fmt::streamed (endpoint));
+			logger.debug (nano::log::type::peer_history, "Saved new peer: {}", endpoint);
 		}
 		else
 		{
@@ -116,7 +116,7 @@ void nano::peer_history::run_one ()
 
 			stats.inc (nano::stat::type::peer_history, nano::stat::detail::erased);
 			logger.debug (nano::log::type::peer_history, "Erased peer: {} (not seen for {}s)",
-			fmt::streamed (endpoint.endpoint ()),
+			endpoint.endpoint (),
 			nano::log::seconds_delta (timestamp));
 		}
 	}

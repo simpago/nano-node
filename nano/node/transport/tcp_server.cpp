@@ -33,7 +33,7 @@ nano::transport::tcp_server::~tcp_server ()
 		return;
 	}
 
-	node->logger.debug (nano::log::type::tcp_server, "Exiting server: {}", fmt::streamed (remote_endpoint));
+	node->logger.debug (nano::log::type::tcp_server, "Exiting server: {}", remote_endpoint);
 
 	stop ();
 }
@@ -53,7 +53,7 @@ void nano::transport::tcp_server::start ()
 		return;
 	}
 
-	node->logger.debug (nano::log::type::tcp_server, "Starting server: {}", fmt::streamed (remote_endpoint));
+	node->logger.debug (nano::log::type::tcp_server, "Starting server: {}", remote_endpoint);
 
 	receive_message ();
 }
@@ -86,7 +86,7 @@ void nano::transport::tcp_server::receive_message ()
 			node->logger.debug (nano::log::type::tcp_server, "Error reading message: {}, status: {} ({})",
 			ec.message (),
 			to_string (this_l->message_deserializer->status),
-			fmt::streamed (this_l->remote_endpoint));
+			this_l->remote_endpoint);
 
 			this_l->stop ();
 		}
@@ -134,7 +134,7 @@ void nano::transport::tcp_server::received_message (std::unique_ptr<nano::messag
 			{
 				node->logger.debug (nano::log::type::tcp_server, "Error deserializing message: {} ({})",
 				to_string (message_deserializer->status),
-				fmt::streamed (remote_endpoint));
+				remote_endpoint);
 			}
 			break;
 		}
@@ -193,7 +193,7 @@ auto nano::transport::tcp_server::process_message (std::unique_ptr<nano::message
 			case handshake_status::abort:
 			{
 				node->stats.inc (nano::stat::type::tcp_server, nano::stat::detail::handshake_abort);
-				node->logger.debug (nano::log::type::tcp_server, "Aborting handshake: {} ({})", to_string (message->type ()), fmt::streamed (remote_endpoint));
+				node->logger.debug (nano::log::type::tcp_server, "Aborting handshake: {} ({})", to_string (message->type ()), remote_endpoint);
 
 				return process_result::abort;
 			}
@@ -212,7 +212,7 @@ auto nano::transport::tcp_server::process_message (std::unique_ptr<nano::message
 				if (!success)
 				{
 					node->stats.inc (nano::stat::type::tcp_server, nano::stat::detail::handshake_error);
-					node->logger.debug (nano::log::type::tcp_server, "Error switching to bootstrap mode: {} ({})", to_string (message->type ()), fmt::streamed (remote_endpoint));
+					node->logger.debug (nano::log::type::tcp_server, "Error switching to bootstrap mode: {} ({})", to_string (message->type ()), remote_endpoint);
 
 					return process_result::abort; // Switch failed, abort
 				}
@@ -276,21 +276,21 @@ auto nano::transport::tcp_server::process_handshake (nano::node_id_handshake con
 	if (node->flags.disable_tcp_realtime)
 	{
 		node->stats.inc (nano::stat::type::tcp_server, nano::stat::detail::handshake_error);
-		node->logger.debug (nano::log::type::tcp_server, "Handshake attempted with disabled realtime mode ({})", fmt::streamed (remote_endpoint));
+		node->logger.debug (nano::log::type::tcp_server, "Handshake attempted with disabled realtime mode ({})", remote_endpoint);
 
 		return handshake_status::abort;
 	}
 	if (!message.query && !message.response)
 	{
 		node->stats.inc (nano::stat::type::tcp_server, nano::stat::detail::handshake_error);
-		node->logger.debug (nano::log::type::tcp_server, "Invalid handshake message received ({})", fmt::streamed (remote_endpoint));
+		node->logger.debug (nano::log::type::tcp_server, "Invalid handshake message received ({})", remote_endpoint);
 
 		return handshake_status::abort;
 	}
 	if (message.query && handshake_received) // Second handshake message should be a response only
 	{
 		node->stats.inc (nano::stat::type::tcp_server, nano::stat::detail::handshake_error);
-		node->logger.debug (nano::log::type::tcp_server, "Detected multiple handshake queries ({})", fmt::streamed (remote_endpoint));
+		node->logger.debug (nano::log::type::tcp_server, "Detected multiple handshake queries ({})", remote_endpoint);
 
 		return handshake_status::abort;
 	}
@@ -300,7 +300,7 @@ auto nano::transport::tcp_server::process_handshake (nano::node_id_handshake con
 	node->stats.inc (nano::stat::type::tcp_server, nano::stat::detail::node_id_handshake, nano::stat::dir::in);
 	node->logger.debug (nano::log::type::tcp_server, "Handshake message received: {} ({})",
 	message.query ? (message.response ? "query + response" : "query") : (message.response ? "response" : "none"),
-	fmt::streamed (remote_endpoint));
+	remote_endpoint);
 
 	if (message.query)
 	{
@@ -320,7 +320,7 @@ auto nano::transport::tcp_server::process_handshake (nano::node_id_handshake con
 			else
 			{
 				node->stats.inc (nano::stat::type::tcp_server, nano::stat::detail::handshake_error);
-				node->logger.debug (nano::log::type::tcp_server, "Error switching to realtime mode ({})", fmt::streamed (remote_endpoint));
+				node->logger.debug (nano::log::type::tcp_server, "Error switching to realtime mode ({})", remote_endpoint);
 
 				return handshake_status::abort;
 			}
@@ -328,7 +328,7 @@ auto nano::transport::tcp_server::process_handshake (nano::node_id_handshake con
 		else
 		{
 			node->stats.inc (nano::stat::type::tcp_server, nano::stat::detail::handshake_response_invalid);
-			node->logger.debug (nano::log::type::tcp_server, "Invalid handshake response received ({})", fmt::streamed (remote_endpoint));
+			node->logger.debug (nano::log::type::tcp_server, "Invalid handshake response received ({})", remote_endpoint);
 
 			return handshake_status::abort;
 		}
@@ -348,7 +348,7 @@ void nano::transport::tcp_server::initiate_handshake ()
 	auto query = node->network.prepare_handshake_query (nano::transport::map_tcp_to_endpoint (remote_endpoint));
 	nano::node_id_handshake message{ node->network_params.network, query };
 
-	node->logger.debug (nano::log::type::tcp_server, "Initiating handshake query ({})", fmt::streamed (remote_endpoint));
+	node->logger.debug (nano::log::type::tcp_server, "Initiating handshake query ({})", remote_endpoint);
 
 	auto shared_const_buffer = message.to_shared_const_buffer ();
 	socket->async_write (shared_const_buffer, [this_l = shared_from_this ()] (boost::system::error_code const & ec, std::size_t size_a) {
@@ -360,7 +360,7 @@ void nano::transport::tcp_server::initiate_handshake ()
 		if (ec)
 		{
 			node->stats.inc (nano::stat::type::tcp_server, nano::stat::detail::handshake_network_error);
-			node->logger.debug (nano::log::type::tcp_server, "Error sending handshake query: {} ({})", ec.message (), fmt::streamed (this_l->remote_endpoint));
+			node->logger.debug (nano::log::type::tcp_server, "Error sending handshake query: {} ({})", ec.message (), this_l->remote_endpoint);
 
 			// Stop invalid handshake
 			this_l->stop ();
@@ -385,7 +385,7 @@ void nano::transport::tcp_server::send_handshake_response (nano::node_id_handsha
 	auto own_query = node->network.prepare_handshake_query (nano::transport::map_tcp_to_endpoint (remote_endpoint));
 	nano::node_id_handshake handshake_response{ node->network_params.network, own_query, response };
 
-	node->logger.debug (nano::log::type::tcp_server, "Responding to handshake ({})", fmt::streamed (remote_endpoint));
+	node->logger.debug (nano::log::type::tcp_server, "Responding to handshake ({})", remote_endpoint);
 
 	auto shared_const_buffer = handshake_response.to_shared_const_buffer ();
 	socket->async_write (shared_const_buffer, [this_l = shared_from_this ()] (boost::system::error_code const & ec, std::size_t size_a) {
@@ -397,7 +397,7 @@ void nano::transport::tcp_server::send_handshake_response (nano::node_id_handsha
 		if (ec)
 		{
 			node->stats.inc (nano::stat::type::tcp_server, nano::stat::detail::handshake_network_error);
-			node->logger.debug (nano::log::type::tcp_server, "Error sending handshake response: {} ({})", ec.message (), fmt::streamed (this_l->remote_endpoint));
+			node->logger.debug (nano::log::type::tcp_server, "Error sending handshake response: {} ({})", ec.message (), this_l->remote_endpoint);
 
 			// Stop invalid handshake
 			this_l->stop ();
@@ -551,7 +551,7 @@ void nano::transport::tcp_server::timeout ()
 	}
 	if (socket->has_timed_out ())
 	{
-		node->logger.debug (nano::log::type::tcp_server, "Closing TCP server due to timeout ({})", fmt::streamed (remote_endpoint));
+		node->logger.debug (nano::log::type::tcp_server, "Closing TCP server due to timeout ({})", remote_endpoint);
 
 		socket->close ();
 	}
@@ -600,7 +600,7 @@ bool nano::transport::tcp_server::to_bootstrap_connection ()
 
 	socket->type_set (nano::transport::socket_type::bootstrap);
 
-	node->logger.debug (nano::log::type::tcp_server, "Switched to bootstrap mode ({})", fmt::streamed (remote_endpoint));
+	node->logger.debug (nano::log::type::tcp_server, "Switched to bootstrap mode ({})", remote_endpoint);
 
 	return true;
 }
@@ -630,7 +630,7 @@ bool nano::transport::tcp_server::to_realtime_connection (nano::account const & 
 
 	socket->type_set (nano::transport::socket_type::realtime);
 
-	node->logger.debug (nano::log::type::tcp_server, "Switched to realtime mode ({})", fmt::streamed (remote_endpoint));
+	node->logger.debug (nano::log::type::tcp_server, "Switched to realtime mode ({})", remote_endpoint);
 
 	return true;
 }

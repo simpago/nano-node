@@ -56,7 +56,7 @@ bool nano::transport::tcp_channels::check (const nano::tcp_endpoint & endpoint, 
 	if (node.network.not_a_peer (nano::transport::map_tcp_to_endpoint (endpoint), node.config.allow_local_peers))
 	{
 		node.stats.inc (nano::stat::type::tcp_channels_rejected, nano::stat::detail::not_a_peer);
-		node.logger.debug (nano::log::type::tcp_channels, "Rejected invalid endpoint channel: {}", fmt::streamed (endpoint));
+		node.logger.debug (nano::log::type::tcp_channels, "Rejected invalid endpoint channel: {}", endpoint);
 
 		return false; // Reject
 	}
@@ -76,7 +76,7 @@ bool nano::transport::tcp_channels::check (const nano::tcp_endpoint & endpoint, 
 	if (has_duplicate)
 	{
 		node.stats.inc (nano::stat::type::tcp_channels_rejected, nano::stat::detail::channel_duplicate);
-		node.logger.debug (nano::log::type::tcp_channels, "Rejected duplicate channel: {} ({})", fmt::streamed (endpoint), node_id.to_node_id ());
+		node.logger.debug (nano::log::type::tcp_channels, "Rejected duplicate channel: {} ({})", endpoint, node_id.to_node_id ());
 
 		return false; // Reject
 	}
@@ -100,7 +100,7 @@ std::shared_ptr<nano::transport::tcp_channel> nano::transport::tcp_channels::cre
 	if (!check (endpoint, node_id))
 	{
 		node.stats.inc (nano::stat::type::tcp_channels, nano::stat::detail::channel_rejected);
-		node.logger.debug (nano::log::type::tcp_channels, "Rejected channel: {} ({})", fmt::streamed (endpoint), node_id.to_node_id ());
+		node.logger.debug (nano::log::type::tcp_channels, "Rejected channel: {} ({})", endpoint, node_id.to_node_id ());
 		// Rejection reason should be logged earlier
 
 		return nullptr;
@@ -108,7 +108,7 @@ std::shared_ptr<nano::transport::tcp_channel> nano::transport::tcp_channels::cre
 
 	node.stats.inc (nano::stat::type::tcp_channels, nano::stat::detail::channel_accepted);
 	node.logger.debug (nano::log::type::tcp_channels, "Accepted channel: {} ({}) ({})",
-	fmt::streamed (socket->remote_endpoint ()),
+	socket->remote_endpoint (),
 	to_string (socket->endpoint_type ()),
 	node_id.to_node_id ());
 
