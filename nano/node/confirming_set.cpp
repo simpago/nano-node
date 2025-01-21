@@ -263,12 +263,12 @@ void nano::confirming_set::run_batch (std::unique_lock<std::mutex> & lock)
 			if (success)
 			{
 				stats.inc (nano::stat::type::confirming_set, nano::stat::detail::cemented_hash);
-				logger.debug (nano::log::type::confirming_set, "Cemented block: {} (total cemented: {})", hash.to_string (), cemented_count);
+				logger.debug (nano::log::type::confirming_set, "Cemented block: {} (total cemented: {})", hash, cemented_count);
 			}
 			else
 			{
 				stats.inc (nano::stat::type::confirming_set, nano::stat::detail::cementing_failed);
-				logger.debug (nano::log::type::confirming_set, "Failed to cement block: {}", hash.to_string ());
+				logger.debug (nano::log::type::confirming_set, "Failed to cement block: {}", hash);
 
 				// Requeue failed blocks for processing later
 				// Add them to the deferred set while still holding the exclusive database write transaction to avoid block processor races

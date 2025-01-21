@@ -55,6 +55,8 @@ add_library(
   errors.cpp
   files.hpp
   files.cpp
+  formatting.hpp
+  formatting.cpp
   fwd.hpp
   id_dispenser.hpp
   interval.hpp

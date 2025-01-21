@@ -65,7 +65,7 @@ void nano::epoch_upgrader::upgrade_impl (nano::raw_key const & prv_a, nano::epoc
 			bool fork (result == nano::block_status::fork);
 
 			logger.error (nano::log::type::epoch_upgrader, "Failed to upgrade account {} (valid signature: {}, valid work: {}, fork: {})",
-			account_a.to_account (),
+			account_a,
 			valid_signature,
 			valid_work,
 			fork);
