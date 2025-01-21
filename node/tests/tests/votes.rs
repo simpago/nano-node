@@ -4,6 +4,7 @@ use rsnano_core::{
 };
 use rsnano_ledger::{DEV_GENESIS_ACCOUNT, DEV_GENESIS_HASH, DEV_GENESIS_PUB_KEY};
 use rsnano_node::{
+    config::NodeFlags,
     stats::{DetailType, Direction, StatType},
     wallets::WalletsExt,
 };
@@ -291,92 +292,16 @@ fn vote_generator_multiple_representatives() {
 #[test]
 fn vote_spacing_vote_generator() {
     let mut system = System::new();
-    let config = System::default_config_without_backlog_scan();
-    let node = system.build_node().config(config).finish();
-
-    let wallet_id = WalletId::random();
-    node.wallets.create(wallet_id);
-    node.wallets
-        .insert_adhoc2(&wallet_id, &DEV_GENESIS_KEY.raw_key(), true)
-        .unwrap();
-
-    let mut lattice = UnsavedBlockLatticeBuilder::new();
-    let send1 = lattice
-        .genesis()
-        .send(&*DEV_GENESIS_KEY, Amount::nano(1000));
-
-    let mut fork_lattice = UnsavedBlockLatticeBuilder::new();
-    let send2 = fork_lattice
-        .genesis()
-        .send(&*DEV_GENESIS_KEY, Amount::nano(1001));
-
-    node.ledger
-        .process(&mut node.store.tx_begin_write(), &send1)
-        .unwrap();
-    assert!(
-        node.stats.count(
-            StatType::VoteGenerator,
-            DetailType::GeneratorBroadcasts,
-            Direction::In
-        ) == 0
-    );
-    node.vote_generators
-        .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send1.hash().into());
-
-    assert_timely(Duration::from_secs(3), || {
-        node.stats.count(
-            StatType::VoteGenerator,
-            DetailType::GeneratorBroadcasts,
-            Direction::In,
-        ) == 1
-    });
-
-    node.ledger
-        .rollback(&mut node.store.tx_begin_write(), &send1.hash())
-        .unwrap();
-    node.ledger
-        .process(&mut node.store.tx_begin_write(), &send2)
-        .unwrap();
-    node.vote_generators
-        .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send2.hash().into());
-
-    assert_timely(Duration::from_secs(3), || {
-        node.stats.count(
-            StatType::VoteGenerator,
-            DetailType::GeneratorSpacing,
-            Direction::In,
-        ) == 1
-    });
-
-    assert_eq!(
-        1,
-        node.stats.count(
-            StatType::VoteGenerator,
-            DetailType::GeneratorBroadcasts,
-            Direction::In
-        )
-    );
-    std::thread::sleep(Duration::from_millis(
-        node.config.vote_generator_delay_ms as u64,
-    ));
-
-    node.vote_generators
-        .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send2.hash().into());
-
-    assert_timely(Duration::from_secs(3), || {
-        node.stats.count(
-            StatType::VoteGenerator,
-            DetailType::GeneratorBroadcasts,
-            Direction::In,
-        ) == 2
-    });
-}
-
-#[test]
-fn vote_spacing_rapid() {
-    let mut system = System::new();
-    let config = System::default_config_without_backlog_scan();
-    let node = system.build_node().config(config).finish();
+    let mut config = System::default_config_without_backlog_scan();
+    config.active_elections.hinted_limit_percentage = 0;
+    let node = system
+        .build_node()
+        .config(config)
+        .flags(NodeFlags {
+            disable_search_pending: true,
+            ..Default::default()
+        })
+        .finish();
 
     node.insert_into_wallet(&DEV_GENESIS_KEY);
 
@@ -393,6 +318,101 @@ fn vote_spacing_rapid() {
     node.ledger
         .process(&mut node.store.tx_begin_write(), &send1)
         .unwrap();
+    assert_eq!(
+        node.stats.count(
+            StatType::VoteGenerator,
+            DetailType::GeneratorBroadcasts,
+            Direction::In
+        ),
+        0
+    );
+    node.vote_generators
+        .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send1.hash().into());
+
+    assert_timely_eq2(
+        || {
+            node.stats.count(
+                StatType::VoteGenerator,
+                DetailType::GeneratorBroadcasts,
+                Direction::In,
+            )
+        },
+        1,
+    );
+
+    node.ledger
+        .rollback(&mut node.store.tx_begin_write(), &send1.hash())
+        .unwrap();
+    node.ledger
+        .process(&mut node.store.tx_begin_write(), &send2)
+        .unwrap();
+    node.vote_generators
+        .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send2.hash().into());
+
+    assert_timely_eq2(
+        || {
+            node.stats.count(
+                StatType::VoteGenerator,
+                DetailType::GeneratorSpacing,
+                Direction::In,
+            )
+        },
+        1,
+    );
+
+    assert_eq!(
+        1,
+        node.stats.count(
+            StatType::VoteGenerator,
+            DetailType::GeneratorBroadcasts,
+            Direction::In
+        )
+    );
+    std::thread::sleep(node.network_params.voting.delay);
+
+    node.vote_generators
+        .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send2.hash().into());
+
+    assert_timely_eq2(
+        || {
+            node.stats.count(
+                StatType::VoteGenerator,
+                DetailType::GeneratorBroadcasts,
+                Direction::In,
+            )
+        },
+        2,
+    );
+}
+
+#[test]
+fn vote_spacing_rapid() {
+    let mut system = System::new();
+    let mut config = System::default_config_without_backlog_scan();
+    config.active_elections.hinted_limit_percentage = 0; // Disable election hinting
+    let node = system
+        .build_node()
+        .config(config)
+        .flags(NodeFlags {
+            disable_search_pending: true,
+            ..Default::default()
+        })
+        .finish();
+
+    node.insert_into_wallet(&DEV_GENESIS_KEY);
+
+    let mut lattice = UnsavedBlockLatticeBuilder::new();
+    let send1 = lattice
+        .genesis()
+        .send(&*DEV_GENESIS_KEY, Amount::nano(1000));
+
+    let mut fork_lattice = UnsavedBlockLatticeBuilder::new();
+    let send2 = fork_lattice
+        .genesis()
+        .send(&*DEV_GENESIS_KEY, Amount::nano(1001));
+
+    node.process(send1.clone()).unwrap();
+
     node.vote_generators
         .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send1.hash().into());
 
@@ -427,9 +447,7 @@ fn vote_spacing_rapid() {
         1,
     );
 
-    std::thread::sleep(Duration::from_millis(
-        node.config.vote_generator_delay_ms as u64,
-    ));
+    std::thread::sleep(node.network_params.voting.delay);
 
     node.vote_generators
         .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send2.hash().into());

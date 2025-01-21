@@ -395,8 +395,8 @@ mod tests {
             default_cfg.node.use_memory_pools
         );
         assert_ne!(
-            deserialized.node.vote_generator_delay_ms,
-            default_cfg.node.vote_generator_delay_ms
+            deserialized.node.vote_generator_delay,
+            default_cfg.node.vote_generator_delay
         );
         assert_ne!(
             deserialized.node.vote_minimum,

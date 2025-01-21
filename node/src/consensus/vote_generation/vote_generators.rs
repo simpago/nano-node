@@ -8,7 +8,7 @@ use rsnano_ledger::Ledger;
 use rsnano_network::ChannelId;
 use rsnano_nullable_clock::SteadyClock;
 use rsnano_output_tracker::{OutputListenerMt, OutputTrackerMt};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct VoteGenerationEvent {
@@ -43,7 +43,7 @@ impl VoteGenerators {
             stats.clone(),
             message_sender.clone(),
             network_params.voting.delay,
-            Duration::from_millis(config.vote_generator_delay_ms as u64),
+            config.vote_generator_delay,
             vote_broadcaster.clone(),
             clock.clone(),
         );
@@ -56,7 +56,7 @@ impl VoteGenerators {
             stats,
             message_sender.clone(),
             network_params.voting.delay,
-            Duration::from_millis(config.vote_generator_delay_ms as u64),
+            config.vote_generator_delay,
             vote_broadcaster,
             clock,
         );

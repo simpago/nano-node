@@ -44,7 +44,7 @@ pub struct NodeToml {
     pub signature_checker_threads: Option<u32>,
     pub unchecked_cutoff_time: Option<i64>,
     pub use_memory_pools: Option<bool>,
-    pub vote_generator_delay: Option<i64>,
+    pub vote_generator_delay: Option<u64>,
     pub vote_minimum: Option<String>,
     pub work_peers: Option<Vec<String>>,
     pub work_threads: Option<u32>,
@@ -202,8 +202,8 @@ impl NodeConfig {
         if let Some(use_memory_pools) = toml.use_memory_pools {
             self.use_memory_pools = use_memory_pools;
         }
-        if let Some(vote_generator_delay_ms) = toml.vote_generator_delay {
-            self.vote_generator_delay_ms = vote_generator_delay_ms;
+        if let Some(delay) = toml.vote_generator_delay {
+            self.vote_generator_delay = Duration::from_millis(delay);
         }
         if let Some(vote_minimum) = &toml.vote_minimum {
             self.vote_minimum = Amount::decode_dec(&vote_minimum).expect("Invalid vote minimum");
@@ -412,7 +412,7 @@ impl From<&NodeConfig> for NodeToml {
             signature_checker_threads: Some(config.signature_checker_threads),
             unchecked_cutoff_time: Some(config.unchecked_cutoff_time_s),
             use_memory_pools: Some(config.use_memory_pools),
-            vote_generator_delay: Some(config.vote_generator_delay_ms),
+            vote_generator_delay: Some(config.vote_generator_delay.as_millis() as u64),
             vote_minimum: Some(config.vote_minimum.to_string_dec()),
             work_peers: Some(
                 config
