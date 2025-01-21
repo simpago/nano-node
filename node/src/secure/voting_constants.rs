@@ -1,9 +1,10 @@
 use crate::config::NetworkConstants;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct VotingConstants {
     pub max_cache: usize,
-    pub delay_s: i64,
+    pub delay: Duration,
 }
 
 impl VotingConstants {
@@ -14,10 +15,10 @@ impl VotingConstants {
             } else {
                 128 * 1024
             },
-            delay_s: if network_constants.is_dev_network() {
-                1
+            delay: if network_constants.is_dev_network() {
+                Duration::from_secs(1)
             } else {
-                15
+                Duration::from_secs(15)
             },
         }
     }

@@ -42,7 +42,7 @@ impl VoteGenerators {
             false, //none-final
             stats.clone(),
             message_sender.clone(),
-            Duration::from_secs(network_params.voting.delay_s as u64),
+            network_params.voting.delay,
             Duration::from_millis(config.vote_generator_delay_ms as u64),
             vote_broadcaster.clone(),
             clock.clone(),
@@ -55,7 +55,7 @@ impl VoteGenerators {
             true, //final
             stats,
             message_sender.clone(),
-            Duration::from_secs(network_params.voting.delay_s as u64),
+            network_params.voting.delay,
             Duration::from_millis(config.vote_generator_delay_ms as u64),
             vote_broadcaster,
             clock,
