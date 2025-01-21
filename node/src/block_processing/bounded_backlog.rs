@@ -258,17 +258,9 @@ impl BoundedBacklogImpl {
             }
 
             // Wait until all notification about the previous rollbacks are processed
-            while self.block_processor.should_cool_down_notifications() {
+            if self.block_processor.wait() {
                 self.stats
                     .inc(StatType::BoundedBacklog, DetailType::Cooldown);
-                guard = self
-                    .condition
-                    .wait_timeout_while(guard, Duration::from_millis(100), |i| !i.stopped)
-                    .unwrap()
-                    .0;
-                if guard.stopped {
-                    return;
-                }
             }
 
             self.stats.inc(StatType::BoundedBacklog, DetailType::Loop);

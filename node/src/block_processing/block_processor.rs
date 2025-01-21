@@ -209,8 +209,8 @@ impl BlockProcessor {
         self.processor_loop.force(block);
     }
 
-    pub fn should_cool_down_notifications(&self) -> bool {
-        self.processor_loop.notifier.should_cool_down()
+    pub fn wait(&self) -> bool {
+        self.processor_loop.notifier.wait()
     }
 
     pub fn info(&self) -> FairQueueInfo<BlockSource> {
@@ -248,22 +248,26 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
     fn run(&self) {
         let mut guard = self.mutex.lock().unwrap();
         while !guard.stopped {
-            if !guard.rollback_queue.is_empty() {
-                guard = self.cool_down(guard);
+            if !guard.add_queue.is_empty() || !guard.rollback_queue.is_empty() {
+                drop(guard);
+                // It's possible that ledger processing happens faster than the
+                // notifications can be processed by other components, cooldown here
+                if self.notifier.wait() {
+                    self.stats
+                        .inc(StatType::BlockProcessor, DetailType::Cooldown);
+                }
+                guard = self.mutex.lock().unwrap();
                 if guard.stopped {
                     return;
                 }
+            }
 
+            if !guard.rollback_queue.is_empty() {
                 let request = guard.rollback_queue.pop_front().unwrap();
                 drop(guard);
                 self.process_rollback(request);
                 guard = self.mutex.lock().unwrap();
             } else if !guard.add_queue.is_empty() {
-                guard = self.cool_down(guard);
-                if guard.stopped {
-                    return;
-                }
-
                 if guard.should_log() {
                     info!(
                         "{} blocks (+ {} forced) in processing_queue",
@@ -299,28 +303,6 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
 }
 
 impl BlockProcessorLoopImpl {
-    /// It's possible that ledger processing happens faster than the
-    /// notifications can be processed by other components, cooldown here
-    fn cool_down<'a, 'b>(
-        &'a self,
-        mut guard: MutexGuard<'b, BlockProcessorImpl>,
-    ) -> MutexGuard<'b, BlockProcessorImpl> {
-        while self.notifier.should_cool_down() {
-            self.stats
-                .inc(StatType::BlockProcessor, DetailType::Cooldown);
-            guard = self
-                .condition
-                .wait_timeout_while(guard, Duration::from_millis(100), |i| !i.stopped)
-                .unwrap()
-                .0;
-
-            if guard.stopped {
-                return guard;
-            }
-        }
-        guard
-    }
-
     pub fn process_active(&self, block: Block) {
         self.add(block, BlockSource::Live, ChannelId::LOOPBACK, None);
     }
@@ -700,9 +682,11 @@ impl BlockProcessorLoopImpl {
                     }
                 };
 
-                // Notify observers of the rolled back blocks on a background thread while not holding the ledger write lock
-                self.notifier
-                    .notify_rollback(rollback_list, fork_block.qualified_root());
+                if !rollback_list.is_empty() {
+                    // Notify observers of the rolled back blocks on a background thread while not holding the ledger write lock
+                    self.notifier
+                        .notify_rollback(rollback_list, fork_block.qualified_root());
+                }
             }
         }
     }

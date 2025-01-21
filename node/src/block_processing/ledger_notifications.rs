@@ -134,13 +134,26 @@ impl LedgerNotificationQueue {
         if self.stopped.load(Ordering::SeqCst) {
             return None;
         }
-        guard.pop_front()
+        let result = guard.pop_front();
+        drop(guard);
+        self.changed.notify_all();
+        result
     }
 
-    pub fn should_cool_down(&self) -> bool {
-        self.len() >= self.max_size
+    /// Returns if waiting happened
+    pub fn wait(&self) -> bool {
+        let guard = self.events.lock().unwrap();
+        let predicate =
+            |i: &VecDeque<Event>| i.len() >= self.max_size && !self.stopped.load(Ordering::SeqCst);
+
+        if predicate(&guard) {
+            return false;
+        }
+        drop(self.changed.wait_while(guard, |g| predicate(g)).unwrap());
+        true
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.events.lock().unwrap().len()
     }
