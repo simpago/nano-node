@@ -774,6 +774,7 @@ fn fork_bootstrap_flip() {
     );
 }
 
+// Test that more than one block can be rolled back
 #[test]
 fn fork_multi_flip() {
     let mut system = System::new();
@@ -784,7 +785,7 @@ fn fork_multi_flip() {
         .config(config.clone())
         .flags(flags.clone())
         .finish();
-    let wallet_id1 = node1.wallets.wallet_ids()[0];
+
     config.peering_port = Some(get_available_port());
     // Reduce cooldown to speed up fork resolution
     config.bootstrap.account_sets.cooldown = Duration::from_millis(100);
@@ -799,24 +800,13 @@ fn fork_multi_flip() {
     let send2 = fork_lattice.genesis().legacy_send(&key2, 100);
     let send3 = fork_lattice.genesis().legacy_send(&key2, 0);
 
-    assert_eq!(
-        BlockStatus::Progress,
-        node1.process_local(send1.clone()).unwrap()
-    );
+    node1.process(send1.clone()).unwrap();
     // Node2 has two blocks that will be rolled back by node1's vote
-    assert_eq!(
-        BlockStatus::Progress,
-        node2.process_local(send2.clone()).unwrap()
-    );
-    assert_eq!(
-        BlockStatus::Progress,
-        node2.process_local(send3.clone()).unwrap()
-    );
+    node2.process(send2.clone()).unwrap();
+    node2.process(send3.clone()).unwrap();
 
-    node1
-        .wallets
-        .insert_adhoc2(&wallet_id1, &DEV_GENESIS_KEY.raw_key(), true)
-        .unwrap(); // Insert voting key into node1
+    // Insert voting key into node1
+    node1.insert_into_wallet(&DEV_GENESIS_KEY);
 
     let election = start_election(&node2, &send2.hash());
 
