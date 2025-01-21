@@ -345,8 +345,7 @@ TEST (uint256_union, decode_empty)
 TEST (uint256_union, parse_zero)
 {
 	nano::uint256_union input (nano::uint256_t (0));
-	std::string text;
-	input.encode_hex (text);
+	std::string text = input.to_string ();
 	nano::uint256_union output;
 	auto error (output.decode_hex (text));
 	ASSERT_FALSE (error);
@@ -366,8 +365,7 @@ TEST (uint256_union, parse_zero_short)
 TEST (uint256_union, parse_one)
 {
 	nano::uint256_union input (nano::uint256_t (1));
-	std::string text;
-	input.encode_hex (text);
+	std::string text = input.to_string ();
 	nano::uint256_union output;
 	auto error (output.decode_hex (text));
 	ASSERT_FALSE (error);
@@ -378,8 +376,7 @@ TEST (uint256_union, parse_one)
 TEST (uint256_union, parse_error_symbol)
 {
 	nano::uint256_union input (nano::uint256_t (1000));
-	std::string text;
-	input.encode_hex (text);
+	std::string text = input.to_string ();
 	text[5] = '!';
 	nano::uint256_union output;
 	auto error (output.decode_hex (text));
@@ -389,8 +386,7 @@ TEST (uint256_union, parse_error_symbol)
 TEST (uint256_union, max_hex)
 {
 	nano::uint256_union input (std::numeric_limits<nano::uint256_t>::max ());
-	std::string text;
-	input.encode_hex (text);
+	std::string text = input.to_string ();
 	nano::uint256_union output;
 	auto error (output.decode_hex (text));
 	ASSERT_FALSE (error);
@@ -409,8 +405,7 @@ TEST (uint256_union, decode_dec)
 TEST (uint256_union, max_dec)
 {
 	nano::uint256_union input (std::numeric_limits<nano::uint256_t>::max ());
-	std::string text;
-	input.encode_dec (text);
+	std::string text = input.to_string_dec ();
 	nano::uint256_union output;
 	auto error (output.decode_dec (text));
 	ASSERT_FALSE (error);
@@ -445,8 +440,7 @@ TEST (uint256_union, decode_dec_leading_zero)
 TEST (uint256_union, parse_error_overflow)
 {
 	nano::uint256_union input (std::numeric_limits<nano::uint256_t>::max ());
-	std::string text;
-	input.encode_hex (text);
+	std::string text = input.to_string ();
 	text.push_back (0);
 	nano::uint256_union output;
 	auto error (output.decode_hex (text));
@@ -650,6 +644,68 @@ TEST (uint512_union, hash)
 	}
 }
 
+TEST (uint512_union, parse_zero)
+{
+	nano::uint512_union input (nano::uint512_t (0));
+	std::string text = input.to_string ();
+	nano::uint512_union output;
+	auto error (output.decode_hex (text));
+	ASSERT_FALSE (error);
+	ASSERT_EQ (input, output);
+	ASSERT_TRUE (output.number ().is_zero ());
+}
+
+TEST (uint512_union, parse_zero_short)
+{
+	std::string text ("0");
+	nano::uint512_union output;
+	auto error (output.decode_hex (text));
+	ASSERT_FALSE (error);
+	ASSERT_TRUE (output.number ().is_zero ());
+}
+
+TEST (uint512_union, parse_one)
+{
+	nano::uint512_union input (nano::uint512_t (1));
+	std::string text = input.to_string ();
+	nano::uint512_union output;
+	auto error (output.decode_hex (text));
+	ASSERT_FALSE (error);
+	ASSERT_EQ (input, output);
+	ASSERT_EQ (1, output.number ());
+}
+
+TEST (uint512_union, parse_error_symbol)
+{
+	nano::uint512_union input (nano::uint512_t (1000));
+	std::string text = input.to_string ();
+	text[5] = '!';
+	nano::uint512_union output;
+	auto error (output.decode_hex (text));
+	ASSERT_TRUE (error);
+}
+
+TEST (uint512_union, max)
+{
+	nano::uint512_union input (std::numeric_limits<nano::uint512_t>::max ());
+	std::string text = input.to_string ();
+	nano::uint512_union output;
+	auto error (output.decode_hex (text));
+	ASSERT_FALSE (error);
+	ASSERT_EQ (input, output);
+	ASSERT_EQ (nano::uint512_t ("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), output.number ());
+}
+
+TEST (uint512_union, parse_error_overflow)
+{
+	nano::uint512_union input (std::numeric_limits<nano::uint512_t>::max ());
+	std::string text = input.to_string ();
+	text.push_back (0);
+	nano::uint512_union output;
+	auto error (output.decode_hex (text));
+	ASSERT_TRUE (error);
+}
+
 TEST (sat_math, add_sat)
 {
 	// Test uint128_t
@@ -743,4 +799,67 @@ TEST (sat_math, sub_sat)
 		ASSERT_EQ (nano::sub_sat (hundred, nano::uint512_t (200)), min);
 		ASSERT_EQ (nano::sub_sat (min, max), min);
 	}
+}
+
+TEST (account, encode_zero)
+{
+	nano::account number0{};
+	std::stringstream stream;
+	number0.encode_account (stream);
+	auto str0 = stream.str ();
+
+	/*
+	 * Handle different lengths for "xrb_" prefixed and "nano_" prefixed accounts
+	 */
+	ASSERT_EQ ((str0.front () == 'x') ? 64 : 65, str0.size ());
+	ASSERT_EQ (65, str0.size ());
+	nano::account number1;
+	ASSERT_FALSE (number1.decode_account (str0));
+	ASSERT_EQ (number0, number1);
+}
+
+TEST (account, encode_all)
+{
+	nano::account number0;
+	number0.decode_hex ("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+	std::stringstream stream;
+	number0.encode_account (stream);
+	auto str0 = stream.str ();
+
+	/*
+	 * Handle different lengths for "xrb_" prefixed and "nano_" prefixed accounts
+	 */
+	ASSERT_EQ ((str0.front () == 'x') ? 64 : 65, str0.size ());
+	nano::account number1;
+	ASSERT_FALSE (number1.decode_account (str0));
+	ASSERT_EQ (number0, number1);
+}
+
+TEST (account, encode_fail)
+{
+	nano::account number0{};
+	std::stringstream stream;
+	number0.encode_account (stream);
+	auto str0 = stream.str ();
+	str0[16] ^= 1;
+	nano::account number1;
+	ASSERT_TRUE (number1.decode_account (str0));
+}
+
+TEST (account, known_addresses)
+{
+	nano::account account1{ "0000000000000000000000000000000000000000000000000000000000000000" };
+	ASSERT_EQ (account1.to_account (), "nano_1111111111111111111111111111111111111111111111111111hifc8npp");
+
+	nano::account account2{ "B0311EA55708D6A53C75CDBF88300259C6D018522FE3D4D0A242E431F9E8B6D0" };
+	ASSERT_EQ (account2.to_account (), "nano_3e3j5tkog48pnny9dmfzj1r16pg8t1e76dz5tmac6iq689wyjfpiij4txtdo");
+
+	nano::account account3{ "45C6FF9D1706D61F0821327752671BDA9F9ED2DA40326B01935AB566FB9E08ED" };
+	ASSERT_EQ (account3.to_account (), "nano_1jg8zygjg3pp5w644emqcbmjqpnzmubfni3kfe1s8pooeuxsw49fdq1mco9j");
+
+	nano::account account4{ "E89208DD038FBB269987689621D52292AE9C35941A7484756ECCED92A65093BA" };
+	ASSERT_EQ (account4.to_account (), "nano_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3");
+
+	nano::account account5{ "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" };
+	ASSERT_EQ (account5.to_account (), "nano_3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzc3yoon41");
 }

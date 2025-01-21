@@ -49,9 +49,9 @@ public:
 	 */
 	explicit uint128_union (std::string const &);
 
-	void encode_hex (std::string &) const;
+	void encode_hex (std::ostream &) const;
 	bool decode_hex (std::string const &);
-	void encode_dec (std::string &) const;
+	void encode_dec (std::ostream &) const;
 	bool decode_dec (std::string const &, bool = false);
 	bool decode_dec (std::string const &, nano::uint128_t);
 
@@ -151,9 +151,9 @@ public:
 	uint256_union & operator^= (uint256_union const &);
 	uint256_union operator^ (uint256_union const &) const;
 
-	void encode_hex (std::string &) const;
+	void encode_hex (std::ostream &) const;
 	bool decode_hex (std::string const &);
-	void encode_dec (std::string &) const;
+	void encode_dec (std::ostream &) const;
 	bool decode_dec (std::string const &);
 
 	void clear ()
@@ -173,6 +173,7 @@ public:
 	}
 
 	std::string to_string () const;
+	std::string to_string_dec () const;
 
 public:
 	union
@@ -236,7 +237,7 @@ public:
 	static const public_key & null ();
 
 	bool decode_node_id (std::string const &);
-	void encode_account (std::string &) const;
+	void encode_account (std::ostream &) const;
 	bool decode_account (std::string const &);
 
 	std::string to_node_id () const;
@@ -427,7 +428,7 @@ public:
 		return *this;
 	}
 
-	void encode_hex (std::string &) const;
+	void encode_hex (std::ostream &) const;
 	bool decode_hex (std::string const &);
 
 	void clear ()
@@ -519,6 +520,7 @@ std::ostream & operator<< (std::ostream &, const uint128_union &);
 std::ostream & operator<< (std::ostream &, const uint256_union &);
 std::ostream & operator<< (std::ostream &, const uint512_union &);
 std::ostream & operator<< (std::ostream &, const hash_or_account &);
+std::ostream & operator<< (std::ostream &, const account &);
 
 /**
  * Convert a double to string in fixed format

@@ -24,10 +24,7 @@ nano::error nano::wallet_config::parse (std::string const & wallet_a, std::strin
 
 nano::error nano::wallet_config::serialize_toml (nano::tomlconfig & toml) const
 {
-	std::string wallet_string;
-	wallet.encode_hex (wallet_string);
-
-	toml.put ("wallet", wallet_string, "Wallet identifier\ntype:string,hex");
+	toml.put ("wallet", wallet.to_string (), "Wallet identifier\ntype:string,hex");
 	toml.put ("account", account.to_account (), "Current wallet account\ntype:string,account");
 	return toml.get_error ();
 }

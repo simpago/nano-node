@@ -472,17 +472,11 @@ void nano::send_block::serialize_json (std::string & string_a, bool single_line)
 void nano::send_block::serialize_json (boost::property_tree::ptree & tree) const
 {
 	tree.put ("type", "send");
-	std::string previous;
-	hashables.previous.encode_hex (previous);
-	tree.put ("previous", previous);
+	tree.put ("previous", hashables.previous.to_string ());
 	tree.put ("destination", hashables.destination.to_account ());
-	std::string balance;
-	hashables.balance.encode_hex (balance);
-	tree.put ("balance", balance);
-	std::string signature_l;
-	signature.encode_hex (signature_l);
+	tree.put ("balance", hashables.balance.to_string ());
 	tree.put ("work", nano::to_string_hex (work));
-	tree.put ("signature", signature_l);
+	tree.put ("signature", signature.to_string ());
 }
 
 bool nano::send_block::deserialize_json (boost::property_tree::ptree const & tree_a)
@@ -836,10 +830,8 @@ void nano::open_block::serialize_json (boost::property_tree::ptree & tree) const
 	tree.put ("source", hashables.source.to_string ());
 	tree.put ("representative", hashables.representative.to_account ());
 	tree.put ("account", hashables.account.to_account ());
-	std::string signature_l;
-	signature.encode_hex (signature_l);
 	tree.put ("work", nano::to_string_hex (work));
-	tree.put ("signature", signature_l);
+	tree.put ("signature", signature.to_string ());
 }
 
 bool nano::open_block::deserialize_json (boost::property_tree::ptree const & tree_a)
@@ -1105,9 +1097,7 @@ void nano::change_block::serialize_json (boost::property_tree::ptree & tree) con
 	tree.put ("previous", hashables.previous.to_string ());
 	tree.put ("representative", hashables.representative.to_account ());
 	tree.put ("work", nano::to_string_hex (work));
-	std::string signature_l;
-	signature.encode_hex (signature_l);
-	tree.put ("signature", signature_l);
+	tree.put ("signature", signature.to_string ());
 }
 
 bool nano::change_block::deserialize_json (boost::property_tree::ptree const & tree_a)
@@ -1424,9 +1414,7 @@ void nano::state_block::serialize_json (boost::property_tree::ptree & tree) cons
 	tree.put ("balance", hashables.balance.to_string_dec ());
 	tree.put ("link", hashables.link.to_string ());
 	tree.put ("link_as_account", hashables.link.to_account ());
-	std::string signature_l;
-	signature.encode_hex (signature_l);
-	tree.put ("signature", signature_l);
+	tree.put ("signature", signature.to_string ());
 	tree.put ("work", nano::to_string_hex (work));
 }
 
@@ -1722,16 +1710,10 @@ void nano::receive_block::serialize_json (std::string & string_a, bool single_li
 void nano::receive_block::serialize_json (boost::property_tree::ptree & tree) const
 {
 	tree.put ("type", "receive");
-	std::string previous;
-	hashables.previous.encode_hex (previous);
-	tree.put ("previous", previous);
-	std::string source;
-	hashables.source.encode_hex (source);
-	tree.put ("source", source);
-	std::string signature_l;
-	signature.encode_hex (signature_l);
+	tree.put ("previous", hashables.previous.to_string ());
+	tree.put ("source", hashables.source.to_string ());
 	tree.put ("work", nano::to_string_hex (work));
-	tree.put ("signature", signature_l);
+	tree.put ("signature", signature.to_string ());
 }
 
 bool nano::receive_block::deserialize_json (boost::property_tree::ptree const & tree_a)
