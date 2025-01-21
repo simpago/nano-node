@@ -89,11 +89,7 @@ impl BootstrapService {
                 accounts: AccountSets::new(config.account_sets.clone()),
                 scoring: PeerScoring::new(config.clone()),
                 database_scan: DatabaseScan::new(ledger.clone()),
-                frontiers: FrontierScan::new(
-                    config.frontier_scan.clone(),
-                    stats.clone(),
-                    clock.clone(),
-                ),
+                frontiers: FrontierScan::new(config.frontier_scan.clone(), stats.clone()),
                 tags: OrderedTags::default(),
                 throttle: Throttle::new(compute_throttle_size(
                     ledger.account_count(),
@@ -563,7 +559,7 @@ impl BootstrapService {
     fn wait_frontier(&self) -> Account {
         let mut result = Account::zero();
         self.wait(|i| {
-            result = i.frontiers.next();
+            result = i.frontiers.next(self.clock.now());
             if !result.is_zero() {
                 self.stats
                     .inc(StatType::BootstrapNext, DetailType::NextFrontier);

@@ -36,11 +36,10 @@ pub struct FrontierScan {
     config: FrontierScanConfig,
     stats: Arc<Stats>,
     heads: OrderedHeads,
-    clock: Arc<SteadyClock>,
 }
 
 impl FrontierScan {
-    pub fn new(config: FrontierScanConfig, stats: Arc<Stats>, clock: Arc<SteadyClock>) -> Self {
+    pub fn new(config: FrontierScanConfig, stats: Arc<Stats>) -> Self {
         // Divide nano::account numeric range into consecutive and equal ranges
         let max_account = Account::MAX.number();
         let range_size = max_account / config.head_parallelism;
@@ -67,12 +66,11 @@ impl FrontierScan {
             config,
             stats,
             heads,
-            clock,
         }
     }
 
-    pub fn next(&mut self) -> Account {
-        let cutoff = self.clock.now() - self.config.cooldown;
+    pub fn next(&mut self, now: Timestamp) -> Account {
+        let cutoff = now - self.config.cooldown;
         let mut next_account = Account::zero();
         let mut it = Account::zero();
         for head in self.heads.ordered_by_timestamp() {
@@ -101,7 +99,7 @@ impl FrontierScan {
         } else {
             self.heads.modify(&it, |head| {
                 head.requests += 1;
-                head.timestamp = self.clock.now()
+                head.timestamp = now
             });
         }
 
@@ -177,5 +175,241 @@ impl FrontierScan {
         // TODO port the detailed container info from nano_node
         let total_processed = self.heads.iter().map(|i| i.processed).sum();
         [("total_processed", total_processed, 0)].into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rsnano_core::BlockHash;
+
+    #[test]
+    fn next_basic() {
+        let config = FrontierScanConfig {
+            head_parallelism: 2,
+            consideration_count: 3,
+            ..Default::default()
+        };
+        let stats = Arc::new(Stats::default());
+        let mut frontier_scan = FrontierScan::new(config, stats);
+        let now = Timestamp::new_test_instance();
+
+        // First call should return first head, account number 1 (avoiding burn account 0)
+        let first = frontier_scan.next(now);
+        assert_eq!(first, Account::from(1));
+
+        // Second call should return second head, account number 0x7FF... (half the range)
+        let second = frontier_scan.next(now);
+        assert_eq!(
+            second,
+            Account::decode_hex("7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+                .unwrap()
+        );
+
+        // Third call should return first head again, sequentially iterating through heads
+        let third = frontier_scan.next(now);
+        assert_eq!(third, Account::from(1));
+    }
+
+    #[test]
+    fn process_basic() {
+        let config = FrontierScanConfig {
+            head_parallelism: 1,
+            consideration_count: 3,
+            candidates: 5,
+            ..Default::default()
+        };
+        let stats = Arc::new(Stats::default());
+        let mut frontier_scan = FrontierScan::new(config, stats);
+        let now = Timestamp::new_test_instance();
+
+        // Get initial account to scan
+        let start = frontier_scan.next(now);
+        assert_eq!(start, Account::from(1));
+
+        // Create response with some frontiers
+        let response = [
+            Frontier::new(Account::from(2), BlockHash::from(1)),
+            Frontier::new(Account::from(3), BlockHash::from(2)),
+        ];
+
+        // Process should not be done until consideration_count is reached
+        assert!(!frontier_scan.process(start, &response));
+        assert!(!frontier_scan.process(start, &response));
+
+        // Head should not advance before reaching `consideration_count` responses
+        assert_eq!(frontier_scan.next(now), Account::from(1));
+
+        // After consideration_count responses, should be done
+        assert!(frontier_scan.process(start, &response));
+
+        // Head should advance to next account and start subsequent scan from there
+        assert_eq!(frontier_scan.next(now), Account::from(3));
+    }
+
+    #[test]
+    fn range_wrap_around() {
+        let config = FrontierScanConfig {
+            head_parallelism: 1,
+            consideration_count: 1,
+            candidates: 1,
+            ..Default::default()
+        };
+        let stats = Arc::new(Stats::default());
+        let now = Timestamp::new_test_instance();
+        let mut frontier_scan = FrontierScan::new(config, stats);
+
+        let start = frontier_scan.next(now);
+
+        // Create response that would push next beyond the range end
+        let response = [Frontier::new(Account::MAX, BlockHash::from(1))];
+
+        // Process should succeed and wrap around
+        assert!(frontier_scan.process(start, &response));
+
+        // Next account should be back at start of range
+        let next = frontier_scan.next(now);
+        assert_eq!(next, Account::from(1));
+    }
+
+    #[test]
+    fn cooldown() {
+        let config = FrontierScanConfig {
+            head_parallelism: 1,
+            consideration_count: 1,
+            cooldown: Duration::from_millis(250),
+            ..Default::default()
+        };
+        let stats = Arc::new(Stats::default());
+        let now = Timestamp::new_test_instance();
+        let mut frontier_scan = FrontierScan::new(config, stats);
+
+        // First call should succeed
+        let first = frontier_scan.next(now);
+        assert!(!first.is_zero());
+
+        // Immediate second call should fail (return 0)
+        let second = frontier_scan.next(now);
+        assert!(second.is_zero());
+
+        // After cooldown, should succeed again
+        let third = frontier_scan.next(now + Duration::from_millis(251));
+        assert!(!third.is_zero());
+    }
+
+    #[test]
+    fn candidate_trimming() {
+        let config = FrontierScanConfig {
+            head_parallelism: 1,
+            consideration_count: 2,
+            candidates: 3, // Only keep the lowest candidates
+            ..Default::default()
+        };
+        let stats = Arc::new(Stats::default());
+        let now = Timestamp::new_test_instance();
+        let mut frontier_scan = FrontierScan::new(config, stats);
+
+        let start = frontier_scan.next(now);
+        // Create response with more candidates than limit
+        let response1 = [
+            Frontier::new(Account::from(1), BlockHash::from(0)),
+            Frontier::new(Account::from(4), BlockHash::from(3)),
+            Frontier::new(Account::from(7), BlockHash::from(6)),
+            Frontier::new(Account::from(10), BlockHash::from(9)),
+        ];
+
+        assert!(!frontier_scan.process(start, &response1));
+
+        let response2 = [
+            Frontier::new(Account::from(1), BlockHash::from(0)),
+            Frontier::new(Account::from(3), BlockHash::from(2)),
+            Frontier::new(Account::from(5), BlockHash::from(4)),
+            Frontier::new(Account::from(7), BlockHash::from(6)),
+            Frontier::new(Account::from(9), BlockHash::from(8)),
+        ];
+        assert!(frontier_scan.process(start, &response2));
+
+        // After processing replies candidates should be ordered and trimmed
+        let next = frontier_scan.next(now);
+        assert_eq!(next, Account::from(5));
+    }
+
+    #[test]
+    fn heads_distribution() {
+        let config = FrontierScanConfig {
+            head_parallelism: 4,
+            ..Default::default()
+        };
+        let stats = Arc::new(Stats::default());
+        let now = Timestamp::new_test_instance();
+        let mut frontier_scan = FrontierScan::new(config, stats);
+
+        // Collect initial accounts from each head
+        let first0 = frontier_scan.next(now);
+        let first1 = frontier_scan.next(now);
+        let first2 = frontier_scan.next(now);
+        let first3 = frontier_scan.next(now);
+
+        // Verify accounts are properly distributed across the range
+        assert!(first1 > first0);
+        assert!(first2 > first1);
+        assert!(first3 > first2);
+    }
+
+    #[test]
+    fn invalid_response_ordering() {
+        let config = FrontierScanConfig {
+            head_parallelism: 1,
+            consideration_count: 1,
+            ..Default::default()
+        };
+        let stats = Arc::new(Stats::default());
+        let now = Timestamp::new_test_instance();
+        let mut frontier_scan = FrontierScan::new(config, stats);
+
+        let start = frontier_scan.next(now);
+
+        // Create response with out-of-order accounts
+        let response = [
+            Frontier::new(Account::from(3), BlockHash::from(1)),
+            Frontier::new(Account::from(2), BlockHash::from(2)),
+        ];
+
+        // Should still process successfully
+        assert!(frontier_scan.process(start, &response));
+        assert_eq!(frontier_scan.next(now), Account::from(3));
+    }
+
+    #[test]
+    fn empty_responses() {
+        let config = FrontierScanConfig {
+            head_parallelism: 1,
+            consideration_count: 2,
+            ..Default::default()
+        };
+        let stats = Arc::new(Stats::default());
+        let now = Timestamp::new_test_instance();
+        let mut frontier_scan = FrontierScan::new(config, stats);
+
+        let start = frontier_scan.next(now);
+
+        // Empty response should not advance head even after receiving `consideration_count` responses
+        assert!(!frontier_scan.process(start, &[]));
+        assert!(!frontier_scan.process(start, &[]));
+        assert_eq!(frontier_scan.next(now), start);
+
+        // Let the head advance
+        let response = [Frontier::new(Account::from(2), BlockHash::from(1))];
+        assert!(frontier_scan.process(start, &response));
+        assert_eq!(frontier_scan.next(now), Account::from(2));
+
+        // However, after receiving enough empty responses, head should wrap around to the start
+        assert!(!frontier_scan.process(start, &[]));
+        assert!(!frontier_scan.process(start, &[]));
+        assert!(!frontier_scan.process(start, &[]));
+        assert_eq!(frontier_scan.next(now), Account::from(2));
+        assert!(frontier_scan.process(start, &[]));
+        // Wraps around:
+        assert_eq!(frontier_scan.next(now), Account::from(1));
     }
 }
