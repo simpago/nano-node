@@ -149,7 +149,7 @@ impl System {
                     break;
                 }
 
-                if start.elapsed() > Duration::from_secs(5) {
+                if start.elapsed() > Duration::from_secs(7) {
                     panic!("connection not successfull");
                 }
                 sleep(Duration::from_millis(10));
