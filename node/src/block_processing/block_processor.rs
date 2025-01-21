@@ -5,7 +5,7 @@ use crate::stats::{DetailType, StatType, Stats};
 use rsnano_core::{
     utils::{ContainerInfo, FairQueue, FairQueueInfo},
     work::WorkThresholds,
-    Block, BlockHash, BlockType, Epoch, Networks, QualifiedRoot, SavedBlock, UncheckedInfo,
+    Block, BlockHash, BlockType, Epoch, Networks, SavedBlock, UncheckedInfo,
 };
 use rsnano_ledger::{BlockStatus, Ledger, Writer};
 use rsnano_network::{ChannelId, DeadChannelCleanupStep};
@@ -213,12 +213,6 @@ impl BlockProcessor {
         self.processor_loop.notifier.should_cool_down()
     }
 
-    pub fn notify_rollback(&self, rolled_back: Vec<SavedBlock>, root: QualifiedRoot) {
-        self.processor_loop
-            .notifier
-            .notify_rollback(rolled_back, root);
-    }
-
     pub fn info(&self) -> FairQueueInfo<BlockSource> {
         self.processor_loop.info()
     }
@@ -280,10 +274,18 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
                     );
                 }
 
-                let processed = self.process_batch(guard);
-                guard = self.mutex.lock().unwrap();
-
+                let mut processed = self.process_batch(guard);
+                self.stats.inc(StatType::BlockProcessor, DetailType::Notify);
+                // Set results for futures when not holding the lock
+                for (result, context) in processed.iter_mut() {
+                    if let Some(cb) = &context.callback {
+                        cb(*result);
+                    }
+                    context.set_result(*result);
+                }
                 self.notifier.notify_batch_processed(processed);
+
+                guard = self.mutex.lock().unwrap();
             } else {
                 guard = self
                     .condition

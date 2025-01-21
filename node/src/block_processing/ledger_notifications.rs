@@ -1,5 +1,3 @@
-use crate::stats::{DetailType, StatType, Stats};
-
 use super::BlockContext;
 use rsnano_core::{QualifiedRoot, SavedBlock};
 use rsnano_ledger::BlockStatus;
@@ -176,20 +174,17 @@ impl LedgerNotificationQueue {
 pub(crate) struct LedgerNotificationProcessor {
     queue: Arc<LedgerNotificationQueue>,
     notifier: LedgerNotifier,
-    stats: Arc<Stats>,
 }
 
 impl LedgerNotificationProcessor {
     pub(crate) fn new(
         max_queue_len: usize,
-        stats: Arc<Stats>,
     ) -> (Self, Arc<LedgerNotificationQueue>, LedgerNotifications) {
         let (queue, notifications, notifier) = LedgerNotificationQueue::new(max_queue_len);
         let queue = Arc::new(queue);
         let processor = Self {
             queue: queue.clone(),
             notifier,
-            stats,
         };
         (processor, queue, notifications)
     }
@@ -200,17 +195,7 @@ impl LedgerNotificationProcessor {
         };
 
         match event {
-            Event::BatchProcessed(mut batch) => {
-                self.stats.inc(StatType::BlockProcessor, DetailType::Notify);
-                // Set results for futures when not holding the lock
-                for (result, context) in batch.iter_mut() {
-                    if let Some(cb) = &context.callback {
-                        cb(*result);
-                    }
-                    context.set_result(*result);
-                }
-                self.notifier.notify_batch_processed(&batch)
-            }
+            Event::BatchProcessed(batch) => self.notifier.notify_batch_processed(&batch),
             Event::RolledBack(rolled_back, root) => {
                 self.notifier.notify_rollback(&rolled_back, root)
             }
@@ -232,10 +217,8 @@ pub(crate) struct LedgerNotificationThread {
 impl LedgerNotificationThread {
     pub(crate) fn new(
         max_queue_len: usize,
-        stats: Arc<Stats>,
     ) -> (Self, Arc<LedgerNotificationQueue>, LedgerNotifications) {
-        let (processor, queue, notifications) =
-            LedgerNotificationProcessor::new(max_queue_len, stats);
+        let (processor, queue, notifications) = LedgerNotificationProcessor::new(max_queue_len);
         let thread = Self {
             processor: Arc::new(processor),
             handle: None,
@@ -309,8 +292,7 @@ mod tests {
 
     #[test]
     fn process_event() {
-        let (processor, queue, notifications) =
-            LedgerNotificationProcessor::new(8, Arc::new(Stats::default()));
+        let (processor, queue, notifications) = LedgerNotificationProcessor::new(8);
 
         let notified = Arc::new(AtomicBool::new(false));
         let notified2 = notified.clone();
@@ -331,8 +313,7 @@ mod tests {
 
     #[test]
     fn notification_thread() {
-        let (mut thread, queue, notifications) =
-            LedgerNotificationThread::new(8, Arc::new(Stats::default()));
+        let (mut thread, queue, notifications) = LedgerNotificationThread::new(8);
 
         let notified = Arc::new((Condvar::new(), Mutex::new(0)));
         let notified2 = notified.clone();
