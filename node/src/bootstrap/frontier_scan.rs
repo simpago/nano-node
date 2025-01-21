@@ -5,7 +5,7 @@ use crate::{
 };
 use primitive_types::U256;
 use rsnano_core::{utils::ContainerInfo, Account, Frontier};
-use rsnano_nullable_clock::{SteadyClock, Timestamp};
+use rsnano_nullable_clock::Timestamp;
 use std::{sync::Arc, time::Duration};
 
 #[derive(Clone, PartialEq, Eq, Debug)]

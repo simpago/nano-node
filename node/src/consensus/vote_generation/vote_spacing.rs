@@ -1,8 +1,5 @@
-#[cfg(test)]
-use mock_instant::thread_local::Instant;
 use rsnano_core::{BlockHash, Root};
-#[cfg(not(test))]
-use std::time::Instant;
+use rsnano_nullable_clock::Timestamp;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     time::Duration,
@@ -21,20 +18,19 @@ impl VoteSpacing {
         }
     }
 
-    pub fn votable(&self, root: &Root, hash: &BlockHash) -> bool {
+    pub fn votable(&self, root: &Root, hash: &BlockHash, now: Timestamp) -> bool {
         self.recent
             .by_root(root)
-            .all(|item| *hash == item.hash || item.time.elapsed() >= self.delay)
+            .all(|item| *hash == item.hash || item.timestamp.elapsed(now) >= self.delay)
     }
 
-    pub fn flag(&mut self, root: &Root, hash: &BlockHash) {
-        self.trim();
-        let time = Instant::now();
-        if !self.recent.change_time_for_root(root, time) {
+    pub fn flag(&mut self, root: &Root, hash: &BlockHash, now: Timestamp) {
+        self.trim(now);
+        if !self.recent.change_time_for_root(root, now) {
             self.recent.insert(Entry {
                 root: *root,
                 hash: *hash,
-                time,
+                timestamp: now,
             });
         }
     }
@@ -47,22 +43,22 @@ impl VoteSpacing {
         self.recent.is_empty()
     }
 
-    fn trim(&mut self) {
-        self.recent.trim(self.delay);
+    fn trim(&mut self, now: Timestamp) {
+        self.recent.trim(now - self.delay);
     }
 }
 
 struct Entry {
     root: Root,
     hash: BlockHash,
-    time: Instant,
+    timestamp: Timestamp,
 }
 
 #[derive(Default)]
 struct EntryContainer {
     entries: HashMap<usize, Entry>,
     by_root: HashMap<Root, HashSet<usize>>,
-    by_time: BTreeMap<Instant, Vec<usize>>,
+    by_time: BTreeMap<Timestamp, Vec<usize>>,
     next_id: usize,
     empty_id_set: HashSet<usize>,
 }
@@ -78,7 +74,7 @@ impl EntryContainer {
         let by_root = self.by_root.entry(entry.root).or_default();
         by_root.insert(id);
 
-        let by_time = self.by_time.entry(entry.time).or_default();
+        let by_time = self.by_time.entry(entry.timestamp).or_default();
         by_time.push(id);
 
         self.entries.insert(id, entry);
@@ -101,14 +97,14 @@ impl EntryContainer {
         ids.iter().map(|&id| &self.entries[&id])
     }
 
-    fn trim(&mut self, upper_bound: Duration) {
-        let mut instants_to_remove = Vec::new();
-        for (&instant, ids) in self.by_time.iter() {
-            if instant.elapsed() < upper_bound {
+    fn trim(&mut self, cutoff: Timestamp) {
+        let mut to_remove = Vec::new();
+        for (&timestamp, ids) in self.by_time.iter() {
+            if timestamp > cutoff {
                 break;
             }
 
-            instants_to_remove.push(instant);
+            to_remove.push(timestamp);
 
             for id in ids {
                 let entry = self.entries.remove(id).unwrap();
@@ -121,12 +117,12 @@ impl EntryContainer {
             }
         }
 
-        for instant in instants_to_remove {
-            self.by_time.remove(&instant);
+        for timestamp in to_remove {
+            self.by_time.remove(&timestamp);
         }
     }
 
-    fn change_time_for_root(&mut self, root: &Root, time: Instant) -> bool {
+    fn change_time_for_root(&mut self, root: &Root, time: Timestamp) -> bool {
         match self.by_root.get(root) {
             Some(ids) => {
                 change_time_for_entries(ids, time, &mut self.entries, &mut self.by_time);
@@ -147,9 +143,9 @@ impl EntryContainer {
 
 fn change_time_for_entries(
     ids: &HashSet<usize>,
-    time: Instant,
+    time: Timestamp,
     entries: &mut HashMap<usize, Entry>,
-    by_time: &mut BTreeMap<Instant, Vec<usize>>,
+    by_time: &mut BTreeMap<Timestamp, Vec<usize>>,
 ) {
     for id in ids {
         change_time_for_entry(id, time, entries, by_time);
@@ -158,22 +154,22 @@ fn change_time_for_entries(
 
 fn change_time_for_entry(
     id: &usize,
-    time: Instant,
+    time: Timestamp,
     entries: &mut HashMap<usize, Entry>,
-    by_time: &mut BTreeMap<Instant, Vec<usize>>,
+    by_time: &mut BTreeMap<Timestamp, Vec<usize>>,
 ) {
     if let Some(entry) = entries.get_mut(id) {
-        let old_time = entry.time;
-        entry.time = time;
+        let old_time = entry.timestamp;
+        entry.timestamp = time;
         remove_from_time_index(old_time, id, by_time);
         by_time.entry(time).or_default().push(*id);
     }
 }
 
 fn remove_from_time_index(
-    time: Instant,
+    time: Timestamp,
     id: &usize,
-    ids_by_time: &mut BTreeMap<Instant, Vec<usize>>,
+    ids_by_time: &mut BTreeMap<Timestamp, Vec<usize>>,
 ) {
     if let Some(ids) = ids_by_time.get_mut(&time) {
         if ids.len() == 1 {
@@ -187,17 +183,18 @@ fn remove_from_time_index(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mock_instant::thread_local::MockClock;
 
     #[test]
     fn empty() {
+        let now = Timestamp::new_test_instance();
         let spacing = VoteSpacing::new(Duration::from_millis(100));
         assert_eq!(spacing.len(), 0);
-        assert!(spacing.votable(&Root::from(1), &BlockHash::from(2)));
+        assert!(spacing.votable(&Root::from(1), &BlockHash::from(2), now));
     }
 
     #[test]
     fn flag() {
+        let now = Timestamp::new_test_instance();
         let mut spacing = VoteSpacing::new(Duration::from_millis(100));
         let root1 = Root::from(1);
         let root2 = Root::from(2);
@@ -205,24 +202,24 @@ mod tests {
         let hash2 = BlockHash::from(4);
         let hash3 = BlockHash::from(5);
 
-        spacing.flag(&root1, &hash1);
+        spacing.flag(&root1, &hash1, now);
         assert_eq!(spacing.len(), 1);
-        assert!(spacing.votable(&root1, &hash1));
-        assert!(!spacing.votable(&root1, &hash2));
+        assert!(spacing.votable(&root1, &hash1, now));
+        assert!(!spacing.votable(&root1, &hash2, now));
 
-        spacing.flag(&root2, &hash3);
+        spacing.flag(&root2, &hash3, now);
         assert_eq!(spacing.len(), 2);
     }
 
     #[test]
     fn prune() {
         let length = Duration::from_millis(100);
+        let now = Timestamp::new_test_instance();
         let mut spacing = VoteSpacing::new(length);
-        spacing.flag(&Root::from(1), &BlockHash::from(3));
+        spacing.flag(&Root::from(1), &BlockHash::from(3), now);
         assert_eq!(spacing.len(), 1);
 
-        MockClock::advance(length);
-        spacing.flag(&Root::from(2), &BlockHash::from(4));
+        spacing.flag(&Root::from(2), &BlockHash::from(4), now + length);
         assert_eq!(spacing.len(), 1);
     }
 
@@ -232,13 +229,13 @@ mod tests {
         #[test]
         fn trim() {
             let mut container = EntryContainer::new();
+            let now = Timestamp::new_test_instance();
             container.insert(Entry {
                 root: Root::from(1),
                 hash: BlockHash::from(2),
-                time: Instant::now(),
+                timestamp: now,
             });
-            MockClock::advance(Duration::from_secs(10));
-            container.trim(Duration::from_secs(5));
+            container.trim(now + Duration::from_secs(5));
             assert_eq!(container.len(), 0);
             assert_eq!(container.by_time.len(), 0);
             assert_eq!(container.entries.len(), 0);

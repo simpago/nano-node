@@ -13,6 +13,7 @@ use rsnano_core::{
 use rsnano_ledger::{Ledger, Writer};
 use rsnano_messages::{ConfirmAck, Message};
 use rsnano_network::{ChannelId, TrafficType};
+use rsnano_nullable_clock::SteadyClock;
 use rsnano_store_lmdb::{LmdbReadTransaction, LmdbWriteTransaction, Transaction};
 use std::{
     collections::VecDeque,
@@ -47,6 +48,7 @@ impl VoteGenerator {
         voting_delay: Duration,
         vote_generator_delay: Duration,
         vote_broadcaster: Arc<VoteBroadcaster>,
+        clock: Arc<SteadyClock>,
     ) -> Self {
         let shared_state = Arc::new(SharedState {
             ledger: Arc::clone(&ledger),
@@ -65,6 +67,7 @@ impl VoteGenerator {
             vote_broadcaster,
             spacing: Mutex::new(VoteSpacing::new(voting_delay)),
             vote_generator_delay,
+            clock,
         });
 
         let shared_state_clone = Arc::clone(&shared_state);
@@ -191,6 +194,7 @@ struct SharedState {
     vote_broadcaster: Arc<VoteBroadcaster>,
     spacing: Mutex<VoteSpacing>,
     vote_generator_delay: Duration,
+    clock: Arc<SteadyClock>,
 }
 
 impl SharedState {
@@ -231,7 +235,7 @@ impl SharedState {
             let spacing = self.spacing.lock().unwrap();
             while let Some((root, hash)) = queues.candidates.pop_front() {
                 if !roots.contains(&root) {
-                    if spacing.votable(&root, &hash) {
+                    if spacing.votable(&root, &hash, self.clock.now()) {
                         roots.push(root);
                         hashes.push(hash);
                     } else {
@@ -296,9 +300,10 @@ impl SharedState {
         for vote in votes {
             {
                 let mut spacing = self.spacing.lock().unwrap();
+                let now = self.clock.now();
                 for i in 0..hashes.len() {
                     self.history.add(&roots[i], &hashes[i], &vote);
-                    spacing.flag(&roots[i], &hashes[i]);
+                    spacing.flag(&roots[i], &hashes[i], now);
                 }
             }
             action(vote);
@@ -317,7 +322,7 @@ impl SharedState {
                         break;
                     };
                     if !roots.contains(root) {
-                        if spacing.votable(root, hash) {
+                        if spacing.votable(root, hash, self.clock.now()) {
                             roots.push(*root);
                             hashes.push(*hash);
                         } else {

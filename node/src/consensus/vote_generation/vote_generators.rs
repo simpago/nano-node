@@ -6,6 +6,7 @@ use crate::{
 use rsnano_core::{utils::ContainerInfo, BlockHash, Root, SavedBlock};
 use rsnano_ledger::Ledger;
 use rsnano_network::ChannelId;
+use rsnano_nullable_clock::SteadyClock;
 use rsnano_output_tracker::{OutputListenerMt, OutputTrackerMt};
 use std::{sync::Arc, time::Duration};
 
@@ -32,6 +33,7 @@ impl VoteGenerators {
         network_params: &NetworkParams,
         vote_broadcaster: Arc<VoteBroadcaster>,
         message_sender: MessageSender,
+        clock: Arc<SteadyClock>,
     ) -> Self {
         let non_final_vote_generator = VoteGenerator::new(
             ledger.clone(),
@@ -43,6 +45,7 @@ impl VoteGenerators {
             Duration::from_secs(network_params.voting.delay_s as u64),
             Duration::from_millis(config.vote_generator_delay_ms as u64),
             vote_broadcaster.clone(),
+            clock.clone(),
         );
 
         let final_vote_generator = VoteGenerator::new(
@@ -55,6 +58,7 @@ impl VoteGenerators {
             Duration::from_secs(network_params.voting.delay_s as u64),
             Duration::from_millis(config.vote_generator_delay_ms as u64),
             vote_broadcaster,
+            clock,
         );
 
         Self {

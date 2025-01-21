@@ -1,10 +1,9 @@
 use rsnano_core::{
-    Amount, BlockHash, Epoch, PrivateKey, Root, Signature, UnsavedBlockLatticeBuilder, Vote,
-    VoteCode, VoteSource, WalletId, DEV_GENESIS_KEY,
+    Amount, Epoch, PrivateKey, Signature, UnsavedBlockLatticeBuilder, Vote, VoteCode, VoteSource,
+    WalletId, DEV_GENESIS_KEY,
 };
 use rsnano_ledger::{DEV_GENESIS_ACCOUNT, DEV_GENESIS_HASH, DEV_GENESIS_PUB_KEY};
 use rsnano_node::{
-    consensus::VoteSpacing,
     stats::{DetailType, Direction, StatType},
     wallets::WalletsExt,
 };
@@ -13,7 +12,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use test_helpers::{
-    assert_timely, assert_timely2, make_fake_channel, start_election, upgrade_epoch, System,
+    assert_timely, assert_timely_eq2, make_fake_channel, start_election, upgrade_epoch, System,
 };
 
 #[test]
@@ -290,42 +289,6 @@ fn vote_generator_multiple_representatives() {
 }
 
 #[test]
-fn vote_spacing_basic() {
-    let mut spacing = VoteSpacing::new(Duration::from_millis(100));
-    let root1 = Root::from(1);
-    let root2 = Root::from(2);
-    let hash3 = BlockHash::from(3);
-    let hash4 = BlockHash::from(4);
-    let hash5 = BlockHash::from(5);
-
-    assert_eq!(0, spacing.len());
-    assert!(spacing.votable(&root1, &hash3));
-    spacing.flag(&root1, &hash3);
-    assert_eq!(1, spacing.len());
-    assert!(spacing.votable(&root1, &hash3));
-    assert!(!spacing.votable(&root1, &hash4));
-    spacing.flag(&root2, &hash5);
-    assert_eq!(2, spacing.len());
-}
-
-#[test]
-fn vote_spacing_prune() {
-    let prune_duration = Duration::from_millis(100);
-    let mut spacing = VoteSpacing::new(prune_duration);
-    let root1 = Root::from(1);
-    let root2 = Root::from(2);
-    let hash3 = BlockHash::from(3);
-    let hash4 = BlockHash::from(4);
-
-    spacing.flag(&root1, &hash3);
-    assert_eq!(1, spacing.len());
-
-    std::thread::sleep(prune_duration);
-    spacing.flag(&root2, &hash4);
-    assert_eq!(1, spacing.len());
-}
-
-#[test]
 fn vote_spacing_vote_generator() {
     let mut system = System::new();
     let config = System::default_config_without_backlog_scan();
@@ -415,11 +378,7 @@ fn vote_spacing_rapid() {
     let config = System::default_config_without_backlog_scan();
     let node = system.build_node().config(config).finish();
 
-    let wallet_id = WalletId::random();
-    node.wallets.create(wallet_id);
-    node.wallets
-        .insert_adhoc2(&wallet_id, &DEV_GENESIS_KEY.raw_key(), true)
-        .unwrap();
+    node.insert_into_wallet(&DEV_GENESIS_KEY);
 
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let send1 = lattice
@@ -437,13 +396,16 @@ fn vote_spacing_rapid() {
     node.vote_generators
         .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send1.hash().into());
 
-    assert_timely2(|| {
-        node.stats.count(
-            StatType::VoteGenerator,
-            DetailType::GeneratorBroadcasts,
-            Direction::In,
-        ) == 1
-    });
+    assert_timely_eq2(
+        || {
+            node.stats.count(
+                StatType::VoteGenerator,
+                DetailType::GeneratorBroadcasts,
+                Direction::In,
+            )
+        },
+        1,
+    );
 
     node.ledger
         .rollback(&mut node.ledger.rw_txn(), &send1.hash())
@@ -454,13 +416,16 @@ fn vote_spacing_rapid() {
     node.vote_generators
         .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send2.hash().into());
 
-    assert_timely2(|| {
-        node.stats.count(
-            StatType::VoteGenerator,
-            DetailType::GeneratorSpacing,
-            Direction::In,
-        ) == 1
-    });
+    assert_timely_eq2(
+        || {
+            node.stats.count(
+                StatType::VoteGenerator,
+                DetailType::GeneratorSpacing,
+                Direction::In,
+            )
+        },
+        1,
+    );
 
     std::thread::sleep(Duration::from_millis(
         node.config.vote_generator_delay_ms as u64,
@@ -469,11 +434,14 @@ fn vote_spacing_rapid() {
     node.vote_generators
         .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send2.hash().into());
 
-    assert_timely2(|| {
-        node.stats.count(
-            StatType::VoteGenerator,
-            DetailType::GeneratorBroadcasts,
-            Direction::In,
-        ) == 2
-    });
+    assert_timely_eq2(
+        || {
+            node.stats.count(
+                StatType::VoteGenerator,
+                DetailType::GeneratorBroadcasts,
+                Direction::In,
+            )
+        },
+        2,
+    );
 }

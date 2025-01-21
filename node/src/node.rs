@@ -473,6 +473,7 @@ impl Node {
             &network_params,
             vote_broadcaster,
             message_sender.clone(),
+            steady_clock.clone(),
         ));
 
         let vote_applier = Arc::new(VoteApplier::new(
