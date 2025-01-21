@@ -200,6 +200,8 @@ public:
 	nano::http_callbacks & http_callbacks;
 	std::unique_ptr<nano::pruning> pruning_impl;
 	nano::pruning & pruning;
+	std::unique_ptr<nano::vote_rebroadcaster> vote_rebroadcaster_impl;
+	nano::vote_rebroadcaster & vote_rebroadcaster;
 
 public:
 	std::chrono::steady_clock::time_point const startup_time;

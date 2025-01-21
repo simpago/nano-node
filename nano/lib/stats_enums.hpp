@@ -24,6 +24,7 @@ enum class type
 	vote_processor,
 	vote_processor_tier,
 	vote_processor_overfill,
+	vote_rebroadcaster,
 	election,
 	election_cleanup,
 	election_vote,
@@ -172,6 +173,7 @@ enum class detail
 	queued,
 	error,
 	failed,
+	refresh,
 
 	// processing queue
 	queue,
@@ -654,6 +656,9 @@ enum class detail
 	pruning_target,
 	pruned_count,
 	collect_targets,
+
+	// vote_rebroadcaster
+	rebroadcast_hashes,
 
 	_last // Must be the last enum
 };

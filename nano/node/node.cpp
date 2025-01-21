@@ -42,6 +42,7 @@
 #include <nano/node/transport/tcp_listener.hpp>
 #include <nano/node/vote_generator.hpp>
 #include <nano/node/vote_processor.hpp>
+#include <nano/node/vote_rebroadcaster.hpp>
 #include <nano/node/vote_router.hpp>
 #include <nano/node/websocket.hpp>
 #include <nano/secure/ledger.hpp>
@@ -200,6 +201,8 @@ nano::node::node (std::shared_ptr<boost::asio::io_context> io_ctx_a, std::filesy
 	http_callbacks{ *http_callbacks_impl },
 	pruning_impl{ std::make_unique<nano::pruning> (config, flags, ledger, stats, logger) },
 	pruning{ *pruning_impl },
+	vote_rebroadcaster_impl{ std::make_unique<nano::vote_rebroadcaster> (vote_router, network, wallets, stats, logger) },
+	vote_rebroadcaster{ *vote_rebroadcaster_impl },
 	startup_time{ std::chrono::steady_clock::now () },
 	node_seq{ seq }
 {
@@ -216,21 +219,6 @@ nano::node::node (std::shared_ptr<boost::asio::io_context> io_ctx_a, std::filesy
 		{
 			scheduler.optimistic.activate (info.account, info.account_info, info.conf_info);
 			scheduler.priority.activate (transaction, info.account, info.account_info, info.conf_info);
-		}
-	});
-
-	// Republish vote if it is new and the node does not host a principal representative (or close to)
-	vote_router.vote_processed.add ([this] (std::shared_ptr<nano::vote> const & vote, nano::vote_source source, std::unordered_map<nano::block_hash, nano::vote_code> const & results) {
-		bool processed = std::any_of (results.begin (), results.end (), [] (auto const & result) {
-			return result.second == nano::vote_code::vote;
-		});
-		if (processed)
-		{
-			auto const reps = wallets.reps ();
-			if (!reps.have_half_rep () && !reps.exists (vote->account))
-			{
-				network.flood_vote (vote, 0.5f, /* rebroadcasted */ true);
-			}
 		}
 	});
 
@@ -571,6 +559,7 @@ void nano::node::start ()
 	monitor.start ();
 	http_callbacks.start ();
 	pruning.start ();
+	vote_rebroadcaster.start ();
 
 	add_initial_peers ();
 }
@@ -621,6 +610,7 @@ void nano::node::stop ()
 	monitor.stop ();
 	http_callbacks.stop ();
 	pruning.stop ();
+	vote_rebroadcaster.stop ();
 
 	bootstrap_workers.stop ();
 	wallet_workers.stop ();
@@ -989,6 +979,7 @@ nano::container_info nano::node::container_info () const
 	info.add ("bounded_backlog", backlog.container_info ());
 	info.add ("http_callbacks", http_callbacks.container_info ());
 	info.add ("pruning", pruning.container_info ());
+	info.add ("vote_rebroadcaster", vote_rebroadcaster.container_info ());
 	return info;
 }
 

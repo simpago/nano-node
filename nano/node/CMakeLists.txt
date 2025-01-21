@@ -193,6 +193,8 @@ add_library(
   vote_generator.cpp
   vote_processor.hpp
   vote_processor.cpp
+  vote_rebroadcaster.hpp
+  vote_rebroadcaster.cpp
   vote_router.hpp
   vote_router.cpp
   vote_spacing.hpp
