@@ -10,6 +10,7 @@ num-derive = "0"
 num-traits = "0"
 rsnano_core = { path = "../core" }
 rsnano_messages = { path = "../messages" }
+rsnano_ledger = { path = "../ledger" }
 rsnano_node = { path = "../node" }
 rsnano_websocket_messages = { path = "../websocket_messages" }
 serde = { version = "1", features = ["derive"] }
@@ -26,17 +27,4 @@ tokio-tungstenite = "0"
 tracing = "0"
 
 [dev-dependencies]
-futures-util = { version = "0", features = ["sink"] }
-rsnano_ledger = { path = "../ledger" }
-rsnano_messages = { path = "../messages" }
-rsnano_node = { path = "../node" }
 test_helpers = { path = "../tools/test_helpers" }
-tokio = { version = "1", features = [
-    "rt",
-    "rt-multi-thread",
-    "net",
-    "time",
-    "macros",
-    "sync",
-] }
-tokio-tungstenite = "0"

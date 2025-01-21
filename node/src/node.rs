@@ -1,17 +1,17 @@
 use crate::{
     block_processing::{
         BacklogScan, BlockProcessor, BlockProcessorCleanup, BlockSource, BoundedBacklog,
-        LedgerNotificationThread, LocalBlockBroadcaster, LocalBlockBroadcasterExt, UncheckedMap,
+        LedgerNotificationThread, LedgerNotifications, LocalBlockBroadcaster,
+        LocalBlockBroadcasterExt, UncheckedMap,
     },
     bootstrap::{BootstrapExt, BootstrapServer, BootstrapServerCleanup, BootstrapService},
     cementation::ConfirmingSet,
     config::{GlobalConfig, NodeConfig, NodeFlags},
     consensus::{
         election_schedulers::ElectionSchedulers, get_bootstrap_weights, log_bootstrap_weights,
-        ActiveElections, ActiveElectionsExt, LocalVoteHistory, ProcessLiveDispatcher,
-        ProcessLiveDispatcherExt, RecentlyConfirmedCache, RepTiers, RequestAggregator,
-        RequestAggregatorCleanup, VoteApplier, VoteBroadcaster, VoteCache, VoteCacheProcessor,
-        VoteGenerators, VoteProcessor, VoteProcessorExt, VoteProcessorQueue,
+        ActiveElections, ActiveElectionsExt, LocalVoteHistory, RecentlyConfirmedCache, RepTiers,
+        RequestAggregator, RequestAggregatorCleanup, VoteApplier, VoteBroadcaster, VoteCache,
+        VoteCacheProcessor, VoteGenerators, VoteProcessor, VoteProcessorExt, VoteProcessorQueue,
         VoteProcessorQueueCleanup, VoteRouter,
     },
     http_callbacks::HttpCallbacks,
@@ -113,7 +113,6 @@ pub struct Node {
     bounded_backlog: Arc<BoundedBacklog>,
     pub bootstrap: Arc<BootstrapService>,
     pub local_block_broadcaster: Arc<LocalBlockBroadcaster>,
-    pub process_live_dispatcher: Arc<ProcessLiveDispatcher>,
     message_processor: Mutex<MessageProcessor>,
     network_threads: Arc<Mutex<NetworkThreads>>,
     ledger_pruning: Arc<LedgerPruning>,
@@ -133,6 +132,7 @@ pub struct Node {
     receivable_search: ReceivableSearch,
     block_flooder: BlockFlooder,
     ledger_notification_thread: LedgerNotificationThread,
+    pub ledger_notifications: LedgerNotifications,
 }
 
 pub(crate) struct NodeArgs {
@@ -413,7 +413,7 @@ impl Node {
         ));
 
         let confirming_set_w = Arc::downgrade(&confirming_set);
-        ledger_notifications.on_batch_processed(Box::new(move |batch| {
+        ledger_notifications.on_blocks_processed(Box::new(move |batch| {
             if let Some(confirming) = confirming_set_w.upgrade() {
                 confirming.requeue_blocks(batch)
             }
@@ -554,7 +554,7 @@ impl Node {
         let schedulers_w = Arc::downgrade(&election_schedulers);
         let ledger_l = ledger.clone();
         // Activate accounts with fresh blocks
-        ledger_notifications.on_batch_processed(Box::new(move |batch| {
+        ledger_notifications.on_blocks_processed(Box::new(move |batch| {
             let Some(schedulers) = schedulers_w.upgrade() else {
                 return;
             };
@@ -597,8 +597,6 @@ impl Node {
         }
 
         vote_applier.set_election_schedulers(&election_schedulers);
-
-        let process_live_dispatcher = Arc::new(ProcessLiveDispatcher::new());
 
         let mut bootstrap_sender = MessageSender::new_with_buffer_size(
             network.clone(),
@@ -746,7 +744,7 @@ impl Node {
 
         // Track unconfirmed blocks
         let backlog_w = Arc::downgrade(&bounded_backlog);
-        ledger_notifications.on_batch_processed(Box::new(move |batch| {
+        ledger_notifications.on_blocks_processed(Box::new(move |batch| {
             if let Some(backlog) = backlog_w.upgrade() {
                 backlog.insert_batch(batch);
             }
@@ -967,8 +965,6 @@ impl Node {
                 recent.erase(hash);
             }
         });
-
-        process_live_dispatcher.connect(&ledger_notifications);
 
         // Requeue blocks that could not be immediately processed
         let block_processor_w = Arc::downgrade(&block_processor);
@@ -1235,7 +1231,6 @@ impl Node {
             bounded_backlog,
             bootstrap,
             local_block_broadcaster,
-            process_live_dispatcher, // needs to stay alive
             ledger_pruning,
             network_threads,
             message_processor,
@@ -1251,6 +1246,7 @@ impl Node {
             receivable_search,
             block_flooder,
             ledger_notification_thread,
+            ledger_notifications,
         }
     }
 

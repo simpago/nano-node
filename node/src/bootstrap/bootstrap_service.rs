@@ -952,8 +952,9 @@ pub trait BootstrapExt {
 impl BootstrapExt for Arc<BootstrapService> {
     fn initialize(&self, genesis_account: &Account) {
         let self_w = Arc::downgrade(self);
+        // Inspect all processed blocks
         self.notifications
-            .on_batch_processed(Box::new(move |batch| {
+            .on_blocks_processed(Box::new(move |batch| {
                 if let Some(self_l) = self_w.upgrade() {
                     self_l.batch_processed(batch);
                 }

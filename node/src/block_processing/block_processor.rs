@@ -279,7 +279,6 @@ impl BlockProcessorLoop for Arc<BlockProcessorLoopImpl> {
                 }
 
                 let mut processed = self.process_batch(guard);
-                self.stats.inc(StatType::BlockProcessor, DetailType::Notify);
                 // Set results for futures when not holding the lock
                 for (result, context) in processed.iter_mut() {
                     if let Some(cb) = &context.callback {

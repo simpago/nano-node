@@ -2,8 +2,10 @@ use super::WebsocketListener;
 use rsnano_core::{
     Account, Amount, BlockHash, BlockType, SavedBlock, Vote, VoteCode, VoteWithWeightInfo,
 };
+use rsnano_ledger::BlockStatus;
 use rsnano_messages::TelemetryData;
 use rsnano_node::{
+    block_processing::BlockContext,
     config::WebsocketConfig,
     consensus::{ElectionStatus, ElectionStatusType},
     Node,
@@ -108,15 +110,22 @@ pub fn create_websocket_server(
             }
         }));
 
+    // Announce new blocks via websocket
     let server_w: std::sync::Weak<WebsocketListener> = Arc::downgrade(&server);
-    node.process_live_dispatcher
-        .add_new_unconfirmed_block_callback(Arc::new(move |block: &SavedBlock| {
+    node.ledger_notifications.on_blocks_processed(Box::new(
+        move |blocks: &[(BlockStatus, Arc<BlockContext>)]| {
             if let Some(server) = server_w.upgrade() {
                 if server.any_subscriber(Topic::NewUnconfirmedBlock) {
-                    server.broadcast(&new_block_arrived_message(block));
+                    for (result, context) in blocks {
+                        if *result == BlockStatus::Progress {
+                            let block = context.saved_block.lock().unwrap().clone().unwrap();
+                            server.broadcast(&new_block_arrived_message(&block));
+                        }
+                    }
                 }
             }
-        }));
+        },
+    ));
 
     Some(server)
 }

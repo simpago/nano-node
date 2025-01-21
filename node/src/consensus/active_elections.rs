@@ -1143,7 +1143,7 @@ impl ActiveElectionsExt for Arc<ActiveElections> {
         let self_w = Arc::downgrade(self);
         // Notify elections about alternative (forked) blocks
         self.notifications
-            .on_batch_processed(Box::new(move |batch| {
+            .on_blocks_processed(Box::new(move |batch| {
                 if let Some(active) = self_w.upgrade() {
                     for (status, context) in batch {
                         if *status == BlockStatus::Fork {

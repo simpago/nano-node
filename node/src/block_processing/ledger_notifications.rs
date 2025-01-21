@@ -11,7 +11,7 @@ use std::{
 };
 
 #[derive(Clone)]
-pub(crate) struct LedgerNotifications {
+pub struct LedgerNotifications {
     callbacks: Arc<RwLock<Callbacks>>,
 }
 
@@ -38,7 +38,7 @@ impl LedgerNotifications {
     }
 
     /// All processed blocks including forks, rejected etc
-    pub fn on_batch_processed(
+    pub fn on_blocks_processed(
         &self,
         observer: Box<dyn Fn(&[(BlockStatus, Arc<BlockContext>)]) + Send + Sync>,
     ) {
@@ -286,7 +286,7 @@ mod tests {
         let (queue, notifications, _) = LedgerNotificationQueue::new(8);
         let notified = Arc::new(AtomicBool::new(false));
         let notified2 = notified.clone();
-        notifications.on_batch_processed(Box::new(move |_| {
+        notifications.on_blocks_processed(Box::new(move |_| {
             notified2.store(true, Ordering::SeqCst);
         }));
 
@@ -309,7 +309,7 @@ mod tests {
 
         let notified = Arc::new(AtomicBool::new(false));
         let notified2 = notified.clone();
-        notifications.on_batch_processed(Box::new(move |_| {
+        notifications.on_blocks_processed(Box::new(move |_| {
             notified2.store(true, Ordering::SeqCst);
         }));
 
@@ -330,7 +330,7 @@ mod tests {
 
         let notified = Arc::new((Condvar::new(), Mutex::new(0)));
         let notified2 = notified.clone();
-        notifications.on_batch_processed(Box::new(move |_| {
+        notifications.on_blocks_processed(Box::new(move |_| {
             *notified2.1.lock().unwrap() += 1;
             notified2.0.notify_one();
         }));
