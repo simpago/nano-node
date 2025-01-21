@@ -94,6 +94,7 @@ pub enum StatType {
     MessageProcessorOverfill,
     MessageProcessorType,
     ProcessConfirmed,
+    Pruning,
 }
 
 impl StatType {
@@ -585,6 +586,12 @@ pub enum DetailType {
     RollbackMissingBlock,
     RollbackSkipped,
     LoopScan,
+
+    // pruning
+    LedgerPruning,
+    PruningTarget,
+    PrunedCount,
+    CollectTargets,
 }
 
 impl DetailType {

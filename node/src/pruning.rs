@@ -1,6 +1,7 @@
 use crate::{
     config::{NodeConfig, NodeFlags},
-    utils::ThreadPool,
+    stats::{DetailType, StatType, Stats},
+    utils::{ThreadPool, ThreadPoolImpl},
 };
 use rsnano_core::{utils::UnixTimestamp, Account, BlockHash};
 use rsnano_ledger::{Ledger, Writer};
@@ -21,6 +22,7 @@ pub struct LedgerPruning {
     ledger: Arc<Ledger>,
     stopped: AtomicBool,
     workers: Arc<dyn ThreadPool>,
+    stats: Arc<Stats>,
 }
 
 impl LedgerPruning {
@@ -28,22 +30,26 @@ impl LedgerPruning {
         config: NodeConfig,
         flags: NodeFlags,
         ledger: Arc<Ledger>,
-        workers: Arc<dyn ThreadPool>,
+        stats: Arc<Stats>,
     ) -> Self {
         Self {
             config,
             flags,
             ledger,
-            workers,
+            workers: Arc::new(ThreadPoolImpl::create(1, "Pruning")),
+            stats,
             stopped: AtomicBool::new(false),
         }
     }
 
     pub fn stop(&self) {
         self.stopped.store(true, Ordering::SeqCst);
+        self.workers.stop();
     }
 
     pub fn ledger_pruning(&self, batch_size_a: u64, bootstrap_weight_reached: bool) {
+        self.stats.inc(StatType::Pruning, DetailType::LedgerPruning);
+
         let max_depth = if self.config.max_pruning_depth != 0 {
             self.config.max_pruning_depth
         } else {
@@ -69,6 +75,8 @@ impl LedgerPruning {
                 && !target_finished
                 && !self.stopped.load(Ordering::SeqCst)
             {
+                self.stats
+                    .inc(StatType::Pruning, DetailType::CollectTargets);
                 target_finished = self.collect_ledger_pruning_targets(
                     &mut pruning_targets,
                     &mut last_account,
@@ -86,12 +94,19 @@ impl LedgerPruning {
                     && transaction_write_count < batch_size_a
                     && !self.stopped.load(Ordering::SeqCst)
                 {
+                    self.stats.inc(StatType::Pruning, DetailType::PruningTarget);
                     let pruning_hash = pruning_targets.front().unwrap();
                     let account_pruned_count =
                         self.ledger
                             .pruning_action(&mut tx, pruning_hash, batch_size_a);
                     transaction_write_count += account_pruned_count;
                     pruning_targets.pop_front();
+
+                    self.stats.add(
+                        StatType::Pruning,
+                        DetailType::PrunedCount,
+                        account_pruned_count,
+                    );
                 }
                 pruned_count += transaction_write_count;
 

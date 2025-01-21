@@ -1151,7 +1151,7 @@ impl Node {
             config.clone(),
             flags.clone(),
             ledger.clone(),
-            workers.clone(),
+            stats.clone(),
         ));
 
         let monitor = TimerThread::new(
