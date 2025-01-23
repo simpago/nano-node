@@ -152,7 +152,7 @@ impl RealtimeMessageHandler {
             }
             Message::TelemetryAck(ack) => self.telemetry.process(&ack, channel),
             Message::AscPullReq(req) => {
-                self.bootstrap_responder.request(req, channel.clone());
+                self.bootstrap_responder.enqueue(req, channel.clone());
             }
             Message::AscPullAck(ack) => self.bootstrapper.process(ack, channel.channel_id()),
             Message::FrontierReq(_)

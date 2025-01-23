@@ -109,7 +109,7 @@ impl BootstrapResponder {
         *self.server_impl.on_response.lock().unwrap() = Some(cb);
     }
 
-    pub fn request(&self, message: AscPullReq, channel: Arc<Channel>) -> bool {
+    pub fn enqueue(&self, message: AscPullReq, channel: Arc<Channel>) -> bool {
         if !self.verify(&message) {
             self.stats
                 .inc(StatType::BootstrapServer, DetailType::Invalid);

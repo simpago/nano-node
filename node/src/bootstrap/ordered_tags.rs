@@ -39,8 +39,9 @@ pub(crate) enum QuerySource {
     Frontiers,
 }
 
+/// Information about a running query that hasn't been responded yet
 #[derive(Clone)]
-pub(crate) struct AsyncTag {
+pub(crate) struct RunningQuery {
     pub query_type: QueryType,
     pub source: QuerySource,
     pub start: HashOrAccount,
@@ -54,7 +55,7 @@ pub(crate) struct AsyncTag {
 
 #[derive(Default)]
 pub(crate) struct OrderedTags {
-    by_id: HashMap<u64, AsyncTag>,
+    by_id: HashMap<u64, RunningQuery>,
     by_account: HashMap<Account, Vec<u64>>,
     by_hash: HashMap<BlockHash, Vec<u64>>,
     sequenced: VecDeque<u64>,
@@ -64,7 +65,7 @@ static EMPTY_IDS: Vec<u64> = Vec::new();
 
 impl OrderedTags {
     pub const ELEMENT_SIZE: usize =
-        size_of::<AsyncTag>() + size_of::<Account>() + size_of::<u64>() * 3;
+        size_of::<RunningQuery>() + size_of::<Account>() + size_of::<u64>() * 3;
 
     pub(crate) fn len(&self) -> usize {
         self.sequenced.len()
@@ -75,11 +76,11 @@ impl OrderedTags {
     }
 
     #[allow(dead_code)]
-    pub fn get(&self, id: u64) -> Option<&AsyncTag> {
+    pub fn get(&self, id: u64) -> Option<&RunningQuery> {
         self.by_id.get(&id)
     }
 
-    pub fn get_mut(&mut self, id: u64) -> Option<&mut AsyncTag> {
+    pub fn get_mut(&mut self, id: u64) -> Option<&mut RunningQuery> {
         self.by_id.get_mut(&id)
     }
 
@@ -89,20 +90,20 @@ impl OrderedTags {
             .count()
     }
 
-    pub fn iter_hash(&self, hash: &BlockHash) -> impl Iterator<Item = &AsyncTag> {
+    pub fn iter_hash(&self, hash: &BlockHash) -> impl Iterator<Item = &RunningQuery> {
         self.iter_ids(self.by_hash.get(hash))
     }
 
-    pub fn iter_account(&self, account: &Account) -> impl Iterator<Item = &AsyncTag> {
+    pub fn iter_account(&self, account: &Account) -> impl Iterator<Item = &RunningQuery> {
         self.iter_ids(self.by_account.get(account))
     }
 
-    fn iter_ids<'a>(&'a self, ids: Option<&'a Vec<u64>>) -> impl Iterator<Item = &'a AsyncTag> {
+    fn iter_ids<'a>(&'a self, ids: Option<&'a Vec<u64>>) -> impl Iterator<Item = &'a RunningQuery> {
         let ids = ids.unwrap_or(&EMPTY_IDS);
         ids.iter().map(|id| self.by_id.get(id).unwrap())
     }
 
-    pub fn remove(&mut self, id: u64) -> Option<AsyncTag> {
+    pub fn remove(&mut self, id: u64) -> Option<RunningQuery> {
         if let Some(tag) = self.by_id.remove(&id) {
             self.remove_by_account(id, &tag.account);
             self.remove_by_hash(id, &tag.hash);
@@ -113,11 +114,11 @@ impl OrderedTags {
         }
     }
 
-    pub fn front(&self) -> Option<&AsyncTag> {
+    pub fn front(&self) -> Option<&RunningQuery> {
         self.sequenced.front().map(|id| self.by_id.get(id).unwrap())
     }
 
-    pub fn pop_front(&mut self) -> Option<AsyncTag> {
+    pub fn pop_front(&mut self) -> Option<RunningQuery> {
         if let Some(id) = self.sequenced.pop_front() {
             let result = self.by_id.remove(&id).unwrap();
             self.remove_by_account(id, &result.account);
@@ -128,7 +129,7 @@ impl OrderedTags {
         }
     }
 
-    pub(crate) fn insert(&mut self, tag: AsyncTag) {
+    pub(crate) fn insert(&mut self, tag: RunningQuery) {
         let id = tag.id;
         let account = tag.account;
         let hash = tag.hash;

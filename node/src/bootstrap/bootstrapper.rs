@@ -3,7 +3,7 @@ use super::{
     crawlers::{AccountDatabaseCrawler, PendingDatabaseCrawler},
     database_scan::DatabaseScan,
     frontier_scan::{FrontierScan, FrontierScanConfig},
-    ordered_tags::{AsyncTag, OrderedTags, QuerySource, QueryType},
+    ordered_tags::{OrderedTags, QuerySource, QueryType, RunningQuery},
     peer_scoring::PeerScoring,
     throttle::Throttle,
     AccountSetsConfig,
@@ -163,18 +163,18 @@ impl Bootstrapper {
         sent
     }
 
-    fn create_asc_pull_request(&self, tag: &AsyncTag) -> Message {
-        debug_assert!(tag.source != QuerySource::Invalid);
+    fn create_asc_pull_request(&self, query: &RunningQuery) -> Message {
+        debug_assert!(query.source != QuerySource::Invalid);
 
         {
             let mut guard = self.mutex.lock().unwrap();
-            debug_assert!(!guard.tags.contains(tag.id));
-            guard.tags.insert(tag.clone());
+            debug_assert!(!guard.tags.contains(query.id));
+            guard.tags.insert(query.clone());
         }
 
-        let req_type = match tag.query_type {
+        let req_type = match query.query_type {
             QueryType::BlocksByHash | QueryType::BlocksByAccount => {
-                let start_type = if tag.query_type == QueryType::BlocksByHash {
+                let start_type = if query.query_type == QueryType::BlocksByHash {
                     HashType::Block
                 } else {
                     HashType::Account
@@ -182,25 +182,25 @@ impl Bootstrapper {
 
                 AscPullReqType::Blocks(BlocksReqPayload {
                     start_type,
-                    start: tag.start,
-                    count: tag.count as u8,
+                    start: query.start,
+                    count: query.count as u8,
                 })
             }
             QueryType::AccountInfoByHash => AscPullReqType::AccountInfo(AccountInfoReqPayload {
-                target: tag.start,
+                target: query.start,
                 target_type: HashType::Block, // Query account info by block hash
             }),
             QueryType::Invalid => panic!("invalid query type"),
             QueryType::Frontiers => {
                 AscPullReqType::Frontiers(rsnano_messages::FrontiersReqPayload {
-                    start: tag.start.into(),
+                    start: query.start.into(),
                     count: FrontiersReqPayload::MAX_FRONTIERS,
                 })
             }
         };
 
         Message::AscPullReq(AscPullReq {
-            id: tag.id,
+            id: query.id,
             req_type,
         })
     }
@@ -382,7 +382,7 @@ impl Bootstrapper {
             }
         };
 
-        let tag = AsyncTag {
+        let query = RunningQuery {
             id,
             account,
             timestamp: now,
@@ -394,7 +394,7 @@ impl Bootstrapper {
             count,
         };
 
-        self.create_asc_pull_request(&tag)
+        self.create_asc_pull_request(&query)
     }
 
     fn create_account_info_request(
@@ -404,7 +404,7 @@ impl Bootstrapper {
         source: QuerySource,
         now: Timestamp,
     ) -> Message {
-        let tag = AsyncTag {
+        let query = RunningQuery {
             query_type: QueryType::AccountInfoByHash,
             source,
             start: hash.into(),
@@ -416,7 +416,7 @@ impl Bootstrapper {
             timestamp: now,
         };
 
-        self.create_asc_pull_request(&tag)
+        self.create_asc_pull_request(&query)
     }
 
     fn run_one_priority(&self) {
@@ -541,7 +541,7 @@ impl Bootstrapper {
     fn request_frontiers(&self, start: Account, channel: ChannelId, source: QuerySource) {
         let id = thread_rng().next_u64();
         let timestamp = self.clock.now();
-        let tag = AsyncTag {
+        let query = RunningQuery {
             query_type: QueryType::Frontiers,
             source,
             start: start.into(),
@@ -552,7 +552,7 @@ impl Bootstrapper {
             cutoff: timestamp + self.config.request_timeout * 4,
             timestamp,
         };
-        let message = self.create_asc_pull_request(&tag);
+        let message = self.create_asc_pull_request(&query);
         self.send(channel, &message, id);
     }
 
@@ -658,9 +658,9 @@ impl Bootstrapper {
         self.condition.notify_all();
     }
 
-    fn process_frontiers(&self, frontiers: Vec<Frontier>, tag: &AsyncTag) -> bool {
-        debug_assert_eq!(tag.query_type, QueryType::Frontiers);
-        debug_assert!(!tag.start.is_zero());
+    fn process_frontiers(&self, frontiers: Vec<Frontier>, query: &RunningQuery) -> bool {
+        debug_assert_eq!(query.query_type, QueryType::Frontiers);
+        debug_assert!(!query.start.is_zero());
 
         if frontiers.is_empty() {
             self.stats
@@ -672,7 +672,7 @@ impl Bootstrapper {
         self.stats
             .inc(StatType::BootstrapProcess, DetailType::Frontiers);
 
-        let result = self.verify_frontiers(&frontiers, tag);
+        let result = self.verify_frontiers(&frontiers, query);
         match result {
             VerifyResult::Ok => {
                 self.stats
@@ -686,7 +686,7 @@ impl Bootstrapper {
 
                 {
                     let mut guard = self.mutex.lock().unwrap();
-                    guard.frontiers.process(tag.start.into(), &frontiers);
+                    guard.frontiers.process(query.start.into(), &frontiers);
                 }
 
                 // Allow some overfill to avoid unnecessarily dropping responses
@@ -719,7 +719,7 @@ impl Bootstrapper {
         }
     }
 
-    fn verify_frontiers(&self, frontiers: &[Frontier], tag: &AsyncTag) -> VerifyResult {
+    fn verify_frontiers(&self, frontiers: &[Frontier], query: &RunningQuery) -> VerifyResult {
         if frontiers.is_empty() {
             return VerifyResult::NothingNew;
         }
@@ -734,18 +734,18 @@ impl Bootstrapper {
         }
 
         // Ensure the frontiers are larger or equal to the requested frontier
-        if frontiers[0].account.number() < tag.start.number() {
+        if frontiers[0].account.number() < query.start.number() {
             return VerifyResult::Invalid;
         }
 
         VerifyResult::Ok
     }
 
-    fn process_blocks(&self, response: &BlocksAckPayload, tag: &AsyncTag) -> bool {
+    fn process_blocks(&self, response: &BlocksAckPayload, query: &RunningQuery) -> bool {
         self.stats
             .inc(StatType::BootstrapProcess, DetailType::Blocks);
 
-        let result = verify_response(response, tag);
+        let result = verify_response(response, query);
         match result {
             VerifyResult::Ok => {
                 self.stats
@@ -761,7 +761,7 @@ impl Bootstrapper {
 
                 // Avoid re-processing the block we already have
                 assert!(blocks.len() >= 1);
-                if blocks.front().unwrap().hash() == tag.start.into() {
+                if blocks.front().unwrap().hash() == query.start.into() {
                     blocks.pop_front();
                 }
 
@@ -771,7 +771,7 @@ impl Bootstrapper {
                         let stats = self.stats.clone();
                         let data = self.mutex.clone();
                         let condition = self.condition.clone();
-                        let account = tag.account;
+                        let account = query.account;
                         self.block_processor.add_with_callback(
                             block,
                             BlockSource::Bootstrap,
@@ -794,7 +794,7 @@ impl Bootstrapper {
                     }
                 }
 
-                if tag.source == QuerySource::Database {
+                if query.source == QuerySource::Database {
                     self.mutex.lock().unwrap().throttle.add(true);
                 }
                 true
@@ -805,7 +805,7 @@ impl Bootstrapper {
 
                 {
                     let mut guard = self.mutex.lock().unwrap();
-                    match guard.accounts.priority_down(&tag.account) {
+                    match guard.accounts.priority_down(&query.account) {
                         PriorityDownResult::Deprioritized => {
                             self.stats
                                 .inc(StatType::BootstrapAccountSets, DetailType::Deprioritize);
@@ -827,9 +827,9 @@ impl Bootstrapper {
                         PriorityDownResult::InvalidAccount => {}
                     }
 
-                    guard.accounts.timestamp_reset(&tag.account);
+                    guard.accounts.timestamp_reset(&query.account);
 
-                    if tag.source == QuerySource::Database {
+                    if query.source == QuerySource::Database {
                         guard.throttle.add(false);
                     }
                 }
@@ -844,7 +844,7 @@ impl Bootstrapper {
         }
     }
 
-    fn process_accounts(&self, response: &AccountInfoAckPayload, tag: &AsyncTag) -> bool {
+    fn process_accounts(&self, response: &AccountInfoAckPayload, query: &RunningQuery) -> bool {
         if response.account.is_zero() {
             self.stats
                 .inc(StatType::BootstrapProcess, DetailType::AccountInfoEmpty);
@@ -860,7 +860,7 @@ impl Bootstrapper {
             let mut guard = self.mutex.lock().unwrap();
             let updated = guard
                 .accounts
-                .dependency_update(&tag.hash, response.account);
+                .dependency_update(&query.hash, response.account);
             if updated > 0 {
                 self.stats.add(
                     StatType::BootstrapAccountSets,
@@ -1260,7 +1260,7 @@ impl BootstrapLogic {
             self.config.throttle_coefficient,
         ));
 
-        let should_timeout = |tag: &AsyncTag| tag.cutoff < now;
+        let should_timeout = |query: &RunningQuery| query.cutoff < now;
 
         while let Some(front) = self.tags.front() {
             if !should_timeout(front) {
@@ -1329,29 +1329,29 @@ fn compute_throttle_size(account_count: u64, throttle_coefficient: usize) -> usi
 /// - invalid: when received blocks do not correspond to requested hash/account or they do not make a valid chain
 /// - nothing_new: when received response indicates that the account chain does not have more blocks
 /// - ok: otherwise, if all checks pass
-fn verify_response(response: &BlocksAckPayload, tag: &AsyncTag) -> VerifyResult {
+fn verify_response(response: &BlocksAckPayload, query: &RunningQuery) -> VerifyResult {
     let blocks = response.blocks();
     if blocks.is_empty() {
         return VerifyResult::NothingNew;
     }
-    if blocks.len() == 1 && blocks.front().unwrap().hash() == tag.start.into() {
+    if blocks.len() == 1 && blocks.front().unwrap().hash() == query.start.into() {
         return VerifyResult::NothingNew;
     }
-    if blocks.len() > tag.count {
+    if blocks.len() > query.count {
         return VerifyResult::Invalid;
     }
 
     let first = blocks.front().unwrap();
-    match tag.query_type {
+    match query.query_type {
         QueryType::BlocksByHash => {
-            if first.hash() != tag.start.into() {
+            if first.hash() != query.start.into() {
                 // TODO: Stat & log
                 return VerifyResult::Invalid;
             }
         }
         QueryType::BlocksByAccount => {
             // Open & state blocks always contain account field
-            if first.account_field().unwrap() != tag.start.into() {
+            if first.account_field().unwrap() != query.start.into() {
                 // TODO: Stat & log
                 return VerifyResult::Invalid;
             }
