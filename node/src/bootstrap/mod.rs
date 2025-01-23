@@ -7,9 +7,9 @@ mod frontier_scan;
 mod ordered_blocking;
 mod ordered_heads;
 mod ordered_priorities;
-mod ordered_tags;
 mod peer_scoring;
 mod priority;
+mod running_query_container;
 mod throttle;
 
 pub use account_sets::AccountSetsConfig;

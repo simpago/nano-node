@@ -3,8 +3,8 @@ use super::{
     crawlers::{AccountDatabaseCrawler, PendingDatabaseCrawler},
     database_scan::DatabaseScan,
     frontier_scan::{FrontierScan, FrontierScanConfig},
-    ordered_tags::{OrderedTags, QuerySource, QueryType, RunningQuery},
     peer_scoring::PeerScoring,
+    running_query_container::{OrderedTags, QuerySource, QueryType, RunningQuery},
     throttle::Throttle,
     AccountSetsConfig,
 };
