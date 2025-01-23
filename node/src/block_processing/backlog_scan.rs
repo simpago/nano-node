@@ -180,7 +180,6 @@ impl BacklogScanThread {
         &'a self,
         mut lock: MutexGuard<'a, BacklogScanFlags>,
     ) -> MutexGuard<'a, BacklogScanFlags> {
-        let mut total = 0;
         let mut next = Account::zero();
         let mut done = false;
         while !lock.stopped && !done {
@@ -197,6 +196,9 @@ impl BacklogScanThread {
                     })
                     .unwrap()
                     .0;
+                if lock.stopped {
+                    return lock;
+                }
             }
 
             drop(lock);
@@ -211,6 +213,8 @@ impl BacklogScanThread {
                     if count >= self.config.batch_size {
                         break;
                     }
+
+                    self.stats.inc(StatType::BacklogScan, DetailType::Total);
 
                     let conf_info = self
                         .ledger
@@ -233,7 +237,6 @@ impl BacklogScanThread {
 
                     next = account.inc_or_max();
                     count += 1;
-                    total += 1;
                 }
                 done = self
                     .ledger
@@ -243,9 +246,6 @@ impl BacklogScanThread {
                     .is_none();
             }
 
-            self.stats
-                .add(StatType::BacklogScan, DetailType::Total, total);
-
             self.stats.add(
                 StatType::BacklogScan,
                 DetailType::Scanned,
@@ -254,9 +254,10 @@ impl BacklogScanThread {
             self.stats.add(
                 StatType::BacklogScan,
                 DetailType::Activated,
-                scanned.len() as u64,
+                activated.len() as u64,
             );
 
+            // Notify about scanned and activated accounts without holding database transaction
             {
                 let observers = self.scanned_observers.read().unwrap();
                 for observer in &*observers {
