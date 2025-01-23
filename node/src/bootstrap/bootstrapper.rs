@@ -10,7 +10,7 @@ use super::{
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, BlockSource, LedgerNotifications},
-    bootstrap::BootstrapServer,
+    bootstrap::BootstrapResponder,
     stats::{DetailType, Direction, Sample, StatType, Stats},
     transport::MessageSender,
     utils::{ThreadPool, ThreadPoolImpl},
@@ -329,7 +329,7 @@ impl Bootstrapper {
     ) -> Message {
         // Limit the max number of blocks to pull
         debug_assert!(count > 0);
-        debug_assert!(count <= BootstrapServer::MAX_BLOCKS);
+        debug_assert!(count <= BootstrapResponder::MAX_BLOCKS);
         let count = min(count, self.config.max_pull_count);
 
         let tx = self.ledger.read_txn();
@@ -435,7 +435,7 @@ impl Bootstrapper {
         let pull_count = clamp(
             f64::from(result.priority) as usize,
             min_pull_count,
-            BootstrapServer::MAX_BLOCKS,
+            BootstrapResponder::MAX_BLOCKS,
         );
 
         let sent = self.request(

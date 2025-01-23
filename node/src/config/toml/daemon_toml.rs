@@ -750,16 +750,16 @@ mod tests {
 
         // Bootstrap Server section
         assert_ne!(
-            deserialized.node.bootstrap_server.max_queue,
-            default_cfg.node.bootstrap_server.max_queue
+            deserialized.node.bootstrap_responder.max_queue,
+            default_cfg.node.bootstrap_responder.max_queue
         );
         assert_ne!(
-            deserialized.node.bootstrap_server.threads,
-            default_cfg.node.bootstrap_server.threads
+            deserialized.node.bootstrap_responder.threads,
+            default_cfg.node.bootstrap_responder.threads
         );
         assert_ne!(
-            deserialized.node.bootstrap_server.batch_size,
-            default_cfg.node.bootstrap_server.batch_size
+            deserialized.node.bootstrap_responder.batch_size,
+            default_cfg.node.bootstrap_responder.batch_size
         );
 
         // Request Aggregator section

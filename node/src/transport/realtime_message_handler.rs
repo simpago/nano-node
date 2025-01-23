@@ -1,6 +1,6 @@
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
-    bootstrap::{BootstrapServer, Bootstrapper},
+    bootstrap::{BootstrapResponder, Bootstrapper},
     config::NodeConfig,
     consensus::{RequestAggregator, VoteProcessorQueue},
     stats::{DetailType, Direction, StatType, Stats},
@@ -27,7 +27,7 @@ pub struct RealtimeMessageHandler {
     request_aggregator: Arc<RequestAggregator>,
     vote_processor_queue: Arc<VoteProcessorQueue>,
     telemetry: Arc<Telemetry>,
-    bootstrap_server: Arc<BootstrapServer>,
+    bootstrap_responder: Arc<BootstrapResponder>,
     bootstrapper: Arc<Bootstrapper>,
 }
 
@@ -42,7 +42,7 @@ impl RealtimeMessageHandler {
         request_aggregator: Arc<RequestAggregator>,
         vote_processor_queue: Arc<VoteProcessorQueue>,
         telemetry: Arc<Telemetry>,
-        bootstrap_server: Arc<BootstrapServer>,
+        bootstrap_responder: Arc<BootstrapResponder>,
         bootstrapper: Arc<Bootstrapper>,
     ) -> Self {
         Self {
@@ -55,7 +55,7 @@ impl RealtimeMessageHandler {
             request_aggregator,
             vote_processor_queue,
             telemetry,
-            bootstrap_server,
+            bootstrap_responder,
             bootstrapper,
         }
     }
@@ -152,7 +152,7 @@ impl RealtimeMessageHandler {
             }
             Message::TelemetryAck(ack) => self.telemetry.process(&ack, channel),
             Message::AscPullReq(req) => {
-                self.bootstrap_server.request(req, channel.clone());
+                self.bootstrap_responder.request(req, channel.clone());
             }
             Message::AscPullAck(ack) => self.bootstrapper.process(ack, channel.channel_id()),
             Message::FrontierReq(_)

@@ -21,13 +21,13 @@ use std::{
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct BootstrapServerConfig {
+pub struct BootstrapResponderConfig {
     pub max_queue: usize,
     pub threads: usize,
     pub batch_size: usize,
 }
 
-impl Default for BootstrapServerConfig {
+impl Default for BootstrapResponderConfig {
     fn default() -> Self {
         Self {
             max_queue: 16,
@@ -40,26 +40,26 @@ impl Default for BootstrapServerConfig {
 /**
  * Processes bootstrap requests (`asc_pull_req` messages) and replies with bootstrap responses (`asc_pull_ack`)
  */
-pub struct BootstrapServer {
-    config: BootstrapServerConfig,
+pub struct BootstrapResponder {
+    config: BootstrapResponderConfig,
     stats: Arc<Stats>,
     threads: Mutex<Vec<JoinHandle<()>>>,
-    pub(crate) server_impl: Arc<BootstrapServerImpl>,
+    pub(crate) server_impl: Arc<BootstrapResponderImpl>,
 }
 
-impl BootstrapServer {
+impl BootstrapResponder {
     /** Maximum number of blocks to send in a single response, cannot be higher than capacity of a single `asc_pull_ack` message */
     pub const MAX_BLOCKS: usize = BlocksAckPayload::MAX_BLOCKS;
     pub const MAX_FRONTIERS: usize = AscPullAck::MAX_FRONTIERS;
 
     pub(crate) fn new(
-        config: BootstrapServerConfig,
+        config: BootstrapResponderConfig,
         stats: Arc<Stats>,
         ledger: Arc<Ledger>,
         message_sender: MessageSender,
     ) -> Self {
         let max_queue = config.max_queue;
-        let server_impl = Arc::new(BootstrapServerImpl {
+        let server_impl = Arc::new(BootstrapResponderImpl {
             stats: Arc::clone(&stats),
             ledger,
             batch_size: config.batch_size,
@@ -156,13 +156,13 @@ impl BootstrapServer {
     }
 }
 
-impl Drop for BootstrapServer {
+impl Drop for BootstrapResponder {
     fn drop(&mut self) {
         debug_assert!(self.threads.lock().unwrap().is_empty());
     }
 }
 
-pub(crate) struct BootstrapServerImpl {
+pub(crate) struct BootstrapResponderImpl {
     stats: Arc<Stats>,
     ledger: Arc<Ledger>,
     on_response: Arc<Mutex<Option<Box<dyn Fn(&AscPullAck, ChannelId) + Send + Sync>>>>,
@@ -173,7 +173,7 @@ pub(crate) struct BootstrapServerImpl {
     message_sender: Mutex<MessageSender>,
 }
 
-impl BootstrapServerImpl {
+impl BootstrapResponderImpl {
     fn run(&self) {
         let mut queue = self.queue.lock().unwrap();
         while !self.stopped.load(Ordering::SeqCst) {
@@ -233,7 +233,7 @@ impl BootstrapServerImpl {
         id: u64,
         request: BlocksReqPayload,
     ) -> AscPullAck {
-        let count = min(request.count as usize, BootstrapServer::MAX_BLOCKS);
+        let count = min(request.count as usize, BootstrapResponder::MAX_BLOCKS);
 
         match request.start_type {
             HashType::Account => {
@@ -439,15 +439,15 @@ impl From<&AscPullReqType> for DetailType {
     }
 }
 
-pub(crate) struct BootstrapServerCleanup(Arc<BootstrapServerImpl>);
+pub(crate) struct BootstrapResponderCleanup(Arc<BootstrapResponderImpl>);
 
-impl BootstrapServerCleanup {
-    pub fn new(server: Arc<BootstrapServerImpl>) -> Self {
+impl BootstrapResponderCleanup {
+    pub fn new(server: Arc<BootstrapResponderImpl>) -> Self {
         Self(server)
     }
 }
 
-impl DeadChannelCleanupStep for BootstrapServerCleanup {
+impl DeadChannelCleanupStep for BootstrapResponderCleanup {
     fn clean_up_dead_channels(&self, dead_channel_ids: &[ChannelId]) {
         let mut queue = self.0.queue.lock().unwrap();
         for channel_id in dead_channel_ids {

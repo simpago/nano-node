@@ -284,7 +284,7 @@ impl NodeConfig {
             }
         }
         if let Some(bootstrap_server_toml) = &toml.bootstrap_server {
-            self.bootstrap_server = bootstrap_server_toml.into();
+            self.bootstrap_responder = bootstrap_server_toml.into();
         }
         if let Some(websocket_config_toml) = &toml.websocket {
             self.websocket_config.merge_toml(&websocket_config_toml);
@@ -436,7 +436,7 @@ impl From<&NodeConfig> for NodeToml {
             }),
             priority_bucket: Some((&config.priority_bucket).into()),
             bootstrap: Some((&config.bootstrap).into()),
-            bootstrap_server: Some((&config.bootstrap_server).into()),
+            bootstrap_server: Some((&config.bootstrap_responder).into()),
             websocket: Some((&config.websocket_config).into()),
             diagnostics: Some((&config.diagnostics_config).into()),
             statistics: Some((&config.stat_config).into()),

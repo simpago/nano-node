@@ -1,4 +1,4 @@
-use crate::bootstrap::BootstrapServerConfig;
+use crate::bootstrap::BootstrapResponderConfig;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -10,14 +10,14 @@ pub struct BootstrapServerToml {
 
 impl Default for BootstrapServerToml {
     fn default() -> Self {
-        let config = BootstrapServerConfig::default();
+        let config = BootstrapResponderConfig::default();
         (&config).into()
     }
 }
 
-impl From<&BootstrapServerToml> for BootstrapServerConfig {
+impl From<&BootstrapServerToml> for BootstrapResponderConfig {
     fn from(toml: &BootstrapServerToml) -> Self {
-        let mut config = BootstrapServerConfig::default();
+        let mut config = BootstrapResponderConfig::default();
 
         if let Some(max_queue) = toml.max_queue {
             config.max_queue = max_queue;
@@ -32,8 +32,8 @@ impl From<&BootstrapServerToml> for BootstrapServerConfig {
     }
 }
 
-impl From<&BootstrapServerConfig> for BootstrapServerToml {
-    fn from(config: &BootstrapServerConfig) -> Self {
+impl From<&BootstrapResponderConfig> for BootstrapServerToml {
+    fn from(config: &BootstrapResponderConfig) -> Self {
         Self {
             max_queue: Some(config.max_queue),
             threads: Some(config.threads),

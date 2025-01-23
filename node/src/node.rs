@@ -4,7 +4,7 @@ use crate::{
         LedgerNotificationThread, LedgerNotifications, LocalBlockBroadcaster,
         LocalBlockBroadcasterExt, UncheckedMap,
     },
-    bootstrap::{BootstrapExt, BootstrapServer, BootstrapServerCleanup, Bootstrapper},
+    bootstrap::{BootstrapExt, BootstrapResponder, BootstrapResponderCleanup, Bootstrapper},
     cementation::ConfirmingSet,
     config::{GlobalConfig, NodeConfig, NodeFlags},
     consensus::{
@@ -90,7 +90,7 @@ pub struct Node {
     pub syn_cookies: Arc<SynCookies>,
     pub network: Arc<RwLock<Network>>,
     pub telemetry: Arc<Telemetry>,
-    pub bootstrap_server: Arc<BootstrapServer>,
+    pub bootstrap_responder: Arc<BootstrapResponder>,
     online_weight_calculation: TimerThread<OnlineWeightCalculation>,
     pub online_reps: Arc<Mutex<OnlineReps>>,
     pub rep_tiers: Arc<RepTiers>,
@@ -357,14 +357,14 @@ impl Node {
             steady_clock.clone(),
         ));
 
-        let bootstrap_server = Arc::new(BootstrapServer::new(
-            config.bootstrap_server.clone(),
+        let bootstrap_responder = Arc::new(BootstrapResponder::new(
+            config.bootstrap_responder.clone(),
             stats.clone(),
             ledger.clone(),
             message_sender.clone(),
         ));
-        dead_channel_cleanup.add_step(BootstrapServerCleanup::new(
-            bootstrap_server.server_impl.clone(),
+        dead_channel_cleanup.add_step(BootstrapResponderCleanup::new(
+            bootstrap_responder.server_impl.clone(),
         ));
 
         let rep_tiers = Arc::new(RepTiers::new(
@@ -891,7 +891,7 @@ impl Node {
             request_aggregator.clone(),
             vote_processor_queue.clone(),
             telemetry.clone(),
-            bootstrap_server.clone(),
+            bootstrap_responder.clone(),
             bootstrapper.clone(),
         ));
 
@@ -1209,7 +1209,7 @@ impl Node {
             flags,
             work,
             runtime,
-            bootstrap_server,
+            bootstrap_responder,
             online_weight_calculation: TimerThread::new("Online reps", online_weight_calculation),
             online_reps,
             rep_tiers,
@@ -1521,7 +1521,7 @@ impl Node {
         if self.config.enable_bounded_backlog {
             self.bounded_backlog.start();
         }
-        self.bootstrap_server.start();
+        self.bootstrap_responder.start();
         self.bootstrapper
             .initialize(&self.network_params.ledger.genesis_account);
         self.bootstrapper.start();
@@ -1587,7 +1587,7 @@ impl Node {
         self.vote_generators.stop();
         self.confirming_set.stop();
         self.telemetry.stop();
-        self.bootstrap_server.stop();
+        self.bootstrap_responder.stop();
         self.wallets.stop();
         self.stats.stop();
         self.local_block_broadcaster.stop();
