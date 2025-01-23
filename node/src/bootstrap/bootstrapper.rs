@@ -4,7 +4,7 @@ use super::{
     database_scan::DatabaseScan,
     frontier_scan::{FrontierScan, FrontierScanConfig},
     peer_scoring::PeerScoring,
-    running_query_container::{OrderedTags, QuerySource, QueryType, RunningQuery},
+    running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
     throttle::Throttle,
     AccountSetsConfig,
 };
@@ -90,7 +90,7 @@ impl Bootstrapper {
                 scoring: PeerScoring::new(config.clone()),
                 database_scan: DatabaseScan::new(ledger.clone()),
                 frontiers: FrontierScan::new(config.frontier_scan.clone(), stats.clone()),
-                tags: OrderedTags::default(),
+                running_queries: RunningQueryContainer::default(),
                 throttle: Throttle::new(compute_throttle_size(
                     ledger.account_count(),
                     config.throttle_coefficient,
@@ -151,12 +151,12 @@ impl Bootstrapper {
         }
 
         let mut guard = self.mutex.lock().unwrap();
-        if let Some(tag) = guard.tags.get_mut(id) {
+        if let Some(tag) = guard.running_queries.get_mut(id) {
             if sent {
                 // After the request has been sent, the peer has a limited time to respond
                 tag.cutoff = self.clock.now() + self.config.request_timeout;
             } else {
-                guard.tags.remove(id);
+                guard.running_queries.remove(id);
             }
         }
 
@@ -168,8 +168,8 @@ impl Bootstrapper {
 
         {
             let mut guard = self.mutex.lock().unwrap();
-            debug_assert!(!guard.tags.contains(query.id));
-            guard.tags.insert(query.clone());
+            debug_assert!(!guard.running_queries.contains(query.id));
+            guard.running_queries.insert(query.clone());
         }
 
         let req_type = match query.query_type {
@@ -250,7 +250,7 @@ impl Bootstrapper {
     /* Waits for a channel that is not full */
     fn wait_channel(&self) -> Option<ChannelId> {
         // Limit the number of in-flight requests
-        self.wait(|l| l.tags.len() < l.config.max_requests);
+        self.wait(|l| l.running_queries.len() < l.config.max_requests);
 
         // Wait until more requests can be sent
         self.wait(|l| l.limiter.should_pass(1));
@@ -603,7 +603,7 @@ impl Bootstrapper {
         let mut guard = self.mutex.lock().unwrap();
 
         // Only process messages that have a known tag
-        let Some(tag) = guard.tags.remove(message.id) else {
+        let Some(tag) = guard.running_queries.remove(message.id) else {
             self.stats.inc(StatType::Bootstrap, DetailType::MissingTag);
             return;
         };
@@ -1060,7 +1060,7 @@ struct BootstrapLogic {
     accounts: AccountSets,
     scoring: PeerScoring,
     database_scan: DatabaseScan,
-    tags: OrderedTags,
+    running_queries: RunningQueryContainer,
     throttle: Throttle,
     frontiers: FrontierScan,
     sync_dependencies_interval: Instant,
@@ -1187,7 +1187,7 @@ impl BootstrapLogic {
     }
 
     fn count_tags_by_hash(&self, hash: &BlockHash, source: QuerySource) -> usize {
-        self.tags
+        self.running_queries
             .iter_hash(hash)
             .filter(|i| i.source == source)
             .count()
@@ -1195,7 +1195,9 @@ impl BootstrapLogic {
 
     fn next_priority(&mut self, stats: &Stats, now: Timestamp) -> PriorityResult {
         let next = self.accounts.next_priority(now, |account| {
-            self.tags.count_by_account(account, QuerySource::Priority) < 4
+            self.running_queries
+                .count_by_account(account, QuerySource::Priority)
+                < 4
         });
 
         if next.account.is_zero() {
@@ -1222,9 +1224,11 @@ impl BootstrapLogic {
             return Account::zero();
         }
 
-        let account = self
-            .database_scan
-            .next(|account| self.tags.count_by_account(account, QuerySource::Database) == 0);
+        let account = self.database_scan.next(|account| {
+            self.running_queries
+                .count_by_account(account, QuerySource::Database)
+                == 0
+        });
 
         if account.is_zero() {
             return account;
@@ -1262,14 +1266,14 @@ impl BootstrapLogic {
 
         let should_timeout = |query: &RunningQuery| query.cutoff < now;
 
-        while let Some(front) = self.tags.front() {
+        while let Some(front) = self.running_queries.front() {
             if !should_timeout(front) {
                 break;
             }
 
             stats.inc(StatType::Bootstrap, DetailType::Timeout);
             stats.inc(StatType::BootstrapTimeout, front.query_type.into());
-            self.tags.pop_front();
+            self.running_queries.pop_front();
         }
 
         if self.sync_dependencies_interval.elapsed() >= Duration::from_secs(60) {
@@ -1302,7 +1306,11 @@ impl BootstrapLogic {
         .into();
 
         ContainerInfo::builder()
-            .leaf("tags", self.tags.len(), OrderedTags::ELEMENT_SIZE)
+            .leaf(
+                "tags",
+                self.running_queries.len(),
+                RunningQueryContainer::ELEMENT_SIZE,
+            )
             .leaf("throttle", self.throttle.len(), 0)
             .leaf("throttle_success", self.throttle.successes(), 0)
             .node("accounts", self.accounts.container_info())

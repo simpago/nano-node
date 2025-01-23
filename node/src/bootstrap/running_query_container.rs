@@ -54,7 +54,7 @@ pub(crate) struct RunningQuery {
 }
 
 #[derive(Default)]
-pub(crate) struct OrderedTags {
+pub(crate) struct RunningQueryContainer {
     by_id: HashMap<u64, RunningQuery>,
     by_account: HashMap<Account, Vec<u64>>,
     by_hash: HashMap<BlockHash, Vec<u64>>,
@@ -63,7 +63,7 @@ pub(crate) struct OrderedTags {
 
 static EMPTY_IDS: Vec<u64> = Vec::new();
 
-impl OrderedTags {
+impl RunningQueryContainer {
     pub const ELEMENT_SIZE: usize =
         size_of::<RunningQuery>() + size_of::<Account>() + size_of::<u64>() * 3;
 
