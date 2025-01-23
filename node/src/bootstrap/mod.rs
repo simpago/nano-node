@@ -1,6 +1,6 @@
 mod account_sets;
 mod bootstrap_server;
-mod bootstrap_service;
+mod bootstrapper;
 mod crawlers;
 mod database_scan;
 mod frontier_scan;
@@ -14,4 +14,4 @@ mod throttle;
 
 pub use account_sets::AccountSetsConfig;
 pub use bootstrap_server::*;
-pub use bootstrap_service::*;
+pub use bootstrapper::*;
