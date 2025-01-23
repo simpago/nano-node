@@ -1,6 +1,6 @@
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
-    bootstrap::{BootstrapServer, BootstrapService},
+    bootstrap::{BootstrapServer, Bootstrapper},
     config::NodeConfig,
     consensus::{RequestAggregator, VoteProcessorQueue},
     stats::{DetailType, Direction, StatType, Stats},
@@ -28,7 +28,7 @@ pub struct RealtimeMessageHandler {
     vote_processor_queue: Arc<VoteProcessorQueue>,
     telemetry: Arc<Telemetry>,
     bootstrap_server: Arc<BootstrapServer>,
-    ascend_boot: Arc<BootstrapService>,
+    bootstrapper: Arc<Bootstrapper>,
 }
 
 impl RealtimeMessageHandler {
@@ -43,7 +43,7 @@ impl RealtimeMessageHandler {
         vote_processor_queue: Arc<VoteProcessorQueue>,
         telemetry: Arc<Telemetry>,
         bootstrap_server: Arc<BootstrapServer>,
-        ascend_boot: Arc<BootstrapService>,
+        bootstrapper: Arc<Bootstrapper>,
     ) -> Self {
         Self {
             stats,
@@ -56,7 +56,7 @@ impl RealtimeMessageHandler {
             vote_processor_queue,
             telemetry,
             bootstrap_server,
-            ascend_boot,
+            bootstrapper,
         }
     }
 
@@ -154,7 +154,7 @@ impl RealtimeMessageHandler {
             Message::AscPullReq(req) => {
                 self.bootstrap_server.request(req, channel.clone());
             }
-            Message::AscPullAck(ack) => self.ascend_boot.process(ack, channel.channel_id()),
+            Message::AscPullAck(ack) => self.bootstrapper.process(ack, channel.channel_id()),
             Message::FrontierReq(_)
             | Message::BulkPush
             | Message::BulkPull(_)

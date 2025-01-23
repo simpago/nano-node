@@ -4,7 +4,7 @@ use crate::{
         LedgerNotificationThread, LedgerNotifications, LocalBlockBroadcaster,
         LocalBlockBroadcasterExt, UncheckedMap,
     },
-    bootstrap::{BootstrapExt, BootstrapServer, BootstrapServerCleanup, BootstrapService},
+    bootstrap::{BootstrapExt, BootstrapServer, BootstrapServerCleanup, Bootstrapper},
     cementation::ConfirmingSet,
     config::{GlobalConfig, NodeConfig, NodeFlags},
     consensus::{
@@ -111,7 +111,7 @@ pub struct Node {
     pub request_aggregator: Arc<RequestAggregator>,
     pub backlog_scan: Arc<BacklogScan>,
     bounded_backlog: Arc<BoundedBacklog>,
-    pub bootstrap: Arc<BootstrapService>,
+    pub bootstrapper: Arc<Bootstrapper>,
     pub local_block_broadcaster: Arc<LocalBlockBroadcaster>,
     message_processor: Mutex<MessageProcessor>,
     network_threads: Arc<Mutex<NetworkThreads>>,
@@ -767,7 +767,7 @@ impl Node {
             }
         }));
 
-        let bootstrap = Arc::new(BootstrapService::new(
+        let bootstrapper = Arc::new(Bootstrapper::new(
             block_processor.clone(),
             ledger_notifications.clone(),
             ledger.clone(),
@@ -892,7 +892,7 @@ impl Node {
             vote_processor_queue.clone(),
             telemetry.clone(),
             bootstrap_server.clone(),
-            bootstrap.clone(),
+            bootstrapper.clone(),
         ));
 
         let network_threads = Arc::new(Mutex::new(NetworkThreads::new(
@@ -1230,7 +1230,7 @@ impl Node {
             request_aggregator,
             backlog_scan,
             bounded_backlog,
-            bootstrap,
+            bootstrapper,
             local_block_broadcaster,
             ledger_pruning,
             network_threads,
@@ -1289,7 +1289,7 @@ impl Node {
             .node("vote_cache", vote_cache)
             .node("vote_router", self.vote_router.container_info())
             .node("vote_generators", self.vote_generators.container_info())
-            .node("bootstrap_ascending", self.bootstrap.container_info())
+            .node("bootstrap_ascending", self.bootstrapper.container_info())
             .node("unchecked", self.unchecked.container_info())
             .node(
                 "local_block_broadcaster",
@@ -1522,9 +1522,9 @@ impl Node {
             self.bounded_backlog.start();
         }
         self.bootstrap_server.start();
-        self.bootstrap
+        self.bootstrapper
             .initialize(&self.network_params.ledger.genesis_account);
-        self.bootstrap.start();
+        self.bootstrapper.start();
         self.telemetry.start();
         self.stats.start();
         self.local_block_broadcaster.start();
@@ -1573,7 +1573,7 @@ impl Node {
         // No tasks may wait for work generation in I/O threads, or termination signal capturing will be unable to call node::stop()
         self.distributed_work.stop();
         self.backlog_scan.stop();
-        self.bootstrap.stop();
+        self.bootstrapper.stop();
         self.bounded_backlog.stop();
         self.rep_crawler.stop();
         self.unchecked.stop();

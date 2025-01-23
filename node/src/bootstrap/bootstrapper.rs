@@ -42,7 +42,7 @@ enum VerifyResult {
     Invalid,
 }
 
-pub struct BootstrapService {
+pub struct Bootstrapper {
     block_processor: Arc<BlockProcessor>,
     notifications: LedgerNotifications,
     ledger: Arc<Ledger>,
@@ -69,7 +69,7 @@ struct Threads {
     frontiers: Option<JoinHandle<()>>,
 }
 
-impl BootstrapService {
+impl Bootstrapper {
     pub(crate) fn new(
         block_processor: Arc<BlockProcessor>,
         notifications: LedgerNotifications,
@@ -933,7 +933,7 @@ impl BootstrapService {
     }
 }
 
-impl Drop for BootstrapService {
+impl Drop for Bootstrapper {
     fn drop(&mut self) {
         // All threads must be stopped before destruction
         debug_assert!(self.threads.lock().unwrap().is_none());
@@ -945,7 +945,7 @@ pub trait BootstrapExt {
     fn start(&self);
 }
 
-impl BootstrapExt for Arc<BootstrapService> {
+impl BootstrapExt for Arc<Bootstrapper> {
     fn initialize(&self, genesis_account: &Account) {
         let self_w = Arc::downgrade(self);
         // Inspect all processed blocks
