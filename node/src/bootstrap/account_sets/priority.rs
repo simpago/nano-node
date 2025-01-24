@@ -2,7 +2,7 @@ use ordered_float::OrderedFloat;
 use std::ops::{Add, Deref, Div, Mul, Sub};
 
 #[derive(PartialEq, Eq, Default, Clone, Copy, Ord, PartialOrd)]
-pub struct Priority(OrderedFloat<f64>);
+pub(crate) struct Priority(OrderedFloat<f64>);
 
 impl Priority {
     pub const fn new(value: f64) -> Self {
