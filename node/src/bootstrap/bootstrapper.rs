@@ -151,13 +151,13 @@ impl Bootstrapper {
         }
 
         let mut guard = self.mutex.lock().unwrap();
-        if let Some(tag) = guard.running_queries.get_mut(id) {
-            if sent {
+        if sent {
+            guard.running_queries.modify(id, |query| {
                 // After the request has been sent, the peer has a limited time to respond
-                tag.cutoff = self.clock.now() + self.config.request_timeout;
-            } else {
-                guard.running_queries.remove(id);
-            }
+                query.cutoff = self.clock.now() + self.config.request_timeout;
+            });
+        } else {
+            guard.running_queries.remove(id);
         }
 
         sent

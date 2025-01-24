@@ -3,6 +3,7 @@ use rsnano_nullable_clock::Timestamp;
 use std::{
     collections::{HashMap, VecDeque},
     mem::size_of,
+    time::Duration,
 };
 
 use crate::stats::DetailType;
@@ -29,7 +30,7 @@ impl From<QueryType> for DetailType {
     }
 }
 
-#[derive(Default, PartialEq, Eq, Debug, Clone)]
+#[derive(Default, PartialEq, Eq, Debug, Clone, Copy)]
 pub(crate) enum QuerySource {
     #[default]
     Invalid,
@@ -40,7 +41,7 @@ pub(crate) enum QuerySource {
 }
 
 /// Information about a running query that hasn't been responded yet
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct RunningQuery {
     pub query_type: QueryType,
     pub source: QuerySource,
@@ -51,6 +52,23 @@ pub(crate) struct RunningQuery {
     pub cutoff: Timestamp,
     pub timestamp: Timestamp,
     pub id: u64,
+}
+
+impl RunningQuery {
+    #[allow(dead_code)]
+    pub fn new_test_instance() -> Self {
+        Self {
+            query_type: QueryType::BlocksByHash,
+            source: QuerySource::Database,
+            start: HashOrAccount::from(1),
+            account: Account::from(2),
+            hash: BlockHash::from(3),
+            count: 4,
+            cutoff: Timestamp::new_test_instance() + Duration::from_secs(30),
+            timestamp: Timestamp::new_test_instance(),
+            id: 42,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -80,8 +98,20 @@ impl RunningQueryContainer {
         self.by_id.get(&id)
     }
 
-    pub fn get_mut(&mut self, id: u64) -> Option<&mut RunningQuery> {
-        self.by_id.get_mut(&id)
+    pub fn modify(&mut self, id: u64, mut f: impl FnMut(&mut RunningQuery)) -> bool {
+        let Some(query) = self.by_id.get_mut(&id) else {
+            return false;
+        };
+
+        let old_id = query.id;
+        let old_account = query.account;
+        let old_hash = query.hash;
+        f(query);
+        assert_eq!(query.id, old_id);
+        assert_eq!(query.account, old_account);
+        assert_eq!(query.hash, old_hash);
+
+        true
     }
 
     pub fn count_by_account(&self, account: &Account, source: QuerySource) -> usize {
@@ -164,6 +194,70 @@ impl RunningQueryContainer {
             } else {
                 ids.retain(|i| *i != id)
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty() {
+        let mut container = RunningQueryContainer::default();
+        assert_eq!(container.len(), 0);
+        assert_eq!(container.contains(123), false);
+        assert_eq!(container.get(123), None);
+        assert_eq!(
+            container.count_by_account(&Account::from(1), QuerySource::Priority),
+            0
+        );
+        assert_eq!(container.iter_hash(&BlockHash::from(1)).next(), None);
+        assert_eq!(container.iter_account(&Account::from(1)).next(), None);
+        assert_eq!(container.front(), None);
+        assert_eq!(container.pop_front(), None);
+    }
+
+    #[test]
+    fn insert_one() {
+        let mut container = RunningQueryContainer::default();
+        let query = RunningQuery::new_test_instance();
+
+        container.insert(query.clone());
+
+        assert_eq!(container.len(), 1);
+        assert_eq!(container.contains(query.id), true);
+        assert_eq!(container.get(query.id), Some(&query));
+        assert_eq!(container.count_by_account(&query.account, query.source), 1);
+        assert_eq!(container.front(), Some(&query));
+        assert_eq!(
+            container
+                .iter_hash(&query.hash)
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![query.clone()]
+        );
+        assert_eq!(
+            container
+                .iter_account(&query.account)
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![query]
+        );
+    }
+
+    #[test]
+    fn query_type_to_detail_type() {
+        let expectations = [
+            (QueryType::Invalid, DetailType::Invalid),
+            (QueryType::BlocksByHash, DetailType::BlocksByHash),
+            (QueryType::BlocksByAccount, DetailType::BlocksByAccount),
+            (QueryType::AccountInfoByHash, DetailType::AccountInfoByHash),
+            (QueryType::Frontiers, DetailType::Frontiers),
+        ];
+
+        for (qt, dt) in expectations {
+            assert_eq!(DetailType::from(qt), dt);
         }
     }
 }
