@@ -1,11 +1,11 @@
-use super::priority::{Priority, PriorityKeyDesc};
+use crate::bootstrap::priority::{Priority, PriorityKeyDesc};
 use rsnano_core::Account;
 use rsnano_nullable_clock::Timestamp;
 use std::collections::BTreeMap;
 use std::mem::size_of;
 
 #[derive(Clone, Default)]
-pub(crate) struct PriorityEntry {
+pub(super) struct PriorityEntry {
     pub account: Account,
     pub priority: Priority,
     pub fails: usize,
@@ -36,7 +36,7 @@ impl PriorityEntry {
 /// Tracks the ongoing account priorities
 /// This only stores account priorities > 1.0f.
 #[derive(Default)]
-pub(crate) struct PriorityContainer {
+pub(super) struct PriorityContainer {
     by_account: BTreeMap<Account, PriorityEntry>,
     by_priority: BTreeMap<PriorityKeyDesc, Vec<Account>>, // descending
 }

@@ -1,12 +1,11 @@
 use super::{
-    account_sets::{AccountSets, PriorityDownResult, PriorityResult, PriorityUpResult},
     crawlers::{AccountDatabaseCrawler, PendingDatabaseCrawler},
     database_scan::DatabaseScan,
     frontier_scan::{FrontierScan, FrontierScanConfig},
     peer_scoring::PeerScoring,
     running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
     throttle::Throttle,
-    AccountSetsConfig,
+    AccountSets, AccountSetsConfig, PriorityDownResult, PriorityResult, PriorityUpResult,
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, BlockSource, LedgerNotifications},

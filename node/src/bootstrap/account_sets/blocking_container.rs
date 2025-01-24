@@ -5,7 +5,7 @@ use std::{
 };
 
 #[derive(Clone)]
-pub(crate) struct BlockingEntry {
+pub(super) struct BlockingEntry {
     pub account: Account,
     pub dependency: BlockHash,
     pub dependency_account: Account,
@@ -14,7 +14,7 @@ pub(crate) struct BlockingEntry {
 /// A blocked account is an account that has failed to insert a new block because the source block is not currently present in the ledger
 /// An account is unblocked once it has a block successfully inserted
 #[derive(Default)]
-pub(crate) struct BlockingContainer {
+pub(super) struct BlockingContainer {
     by_account: BTreeMap<Account, BlockingEntry>,
     sequenced: VecDeque<Account>,
     by_dependency: BTreeMap<BlockHash, Vec<Account>>,
