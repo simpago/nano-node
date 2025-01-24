@@ -1,7 +1,7 @@
 use super::{
     ordered_blocking::{BlockingEntry, OrderedBlocking},
     priority::Priority,
-    priority_container::{ChangePriorityResult, OrderedPriorities},
+    priority_container::{ChangePriorityResult, PriorityContainer},
 };
 use crate::bootstrap::priority_container::PriorityEntry;
 use rsnano_core::{utils::ContainerInfo, Account, BlockHash};
@@ -46,7 +46,7 @@ pub(crate) enum PriorityDownResult {
 /// This struct tracks various account sets which are shared among the multiple bootstrap threads
 pub(crate) struct AccountSets {
     config: AccountSetsConfig,
-    priorities: OrderedPriorities,
+    priorities: PriorityContainer,
     blocking: OrderedBlocking,
 }
 
@@ -140,7 +140,7 @@ impl AccountSets {
         account: &Account,
         priority: Priority,
         blocking: &OrderedBlocking,
-        priorities: &mut OrderedPriorities,
+        priorities: &mut PriorityContainer,
     ) -> bool {
         if account.is_zero() {
             return false;
@@ -347,7 +347,7 @@ impl AccountSets {
             (
                 "priorities",
                 self.priorities.len(),
-                OrderedPriorities::ELEMENT_SIZE,
+                PriorityContainer::ELEMENT_SIZE,
             ),
             (
                 "blocking",
