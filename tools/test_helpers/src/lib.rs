@@ -11,7 +11,6 @@ use rsnano_node::{
     config::{NodeConfig, NodeFlags},
     consensus::{ActiveElectionsExt, Election},
     unique_path,
-    utils::AsyncRuntime,
     wallets::WalletsExt,
     NetworkParams, Node, NodeBuilder,
 };
@@ -29,7 +28,7 @@ use std::{
 use tracing_subscriber::EnvFilter;
 
 pub struct System {
-    runtime: Arc<AsyncRuntime>,
+    runtime: tokio::runtime::Runtime,
     pub network_params: NetworkParams,
     pub work: Arc<WorkPoolImpl>,
     pub nodes: Vec<Arc<Node>>,
@@ -42,8 +41,14 @@ impl System {
         init_tracing();
         let network_params = NetworkParams::new(Networks::NanoDevNetwork);
 
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("tokio runtime")
+            .enable_all()
+            .build()
+            .unwrap();
+
         Self {
-            runtime: Arc::new(AsyncRuntime::default()),
+            runtime,
             work: Arc::new(WorkPoolImpl::new(
                 network_params.work.clone(),
                 1,
@@ -161,7 +166,7 @@ impl System {
     fn new_node(&self, config: NodeConfig, flags: NodeFlags) -> Node {
         let path = unique_path().expect("Could not get a unique path");
         NodeBuilder::new(self.network_params.network.current_network)
-            .runtime(self.runtime.tokio.handle().clone())
+            .runtime(self.runtime.handle().clone())
             .data_path(path)
             .config(config)
             .network_params(self.network_params.clone())

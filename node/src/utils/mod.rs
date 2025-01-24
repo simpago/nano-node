@@ -1,4 +1,3 @@
-mod async_runtime;
 mod blake2b;
 mod hardened_constants;
 mod long_running_transaction_logger;
@@ -8,7 +7,6 @@ mod timer;
 mod timer_thread;
 
 pub use crate::utils::timer::{NullTimer, Timer, TimerStrategy, TimerWrapper};
-pub use async_runtime::AsyncRuntime;
 use blake2::{
     digest::{Update, VariableOutput},
     Blake2bVar,
