@@ -487,4 +487,25 @@ mod tests {
         sets.priority_set(&account, prio);
         assert_eq!(sets.priority(&account), prio);
     }
+
+    #[test]
+    fn container_info() {
+        let mut sets = AccountSets::default();
+        sets.priority_set_initial(&Account::from(1));
+        sets.priority_set_initial(&Account::from(2));
+        sets.priority_set_initial(&Account::from(3));
+        sets.block(Account::from(2), BlockHash::from(3));
+        sets.dependency_update(&BlockHash::from(3), Account::from(1000));
+        sets.block(Account::from(3), BlockHash::from(4));
+        let info = sets.container_info();
+        assert_eq!(
+            info,
+            [
+                ("priorities", 1, PriorityContainer::ELEMENT_SIZE),
+                ("blocking", 2, OrderedBlocking::ELEMENT_SIZE),
+                ("blocking_unknown", 1, 0)
+            ]
+            .into()
+        )
+    }
 }
