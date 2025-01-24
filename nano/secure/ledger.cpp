@@ -1170,6 +1170,22 @@ std::shared_ptr<nano::block> nano::ledger::find_receive_block_by_send_hash (secu
 	return result;
 }
 
+std::optional<nano::account> nano::ledger::linked_account (secure::transaction const & transaction, nano::block const & block)
+{
+	debug_assert (block.has_sideband ());
+
+	if (block.sideband ().details.is_send)
+	{
+		return block.destination ();
+	}
+	else if (block.sideband ().details.is_receive)
+	{
+		return any.block_account (transaction, block.source ());
+	}
+
+	return std::nullopt;
+}
+
 nano::account const & nano::ledger::epoch_signer (nano::link const & link_a) const
 {
 	return constants.epochs.signer (constants.epochs.epoch (link_a));
