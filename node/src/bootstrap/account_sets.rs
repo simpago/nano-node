@@ -1,9 +1,9 @@
 use super::{
     ordered_blocking::{BlockingEntry, OrderedBlocking},
-    ordered_priorities::{ChangePriorityResult, OrderedPriorities},
     priority::Priority,
+    priority_container::{ChangePriorityResult, OrderedPriorities},
 };
-use crate::bootstrap::ordered_priorities::PriorityEntry;
+use crate::bootstrap::priority_container::PriorityEntry;
 use rsnano_core::{utils::ContainerInfo, Account, BlockHash};
 use rsnano_nullable_clock::Timestamp;
 use std::{cmp::min, time::Duration};
@@ -27,13 +27,6 @@ impl Default for AccountSetsConfig {
     }
 }
 
-/// This struct tracks various account sets which are shared among the multiple bootstrap threads
-pub(crate) struct AccountSets {
-    config: AccountSetsConfig,
-    priorities: OrderedPriorities,
-    blocking: OrderedBlocking,
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum PriorityUpResult {
     Inserted,
@@ -48,6 +41,13 @@ pub(crate) enum PriorityDownResult {
     Erased,
     AccountNotFound,
     InvalidAccount,
+}
+
+/// This struct tracks various account sets which are shared among the multiple bootstrap threads
+pub(crate) struct AccountSets {
+    config: AccountSetsConfig,
+    priorities: OrderedPriorities,
+    blocking: OrderedBlocking,
 }
 
 impl AccountSets {

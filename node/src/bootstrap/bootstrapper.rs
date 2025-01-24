@@ -36,6 +36,59 @@ use std::{
 };
 use tracing::{debug, warn};
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct BootstrapConfig {
+    pub enable: bool,
+    pub enable_scan: bool,
+    pub enable_database_scan: bool,
+    pub enable_dependency_walker: bool,
+    pub enable_frontier_scan: bool,
+    /// Maximum number of un-responded requests per channel, should be lower or equal to bootstrap server max queue size
+    pub channel_limit: usize,
+    pub rate_limit: usize,
+    pub database_rate_limit: usize,
+    pub frontier_rate_limit: usize,
+    pub database_warmup_ratio: usize,
+    pub max_pull_count: usize,
+    pub request_timeout: Duration,
+    pub throttle_coefficient: usize,
+    pub throttle_wait: Duration,
+    pub block_processor_theshold: usize,
+    /** Minimum accepted protocol version used when bootstrapping */
+    pub min_protocol_version: u8,
+    pub max_requests: usize,
+    pub optimistic_request_percentage: u8,
+    pub account_sets: AccountSetsConfig,
+    pub frontier_scan: FrontierScanConfig,
+}
+
+impl Default for BootstrapConfig {
+    fn default() -> Self {
+        Self {
+            enable: true,
+            enable_scan: true,
+            enable_database_scan: false,
+            enable_dependency_walker: true,
+            enable_frontier_scan: true,
+            channel_limit: 16,
+            rate_limit: 500,
+            database_rate_limit: 256,
+            frontier_rate_limit: 8,
+            database_warmup_ratio: 10,
+            max_pull_count: BlocksAckPayload::MAX_BLOCKS,
+            request_timeout: Duration::from_secs(15),
+            throttle_coefficient: 8 * 1024,
+            throttle_wait: Duration::from_millis(100),
+            block_processor_theshold: 1000,
+            min_protocol_version: 0x14, // TODO don't hard code
+            max_requests: 1024,
+            optimistic_request_percentage: 75,
+            account_sets: Default::default(),
+            frontier_scan: Default::default(),
+        }
+    }
+}
+
 enum VerifyResult {
     Ok,
     NothingNew,
@@ -44,7 +97,6 @@ enum VerifyResult {
 
 pub struct Bootstrapper {
     block_processor: Arc<BlockProcessor>,
-    notifications: LedgerNotifications,
     ledger: Arc<Ledger>,
     stats: Arc<Stats>,
     message_sender: Mutex<MessageSender>,
@@ -72,7 +124,6 @@ struct Threads {
 impl Bootstrapper {
     pub(crate) fn new(
         block_processor: Arc<BlockProcessor>,
-        notifications: LedgerNotifications,
         ledger: Arc<Ledger>,
         stats: Arc<Stats>,
         network: Arc<RwLock<Network>>,
@@ -82,7 +133,6 @@ impl Bootstrapper {
     ) -> Self {
         Self {
             block_processor,
-            notifications,
             threads: Mutex::new(None),
             mutex: Arc::new(Mutex::new(BootstrapLogic {
                 stopped: false,
@@ -897,7 +947,7 @@ impl Bootstrapper {
             .inc(StatType::BootstrapAccountSets, DetailType::PrioritizeFailed);
     }
 
-    fn batch_processed(&self, batch: &[(BlockStatus, Arc<BlockContext>)]) {
+    fn blocks_processed(&self, batch: &[(BlockStatus, Arc<BlockContext>)]) {
         {
             let mut guard = self.mutex.lock().unwrap();
             let tx = self.ledger.read_txn();
@@ -941,33 +991,31 @@ impl Drop for Bootstrapper {
 }
 
 pub trait BootstrapExt {
-    fn initialize(&self, genesis_account: &Account);
+    fn initialize(&self, genesis_account: &Account, notifications: &LedgerNotifications);
     fn start(&self);
 }
 
 impl BootstrapExt for Arc<Bootstrapper> {
-    fn initialize(&self, genesis_account: &Account) {
+    fn initialize(&self, genesis_account: &Account, notifications: &LedgerNotifications) {
         let self_w = Arc::downgrade(self);
         // Inspect all processed blocks
-        self.notifications
-            .on_blocks_processed(Box::new(move |batch| {
-                if let Some(self_l) = self_w.upgrade() {
-                    self_l.batch_processed(batch);
-                }
-            }));
+        notifications.on_blocks_processed(Box::new(move |batch| {
+            if let Some(self_l) = self_w.upgrade() {
+                self_l.blocks_processed(batch);
+            }
+        }));
 
         // Unblock rolled back accounts as the dependency is no longer valid
         let self_w = Arc::downgrade(self);
-        self.notifications
-            .on_blocks_rolled_back(move |blocks, _rollback_root| {
-                let Some(self_l) = self_w.upgrade() else {
-                    return;
-                };
-                let mut guard = self_l.mutex.lock().unwrap();
-                for block in blocks {
-                    guard.accounts.unblock(block.account(), None);
-                }
-            });
+        notifications.on_blocks_rolled_back(move |blocks, _rollback_root| {
+            let Some(self_l) = self_w.upgrade() else {
+                return;
+            };
+            let mut guard = self_l.mutex.lock().unwrap();
+            for block in blocks {
+                guard.accounts.unblock(block.account(), None);
+            }
+        });
 
         let inserted = self
             .mutex
@@ -1380,59 +1428,6 @@ fn verify_response(response: &BlocksAckPayload, query: &RunningQuery) -> VerifyR
     }
 
     VerifyResult::Ok
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct BootstrapConfig {
-    pub enable: bool,
-    pub enable_scan: bool,
-    pub enable_database_scan: bool,
-    pub enable_dependency_walker: bool,
-    pub enable_frontier_scan: bool,
-    /// Maximum number of un-responded requests per channel, should be lower or equal to bootstrap server max queue size
-    pub channel_limit: usize,
-    pub rate_limit: usize,
-    pub database_rate_limit: usize,
-    pub frontier_rate_limit: usize,
-    pub database_warmup_ratio: usize,
-    pub max_pull_count: usize,
-    pub request_timeout: Duration,
-    pub throttle_coefficient: usize,
-    pub throttle_wait: Duration,
-    pub block_processor_theshold: usize,
-    /** Minimum accepted protocol version used when bootstrapping */
-    pub min_protocol_version: u8,
-    pub max_requests: usize,
-    pub optimistic_request_percentage: u8,
-    pub account_sets: AccountSetsConfig,
-    pub frontier_scan: FrontierScanConfig,
-}
-
-impl Default for BootstrapConfig {
-    fn default() -> Self {
-        Self {
-            enable: true,
-            enable_scan: true,
-            enable_database_scan: false,
-            enable_dependency_walker: true,
-            enable_frontier_scan: true,
-            channel_limit: 16,
-            rate_limit: 500,
-            database_rate_limit: 256,
-            frontier_rate_limit: 8,
-            database_warmup_ratio: 10,
-            max_pull_count: BlocksAckPayload::MAX_BLOCKS,
-            request_timeout: Duration::from_secs(15),
-            throttle_coefficient: 8 * 1024,
-            throttle_wait: Duration::from_millis(100),
-            block_processor_theshold: 1000,
-            min_protocol_version: 0x14, // TODO don't hard code
-            max_requests: 1024,
-            optimistic_request_percentage: 75,
-            account_sets: Default::default(),
-            frontier_scan: Default::default(),
-        }
-    }
 }
 
 impl From<&Message> for QueryType {

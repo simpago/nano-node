@@ -194,12 +194,12 @@ mod tests {
     #[test]
     fn insert_one() {
         let mut priorities = OrderedPriorities::default();
-        let account = Account::from(1);
-        assert!(priorities.insert(PriorityEntry::new(account, Priority::new(2.5))));
+        let entry = PriorityEntry::new_test_instance();
+        assert!(priorities.insert(entry.clone()));
         assert_eq!(priorities.len(), 1);
         assert_eq!(priorities.is_empty(), false);
-        assert_eq!(priorities.contains(&account), true);
-        assert!(priorities.get(&account).is_some());
+        assert_eq!(priorities.contains(&entry.account), true);
+        assert!(priorities.get(&entry.account).is_some());
     }
 
     #[test]

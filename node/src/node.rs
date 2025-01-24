@@ -769,7 +769,6 @@ impl Node {
 
         let bootstrapper = Arc::new(Bootstrapper::new(
             block_processor.clone(),
-            ledger_notifications.clone(),
             ledger.clone(),
             stats.clone(),
             network.clone(),
@@ -777,6 +776,10 @@ impl Node {
             global_config.node_config.bootstrap.clone(),
             steady_clock.clone(),
         ));
+        bootstrapper.initialize(
+            &network_params.ledger.genesis_account,
+            &ledger_notifications,
+        );
 
         let local_block_broadcaster = Arc::new(LocalBlockBroadcaster::new(
             config.local_block_broadcaster.clone(),
@@ -1522,8 +1525,6 @@ impl Node {
             self.bounded_backlog.start();
         }
         self.bootstrap_responder.start();
-        self.bootstrapper
-            .initialize(&self.network_params.ledger.genesis_account);
         self.bootstrapper.start();
         self.telemetry.start();
         self.stats.start();
