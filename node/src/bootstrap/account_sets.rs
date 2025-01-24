@@ -1,5 +1,5 @@
 use super::{
-    ordered_blocking::{BlockingEntry, OrderedBlocking},
+    blocking_container::{BlockingEntry, OrderedBlocking},
     priority::Priority,
     priority_container::{ChangePriorityResult, PriorityContainer},
 };
