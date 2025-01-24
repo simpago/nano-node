@@ -14,14 +14,14 @@ pub(crate) struct BlockingEntry {
 /// A blocked account is an account that has failed to insert a new block because the source block is not currently present in the ledger
 /// An account is unblocked once it has a block successfully inserted
 #[derive(Default)]
-pub(crate) struct OrderedBlocking {
+pub(crate) struct BlockingContainer {
     by_account: BTreeMap<Account, BlockingEntry>,
     sequenced: VecDeque<Account>,
     by_dependency: BTreeMap<BlockHash, Vec<Account>>,
     by_dependency_account: BTreeMap<Account, Vec<Account>>,
 }
 
-impl OrderedBlocking {
+impl BlockingContainer {
     pub const ELEMENT_SIZE: usize =
         size_of::<BlockingEntry>() + size_of::<Account>() * 3 + size_of::<f32>();
 
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn empty() {
-        let mut blocking = OrderedBlocking::default();
+        let mut blocking = BlockingContainer::default();
         assert_eq!(blocking.len(), 0);
         assert_eq!(blocking.is_empty(), true);
         assert_eq!(blocking.contains(&Account::from(1)), false);
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn insert_one() {
-        let mut blocking = OrderedBlocking::default();
+        let mut blocking = BlockingContainer::default();
 
         let entry = BlockingEntry {
             account: Account::from(5),
@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn dont_insert_if_account_already_present() {
-        let mut blocking = OrderedBlocking::default();
+        let mut blocking = BlockingContainer::default();
 
         let entry = BlockingEntry {
             account: Account::from(5),
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn next() {
-        let mut blocking = OrderedBlocking::default();
+        let mut blocking = BlockingContainer::default();
 
         let entry = BlockingEntry {
             account: Account::from(5),
@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn next_returns_none_when_all_dependency_accounts_are_known() {
-        let mut blocking = OrderedBlocking::default();
+        let mut blocking = BlockingContainer::default();
 
         let entry = BlockingEntry {
             account: Account::from(5),
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn next_with_filter() {
-        let mut blocking = OrderedBlocking::default();
+        let mut blocking = BlockingContainer::default();
 
         blocking.insert(BlockingEntry {
             account: Account::from(1000),
@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn pop_front() {
-        let mut blocking = OrderedBlocking::default();
+        let mut blocking = BlockingContainer::default();
 
         blocking.insert(BlockingEntry {
             account: Account::from(1000),
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn modify_dependency_account() {
-        let mut blocking = OrderedBlocking::default();
+        let mut blocking = BlockingContainer::default();
 
         let dependency = BlockHash::from(100);
         blocking.insert(BlockingEntry {

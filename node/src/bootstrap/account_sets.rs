@@ -1,5 +1,5 @@
 use super::{
-    blocking_container::{BlockingEntry, OrderedBlocking},
+    blocking_container::{BlockingContainer, BlockingEntry},
     priority::Priority,
     priority_container::{ChangePriorityResult, PriorityContainer},
 };
@@ -47,7 +47,7 @@ pub(crate) enum PriorityDownResult {
 pub(crate) struct AccountSets {
     config: AccountSetsConfig,
     priorities: PriorityContainer,
-    blocking: OrderedBlocking,
+    blocking: BlockingContainer,
 }
 
 impl AccountSets {
@@ -139,7 +139,7 @@ impl AccountSets {
     fn priority_set_impl(
         account: &Account,
         priority: Priority,
-        blocking: &OrderedBlocking,
+        blocking: &BlockingContainer,
         priorities: &mut PriorityContainer,
     ) -> bool {
         if account.is_zero() {
@@ -352,7 +352,7 @@ impl AccountSets {
             (
                 "blocking",
                 self.blocking.len(),
-                OrderedBlocking::ELEMENT_SIZE,
+                BlockingContainer::ELEMENT_SIZE,
             ),
             ("blocking_unknown", blocking_unknown, 0),
         ]
@@ -502,7 +502,7 @@ mod tests {
             info,
             [
                 ("priorities", 1, PriorityContainer::ELEMENT_SIZE),
-                ("blocking", 2, OrderedBlocking::ELEMENT_SIZE),
+                ("blocking", 2, BlockingContainer::ELEMENT_SIZE),
                 ("blocking_unknown", 1, 0)
             ]
             .into()
