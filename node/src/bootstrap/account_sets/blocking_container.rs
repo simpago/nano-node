@@ -4,7 +4,7 @@ use std::{
     mem::size_of,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct BlockingEntry {
     pub account: Account,
     pub dependency: BlockHash,
@@ -166,6 +166,10 @@ mod tests {
         assert_eq!(blocking.is_empty(), true);
         assert_eq!(blocking.contains(&Account::from(1)), false);
         assert_eq!(blocking.count_by_dependency_account(&Account::from(1)), 0);
+        assert!(blocking
+            .iter_start_dep_account(Account::from(1))
+            .next()
+            .is_none());
         assert!(blocking.next(|_| true).is_none());
         assert!(blocking.get(&Account::from(1)).is_none());
         assert!(blocking.remove(&Account::from(1)).is_none());
@@ -309,6 +313,132 @@ mod tests {
                 .unwrap()
                 .dependency_account,
             new_dep_account
+        );
+    }
+
+    #[test]
+    fn modify_unknown_dependency_account() {
+        let mut blocking = BlockingContainer::default();
+        let updated = blocking.modify_dependency_account(&1.into(), 2.into());
+        assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn modify_dependency_account_with_multiple_entries() {
+        let mut blocking = BlockingContainer::default();
+
+        let dependency_account = Account::from(42);
+
+        let entry1 = BlockingEntry {
+            account: 1000.into(),
+            dependency: 100.into(),
+            dependency_account,
+        };
+        let entry2 = BlockingEntry {
+            account: 2000.into(),
+            dependency: 200.into(),
+            dependency_account,
+        };
+        blocking.insert(entry1.clone());
+        blocking.insert(entry2.clone());
+
+        let new_dependency_account = Account::from(5000);
+        let updated =
+            blocking.modify_dependency_account(&entry1.dependency, new_dependency_account);
+
+        assert_eq!(updated, 1);
+        assert_eq!(
+            blocking.get(&entry1.account).unwrap().dependency_account,
+            new_dependency_account
+        );
+        assert_ne!(
+            blocking.get(&entry2.account).unwrap().dependency_account,
+            new_dependency_account
+        );
+    }
+
+    #[test]
+    fn modify_dependency_account_to_current_value() {
+        let mut blocking = BlockingContainer::default();
+
+        let dependency_account = Account::from(42);
+
+        let entry = BlockingEntry {
+            account: 1000.into(),
+            dependency: 100.into(),
+            dependency_account,
+        };
+        blocking.insert(entry.clone());
+
+        let updated = blocking.modify_dependency_account(&entry.dependency, dependency_account);
+
+        assert_eq!(updated, 0);
+        assert_eq!(
+            blocking.get(&entry.account).unwrap().dependency_account,
+            dependency_account
+        );
+    }
+
+    #[test]
+    fn iter_start_dependency_account() {
+        let mut container = BlockingContainer::default();
+
+        let entry1 = BlockingEntry {
+            account: 1.into(),
+            dependency: 100.into(),
+            dependency_account: 10.into(),
+        };
+        let entry2 = BlockingEntry {
+            account: 2.into(),
+            dependency: 200.into(),
+            dependency_account: 20.into(),
+        };
+        let entry3 = BlockingEntry {
+            account: 3.into(),
+            dependency: 300.into(),
+            dependency_account: 30.into(),
+        };
+
+        container.insert(entry1);
+        container.insert(entry2.clone());
+        container.insert(entry3.clone());
+
+        let result: Vec<_> = container.iter_start_dep_account(20.into()).collect();
+
+        assert_eq!(result, vec![&entry2, &entry3]);
+    }
+
+    #[test]
+    fn remove_one_of_multiple_with_same_dependency() {
+        let mut container = BlockingContainer::default();
+
+        let same_dependency = BlockHash::from(9999);
+
+        let entry1 = BlockingEntry {
+            account: 1.into(),
+            dependency: same_dependency,
+            dependency_account: 10.into(),
+        };
+        let entry2 = BlockingEntry {
+            account: 2.into(),
+            dependency: same_dependency,
+            dependency_account: 20.into(),
+        };
+        let entry3 = BlockingEntry {
+            account: 3.into(),
+            dependency: 300.into(),
+            dependency_account: 30.into(),
+        };
+
+        container.insert(entry1.clone());
+        container.insert(entry2.clone());
+        container.insert(entry3.clone());
+
+        container.remove(&entry1.account);
+
+        assert_eq!(
+            container.by_dependency.get(&same_dependency).unwrap().len(),
+            1
         );
     }
 }

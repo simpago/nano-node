@@ -99,6 +99,8 @@ impl From<Priority> for PriorityKeyDesc {
 
 #[cfg(test)]
 mod tests {
+    use std::cmp::Ordering;
+
     use super::*;
 
     #[test]
@@ -132,6 +134,26 @@ mod tests {
     fn format() {
         assert_eq!(format!("{}", Priority::new(1.23)), "1.23");
         assert_eq!(format!("{:?}", Priority::new(1.23)), "1.23");
+    }
+
+    #[test]
+    fn from_f64() {
+        assert_eq!(f64::from(Priority::new(1.23)), 1.23f64);
+    }
+
+    #[test]
+    fn partial_ord() {
+        let one = PriorityKeyDesc(Priority::new(1.0));
+        let two = PriorityKeyDesc(Priority::new(2.0));
+        assert_eq!(one.partial_cmp(&one), Some(Ordering::Equal));
+        assert_eq!(one.partial_cmp(&two), Some(Ordering::Greater));
+        assert_eq!(two.partial_cmp(&one), Some(Ordering::Less));
+    }
+
+    #[test]
+    fn deref() {
+        let one = PriorityKeyDesc(Priority::new(1.0));
+        assert_eq!(one.as_f64(), 1.0);
     }
 
     fn assert_priority_eq(actual: Priority, expected: Priority) {
