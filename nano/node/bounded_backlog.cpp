@@ -292,7 +292,7 @@ std::deque<nano::block_hash> nano::bounded_backlog::perform_rollbacks (std::dequ
 		// Here we check that the block is still OK to rollback, there could be a delay between gathering the targets and performing the rollbacks
 		if (auto block = ledger.any.block_get (transaction, hash))
 		{
-			logger.debug (nano::log::type::bounded_backlog, "Rolling back: {}, account: {}", hash.to_string (), block->account ().to_account ());
+			logger.debug (nano::log::type::bounded_backlog, "Rolling back: {}, account: {}", hash, block->account ());
 
 			std::deque<std::shared_ptr<nano::block>> rollback_list;
 			bool error = ledger.rollback (transaction, hash, rollback_list);

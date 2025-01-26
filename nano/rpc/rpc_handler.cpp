@@ -101,8 +101,7 @@ void nano::rpc_handler::process_request (nano::rpc_handler_request_params const 
 					{
 						nano::uint128_union random_id;
 						nano::random_pool::generate_block (random_id.bytes.data (), random_id.bytes.size ());
-						std::string random_id_text;
-						random_id.encode_hex (random_id_text);
+						std::string random_id_text = random_id.to_string ();
 						request.put ("id", random_id_text);
 						std::stringstream ostream;
 						boost::property_tree::write_json (ostream, request);

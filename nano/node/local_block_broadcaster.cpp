@@ -192,7 +192,7 @@ void nano::local_block_broadcaster::run_broadcasts (nano::unique_lock<nano::mute
 		}
 
 		logger.debug (nano::log::type::local_block_broadcaster, "Broadcasting block: {} (rebroadcasts so far: {})",
-		entry.block->hash ().to_string (),
+		entry.block->hash (),
 		entry.rebroadcasts);
 
 		stats.inc (nano::stat::type::local_block_broadcaster, nano::stat::detail::broadcast, nano::stat::dir::out);

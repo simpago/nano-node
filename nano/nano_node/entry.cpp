@@ -446,8 +446,7 @@ int main (int argc, char * const * argv)
 				using time_point = std::chrono::system_clock::time_point;
 				time_point ts (std::chrono::duration_cast<time_point::duration> (std::chrono::nanoseconds (i->first)));
 				std::time_t timestamp = std::chrono::system_clock::to_time_t (ts);
-				std::string weight;
-				i->second.encode_dec (weight);
+				std::string weight = i->second.to_string_dec ();
 				std::cout << boost::str (boost::format ("Timestamp %1% Weight %2%\n") % ctime (&timestamp) % weight);
 			}
 		}

@@ -32,7 +32,7 @@ void nano::online_reps::start ()
 		nano::lock_guard<nano::mutex> lock{ mutex };
 		cached_trended = trended_l;
 
-		logger.info (nano::log::type::online_reps, "Initial trended weight: {}", fmt::streamed (cached_trended));
+		logger.info (nano::log::type::online_reps, "Initial trended weight: {}", cached_trended);
 	}
 
 	thread = std::thread ([this] () {
@@ -125,7 +125,7 @@ void nano::online_reps::sample ()
 		nano::lock_guard<nano::mutex> lock{ mutex };
 		cached_trended = trended_l;
 	}
-	logger.info (nano::log::type::online_reps, "Updated trended weight: {}", fmt::streamed (trended_l));
+	logger.info (nano::log::type::online_reps, "Updated trended weight: {}", trended_l);
 }
 
 nano::uint128_t nano::online_reps::calculate_online () const

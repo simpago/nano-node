@@ -1,5 +1,6 @@
 #pragma once
 
+#include <nano/lib/formatting.hpp>
 #include <nano/lib/logging_enums.hpp>
 #include <nano/lib/object_stream.hpp>
 #include <nano/lib/object_stream_adapters.hpp>

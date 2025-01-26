@@ -135,7 +135,7 @@ bool nano::scheduler::priority::activate (secure::transaction const & transactio
 		{
 			stats.inc (nano::stat::type::election_scheduler, nano::stat::detail::activated);
 			logger.trace (nano::log::type::election_scheduler, nano::log::detail::block_activated,
-			nano::log::arg{ "account", account.to_account () }, // TODO: Convert to lazy eval
+			nano::log::arg{ "account", account },
 			nano::log::arg{ "block", block },
 			nano::log::arg{ "time", account_info.modified },
 			nano::log::arg{ "priority_balance", priority_balance },

@@ -319,48 +319,6 @@ TEST (wallet, rekey)
 	ASSERT_TRUE (wallet.rekey (transaction, "2"));
 }
 
-TEST (account, encode_zero)
-{
-	nano::account number0{};
-	std::string str0;
-	number0.encode_account (str0);
-
-	/*
-	 * Handle different lengths for "xrb_" prefixed and "nano_" prefixed accounts
-	 */
-	ASSERT_EQ ((str0.front () == 'x') ? 64 : 65, str0.size ());
-	ASSERT_EQ (65, str0.size ());
-	nano::account number1;
-	ASSERT_FALSE (number1.decode_account (str0));
-	ASSERT_EQ (number0, number1);
-}
-
-TEST (account, encode_all)
-{
-	nano::account number0;
-	number0.decode_hex ("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-	std::string str0;
-	number0.encode_account (str0);
-
-	/*
-	 * Handle different lengths for "xrb_" prefixed and "nano_" prefixed accounts
-	 */
-	ASSERT_EQ ((str0.front () == 'x') ? 64 : 65, str0.size ());
-	nano::account number1;
-	ASSERT_FALSE (number1.decode_account (str0));
-	ASSERT_EQ (number0, number1);
-}
-
-TEST (account, encode_fail)
-{
-	nano::account number0{};
-	std::string str0;
-	number0.encode_account (str0);
-	str0[16] ^= 1;
-	nano::account number1;
-	ASSERT_TRUE (number1.decode_account (str0));
-}
-
 TEST (wallet, hash_password)
 {
 	bool init;

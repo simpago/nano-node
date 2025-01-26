@@ -253,19 +253,18 @@ auto nano::request_aggregator::aggregate (nano::secure::transaction const & tran
 			if (should_generate_final_vote (block))
 			{
 				to_generate_final.push_back (block);
+
 				stats.inc (nano::stat::type::requests, nano::stat::detail::requests_final);
 
 				logger.debug (nano::log::type::request_aggregator, "Replying with final vote for: {} to: {}",
-				block->hash ().to_string (), // TODO: Lazy eval
-				channel_a->to_string ()); // TODO: Lazy eval
+				block->hash (), channel_a->to_string ()); // TODO: Lazy eval
 			}
 			else
 			{
 				stats.inc (nano::stat::type::requests, nano::stat::detail::requests_non_final);
 
 				logger.debug (nano::log::type::request_aggregator, "Skipping reply with normal vote for: {} (requested by: {})",
-				block->hash ().to_string (), // TODO: Lazy eval
-				channel_a->to_string ()); // TODO: Lazy eval
+				block->hash (), channel_a->to_string ()); // TODO: Lazy eval
 			}
 		}
 		else
@@ -273,9 +272,7 @@ auto nano::request_aggregator::aggregate (nano::secure::transaction const & tran
 			stats.inc (nano::stat::type::requests, nano::stat::detail::requests_unknown);
 
 			logger.debug (nano::log::type::request_aggregator, "Cannot reply, block not found: {} with root: {} (requested by: {})",
-			hash.to_string (), // TODO: Lazy eval
-			root.to_string (), // TODO: Lazy eval
-			channel_a->to_string ()); // TODO: Lazy eval
+			hash, root, channel_a->to_string ()); // TODO: Lazy eval
 		}
 	}
 

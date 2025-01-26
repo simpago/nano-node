@@ -542,8 +542,8 @@ bool nano::bootstrap_service::request (nano::account account, size_t count, std:
 				tag.hash = info->head;
 
 				logger.debug (nano::log::type::bootstrap, "Requesting blocks for {} starting from account frontier: {} (optimistic: {})",
-				account.to_account (), // TODO: Lazy eval
-				tag.start.to_string (), // TODO: Lazy eval
+				account,
+				tag.start,
 				optimistic_reuest);
 			}
 			else // Pessimistic (safe) request case
@@ -557,8 +557,8 @@ bool nano::bootstrap_service::request (nano::account account, size_t count, std:
 					tag.hash = conf_info->height;
 
 					logger.debug (nano::log::type::bootstrap, "Requesting blocks for {} starting from confirmation frontier: {} (optimistic: {})",
-					account.to_account (), // TODO: Lazy eval
-					tag.start.to_string (), // TODO: Lazy eval
+					account,
+					tag.start,
 					optimistic_reuest);
 				}
 				else
@@ -567,7 +567,7 @@ bool nano::bootstrap_service::request (nano::account account, size_t count, std:
 					tag.start = account;
 
 					logger.debug (nano::log::type::bootstrap, "Requesting blocks for {} starting from account root (optimistic: {})",
-					account.to_account (), // TODO: Lazy eval
+					account,
 					optimistic_reuest);
 				}
 			}
@@ -579,7 +579,7 @@ bool nano::bootstrap_service::request (nano::account account, size_t count, std:
 			tag.type = query_type::blocks_by_account;
 			tag.start = account;
 
-			logger.debug (nano::log::type::bootstrap, "Requesting blocks for {}", account.to_account ()); // TODO: Lazy eval
+			logger.debug (nano::log::type::bootstrap, "Requesting blocks for {}", account);
 		}
 	}
 
@@ -594,7 +594,7 @@ bool nano::bootstrap_service::request_info (nano::block_hash hash, std::shared_p
 	tag.start = hash;
 	tag.hash = hash;
 
-	logger.debug (nano::log::type::bootstrap, "Requesting account info for: {}", hash.to_string ()); // TODO: Lazy eval
+	logger.debug (nano::log::type::bootstrap, "Requesting account info for: {}", hash);
 
 	return send (channel, tag);
 }
@@ -606,7 +606,7 @@ bool nano::bootstrap_service::request_frontiers (nano::account start, std::share
 	tag.source = source;
 	tag.start = start;
 
-	logger.debug (nano::log::type::bootstrap, "Requesting frontiers starting from: {}", start.to_account ()); // TODO: Lazy eval
+	logger.debug (nano::log::type::bootstrap, "Requesting frontiers starting from: {}", start);
 
 	return send (channel, tag);
 }

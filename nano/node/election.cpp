@@ -65,7 +65,7 @@ void nano::election::confirm_once (nano::unique_lock<nano::mutex> & lock)
 		nano::log::arg{ "status", extended_status });
 
 		node.logger.debug (nano::log::type::election, "Election confirmed with winner: {} (behavior: {}, state: {}, voters: {}, blocks: {}, duration: {}ms, confirmation requests: {})",
-		status_l.winner->hash ().to_string (),
+		status_l.winner->hash (),
 		to_string (behavior_m),
 		to_string (state_m),
 		extended_status.status.voter_count,
@@ -179,7 +179,7 @@ void nano::election::send_confirm_req (nano::confirmation_solicitor & solicitor_
 
 			node.stats.inc (nano::stat::type::election, nano::stat::detail::confirmation_request);
 			node.logger.debug (nano::log::type::election, "Sent confirmation request for root: {} (behavior: {}, state: {}, voters: {}, blocks: {}, duration: {}ms, confirmation requests: {})",
-			qualified_root.to_string (),
+			qualified_root,
 			to_string (behavior_m),
 			to_string (state_m),
 			status.voter_count,
@@ -210,7 +210,7 @@ bool nano::election::transition_priority ()
 
 	node.logger.debug (nano::log::type::election, "Transitioned election behavior to priority from {} for root: {} (duration: {}ms)",
 	to_string (behavior_m),
-	qualified_root.to_string (),
+	qualified_root,
 	duration ().count ());
 
 	return true;
@@ -270,8 +270,8 @@ void nano::election::broadcast_block (nano::confirmation_solicitor & solicitor_a
 
 			node.stats.inc (nano::stat::type::election, last_block_hash.is_zero () ? nano::stat::detail::broadcast_block_initial : nano::stat::detail::broadcast_block_repeat);
 			node.logger.debug (nano::log::type::election, "Broadcasting current winner: {} for root: {} (behavior: {}, state: {}, voters: {}, blocks: {}, duration: {}ms)",
-			status.winner->hash ().to_string (),
-			qualified_root.to_string (),
+			status.winner->hash (),
+			qualified_root,
 			to_string (behavior_m),
 			to_string (state_m),
 			status.voter_count,
@@ -558,11 +558,11 @@ nano::vote_code nano::election::vote (nano::account const & rep, uint64_t timest
 	nano::log::arg{ "weight", weight });
 
 	node.logger.debug (nano::log::type::election, "Vote received for: {} from: {} root: {} (final: {}, weight: {}, source: {})",
-	block_hash_a.to_string (),
-	rep.to_account (),
-	qualified_root.to_string (),
+	block_hash_a,
+	rep,
+	qualified_root,
 	nano::vote::is_final_timestamp (timestamp_a),
-	weight.convert_to<std::string> (),
+	weight,
 	to_string (vote_source_a));
 
 	if (!confirmed_locked ())
@@ -839,11 +839,10 @@ bool nano::election::contains (nano::block_hash const & hash) const
 	return last_blocks.contains (hash);
 }
 
-// TODO: Remove the need for .to_string () calls
 void nano::election::operator() (nano::object_stream & obs) const
 {
 	obs.write ("id", id);
-	obs.write ("qualified_root", qualified_root.to_string ());
+	obs.write ("qualified_root", qualified_root);
 	obs.write ("behavior", behavior_m);
 	obs.write ("height", height);
 	obs.write ("status", current_status ());
@@ -851,7 +850,7 @@ void nano::election::operator() (nano::object_stream & obs) const
 
 void nano::election_extended_status::operator() (nano::object_stream & obs) const
 {
-	obs.write ("winner", status.winner->hash ().to_string ());
+	obs.write ("winner", status.winner->hash ());
 	obs.write ("tally_amount", status.tally.to_string_dec ());
 	obs.write ("final_tally_amount", status.final_tally.to_string_dec ());
 	obs.write ("confirmation_request_count", status.confirmation_request_count);
@@ -862,8 +861,8 @@ void nano::election_extended_status::operator() (nano::object_stream & obs) cons
 
 	obs.write_range ("votes", votes, [] (auto const & entry, nano::object_stream & obs) {
 		auto & [account, info] = entry;
-		obs.write ("account", account.to_account ());
-		obs.write ("hash", info.hash.to_string ());
+		obs.write ("account", account);
+		obs.write ("hash", info.hash);
 		obs.write ("final", nano::vote::is_final_timestamp (info.timestamp));
 		obs.write ("timestamp", info.timestamp);
 		obs.write ("time", info.time.time_since_epoch ().count ());
@@ -876,7 +875,7 @@ void nano::election_extended_status::operator() (nano::object_stream & obs) cons
 
 	obs.write_range ("tally", tally, [] (auto const & entry, nano::object_stream & obs) {
 		auto & [amount, block] = entry;
-		obs.write ("hash", block->hash ().to_string ());
+		obs.write ("hash", block->hash ());
 		obs.write ("amount", amount);
 	});
 }

@@ -83,10 +83,7 @@ void nano::transport::tcp_socket::async_connect (nano::tcp_endpoint const & endp
 					boost::system::error_code ec;
 					this_l->local = this_l->raw_socket.local_endpoint (ec);
 				}
-
-				node_l->logger.debug (nano::log::type::tcp_socket, "Successfully connected to: {}, local: {}",
-				fmt::streamed (this_l->remote),
-				fmt::streamed (this_l->local));
+				node_l->logger.debug (nano::log::type::tcp_socket, "Successfully connected to: {}, local: {}", this_l->remote, this_l->local);
 			}
 			callback (ec);
 		}));
@@ -318,7 +315,7 @@ void nano::transport::tcp_socket::ongoing_checkup ()
 		if (condition_to_disconnect)
 		{
 			// TODO: Stats
-			node_l->logger.debug (nano::log::type::tcp_socket, "Socket timeout, closing: {}", fmt::streamed (this_l->remote));
+			node_l->logger.debug (nano::log::type::tcp_socket, "Socket timeout, closing: {}", this_l->remote);
 			this_l->timed_out = true;
 			this_l->close ();
 		}
@@ -395,13 +392,13 @@ void nano::transport::tcp_socket::close_internal ()
 	{
 		node_l->stats.inc (nano::stat::type::socket, nano::stat::detail::error_socket_close);
 		node_l->logger.error (nano::log::type::tcp_socket, "Failed to close socket gracefully: {} ({})",
-		fmt::streamed (remote),
+		remote,
 		ec.message ());
 	}
 	else
 	{
 		// TODO: Stats
-		node_l->logger.debug (nano::log::type::tcp_socket, "Closed socket: {}", fmt::streamed (remote));
+		node_l->logger.debug (nano::log::type::tcp_socket, "Closed socket: {}", remote);
 	}
 }
 

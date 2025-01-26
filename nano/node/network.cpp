@@ -357,12 +357,12 @@ bool nano::network::merge_peer (nano::endpoint const & peer)
 	if (track_reachout (peer))
 	{
 		node.stats.inc (nano::stat::type::network, nano::stat::detail::merge_peer);
-		node.logger.debug (nano::log::type::network, "Initiating peer merge: {}", fmt::streamed (peer));
+		node.logger.debug (nano::log::type::network, "Initiating peer merge: {}", peer);
 		bool started = tcp_channels.start_tcp (peer);
 		if (!started)
 		{
 			node.stats.inc (nano::stat::type::tcp, nano::stat::detail::merge_peer_failed);
-			node.logger.debug (nano::log::type::network, "Peer merge failed: {}", fmt::streamed (peer));
+			node.logger.debug (nano::log::type::network, "Peer merge failed: {}", peer);
 		}
 		return started;
 	}
