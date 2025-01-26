@@ -390,19 +390,17 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
 # Find libbacktrace first (Unix/Linux only)
 if(NOT WIN32)
-    find_path(BACKTRACE_INCLUDE_DIR
-        NAMES backtrace.h
-        PATHS
-            /usr/local/include
-            /usr/include
-    )
-    
-    if(BACKTRACE_INCLUDE_DIR)
-        set(BACKTRACE_FOUND TRUE)
-        # Most systems just need -lbacktrace
-        set(BACKTRACE_LIBRARIES backtrace)
-        message(STATUS "Found backtrace.h at ${BACKTRACE_INCLUDE_DIR}")
-    endif()
+  find_path(
+    BACKTRACE_INCLUDE_DIR
+    NAMES backtrace.h
+    PATHS /usr/local/include /usr/include)
+
+  if(BACKTRACE_INCLUDE_DIR)
+    set(BACKTRACE_FOUND TRUE)
+    # Most systems just need -lbacktrace
+    set(BACKTRACE_LIBRARIES backtrace)
+    message(STATUS "Found backtrace.h at ${BACKTRACE_INCLUDE_DIR}")
+  endif()
 endif()
 
 # Then set up boost modules
@@ -504,19 +502,21 @@ include_directories(${BOOST_LIBRARY_INCLUDES})
 
 # Configure stacktrace with appropriate backend
 if(WIN32)
-    message(STATUS "Windows platform - Using WinDbg stacktrace")
-    add_definitions(-DBOOST_STACKTRACE_USE_WINDBG)
-    add_library(Boost::stacktrace ALIAS boost_stacktrace_windbg)
-    target_link_libraries(boost_stacktrace_windbg PRIVATE dbghelp)
-elseif(BACKTRACE_FOUND)
-    message(STATUS "Found libbacktrace - enabling Boost stacktrace backtrace support")
-    add_definitions(-DBOOST_STACKTRACE_USE_BACKTRACE)
-    add_library(Boost::stacktrace ALIAS boost_stacktrace_backtrace)
-    target_link_libraries(boost_stacktrace_backtrace PRIVATE ${BACKTRACE_LIBRARIES})
+  message(STATUS "Windows platform - Using WinDbg stacktrace")
+  add_definitions(-DBOOST_STACKTRACE_USE_WINDBG)
+  add_library(Boost::stacktrace ALIAS boost_stacktrace_windbg)
+  target_link_libraries(boost_stacktrace_windbg PRIVATE dbghelp)
+elseif(BOOST_STACKTRACE_HAS_BACKTRACE)
+  message(
+    STATUS "Found libbacktrace - enabling Boost stacktrace backtrace support")
+  add_definitions(-DBOOST_STACKTRACE_USE_BACKTRACE)
+  add_library(Boost::stacktrace ALIAS boost_stacktrace_backtrace)
+  target_link_libraries(boost_stacktrace_backtrace
+                        PRIVATE ${BACKTRACE_LIBRARIES})
 else()
-    message(STATUS "Unix platform without libbacktrace - Using basic backtrace")
-    add_definitions(-DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
-    add_library(Boost::stacktrace ALIAS boost_stacktrace_basic)
+  message(STATUS "Using basic stacktrace backend")
+  add_definitions(-DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
+  add_library(Boost::stacktrace ALIAS boost_stacktrace_basic)
 endif()
 
 # Workaround for missing reference errata in the boost property_tree module

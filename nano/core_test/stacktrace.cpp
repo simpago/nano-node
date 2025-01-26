@@ -8,6 +8,7 @@
 TEST (stacktrace, human_readable)
 {
 	auto stacktrace = nano::generate_stacktrace ();
+	std::cout << stacktrace << std::endl;
 	ASSERT_FALSE (stacktrace.empty ());
 	ASSERT_TRUE (stacktrace.find ("stacktrace_human_readable_Test") != std::string::npos);
 }
