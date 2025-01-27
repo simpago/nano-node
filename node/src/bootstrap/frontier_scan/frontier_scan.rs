@@ -36,12 +36,8 @@ impl FrontierScan {
     }
 }
 
-impl BootstrapWaiter<(Arc<Channel>, Message, u64)> for FrontierScan {
-    fn wait(
-        &mut self,
-        logic: &mut BootstrapLogic,
-        now: Timestamp,
-    ) -> WaitResult<(Arc<Channel>, Message, u64)> {
+impl BootstrapWaiter<()> for FrontierScan {
+    fn wait(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<()> {
         let mut state_changed = false;
         loop {
             let new_state = match &mut self.state {
@@ -91,7 +87,9 @@ impl BootstrapWaiter<(Arc<Channel>, Message, u64)> for FrontierScan {
                 FrontierScanState::Send(channel, start) => {
                     let id = thread_rng().next_u64();
                     let message = logic.request_frontiers(id, now, *start, QuerySource::Frontiers);
-                    return WaitResult::Finished((channel.clone(), message, id));
+                    let _sent = logic.send(channel, &message, id, now);
+                    // TODO slow down if queue full
+                    Some(FrontierScanState::Initial)
                 }
             };
 

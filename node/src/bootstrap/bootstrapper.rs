@@ -100,7 +100,6 @@ pub struct Bootstrapper {
     block_processor: Arc<BlockProcessor>,
     ledger: Arc<Ledger>,
     stats: Arc<Stats>,
-    message_sender: Mutex<MessageSender>,
     threads: Mutex<Option<Threads>>,
     mutex: Arc<Mutex<BootstrapLogic>>,
     condition: Arc<Condvar>,
@@ -153,13 +152,13 @@ impl Bootstrapper {
                 frontiers_limiter: RateLimiter::new(config.frontier_rate_limit),
                 workers: workers.clone(),
                 stats: stats.clone(),
+                message_sender,
             })),
             condition: Arc::new(Condvar::new()),
             database_limiter: RateLimiter::new(config.database_rate_limit),
             config,
             stats,
             ledger,
-            message_sender: Mutex::new(message_sender),
             clock,
             workers,
         }
@@ -187,30 +186,8 @@ impl Bootstrapper {
     }
 
     fn send(&self, channel: &Channel, request: &Message, id: u64) -> bool {
-        let sent = self.message_sender.lock().unwrap().try_send_channel(
-            channel,
-            &request,
-            TrafficType::BootstrapRequests,
-        );
-
-        if sent {
-            self.stats.inc(StatType::Bootstrap, DetailType::Request);
-            let query_type = QueryType::from(request);
-            self.stats
-                .inc(StatType::BootstrapRequest, query_type.into());
-        } else {
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::RequestFailed);
-        }
-
         let mut guard = self.mutex.lock().unwrap();
-        if sent {
-            guard.query_sent(id, self.clock.now());
-        } else {
-            guard.send_query_failed(id);
-        }
-
-        sent
+        guard.send(channel, request, id, self.clock.now())
     }
 
     fn create_asc_pull_request(&self, query: &RunningQuery) -> Message {
@@ -542,13 +519,8 @@ impl Bootstrapper {
     }
 
     fn run_frontiers(&self) {
-        loop {
-            let frontier_scan = FrontierScan::new();
-            let Some((channel, message, id)) = self.wait_for(frontier_scan) else {
-                break;
-            };
-            self.send(&channel, &message, id);
-        }
+        let frontier_scan = FrontierScan::new();
+        self.wait_for(frontier_scan);
     }
 
     fn run_dependencies(&self) {
@@ -1049,6 +1021,7 @@ pub(super) struct BootstrapLogic {
     pub frontiers_limiter: RateLimiter,
     pub workers: Arc<ThreadPoolImpl>,
     pub stats: Arc<Stats>,
+    pub message_sender: MessageSender,
 }
 
 impl BootstrapLogic {
@@ -1344,6 +1317,30 @@ impl BootstrapLogic {
             id: query.id,
             req_type,
         })
+    }
+
+    pub fn send(&mut self, channel: &Channel, request: &Message, id: u64, now: Timestamp) -> bool {
+        let sent =
+            self.message_sender
+                .try_send_channel(channel, &request, TrafficType::BootstrapRequests);
+
+        if sent {
+            self.stats.inc(StatType::Bootstrap, DetailType::Request);
+            let query_type = QueryType::from(request);
+            self.stats
+                .inc(StatType::BootstrapRequest, query_type.into());
+        } else {
+            self.stats
+                .inc(StatType::Bootstrap, DetailType::RequestFailed);
+        }
+
+        if sent {
+            self.query_sent(id, now);
+        } else {
+            self.send_query_failed(id);
+        }
+
+        sent
     }
 
     pub fn container_info(&self, database_limiter: &RateLimiter) -> ContainerInfo {
