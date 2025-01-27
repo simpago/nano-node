@@ -1,5 +1,6 @@
 use super::{BootstrapLogic, BootstrapWaiter, WaitResult};
 use rsnano_network::Channel;
+use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
 /// Waits until a channel becomes available
@@ -71,7 +72,7 @@ impl ChannelWaiter {
 }
 
 impl BootstrapWaiter<Arc<Channel>> for ChannelWaiter {
-    fn wait(&mut self, logic: &mut BootstrapLogic) -> WaitResult<Arc<Channel>> {
+    fn wait(&mut self, logic: &mut BootstrapLogic, _now: Timestamp) -> WaitResult<Arc<Channel>> {
         let state_changed = self.transition_state(logic);
         if let ChannelWaitState::Found(channel) = &self.state {
             WaitResult::Finished(channel.clone())

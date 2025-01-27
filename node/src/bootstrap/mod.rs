@@ -12,9 +12,10 @@ mod throttle;
 pub use bootstrap_responder::*;
 pub use bootstrapper::*;
 pub(crate) use candidate_accounts::*;
+use rsnano_nullable_clock::Timestamp;
 
 pub(self) trait BootstrapWaiter<T> {
-    fn wait(&mut self, logic: &mut BootstrapLogic) -> WaitResult<T>;
+    fn wait(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<T>;
 }
 
 pub(self) enum WaitResult<T> {

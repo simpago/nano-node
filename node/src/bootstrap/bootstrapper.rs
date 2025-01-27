@@ -2,7 +2,7 @@ use super::{
     channel_waiter::ChannelWaiter,
     crawlers::{AccountDatabaseCrawler, PendingDatabaseCrawler},
     database_scan::DatabaseScan,
-    frontier_scan::{AccountRanges, AccountRangesConfig},
+    frontier_scan::{AccountRanges, AccountRangesConfig, FrontierScan},
     peer_scoring::PeerScoring,
     running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
     throttle::Throttle,
@@ -108,10 +108,8 @@ pub struct Bootstrapper {
     /// Requests for accounts from database have much lower hitrate and could introduce strain on the network
     /// A separate (lower) limiter ensures that we always reserve resources for querying accounts from priority queue
     database_limiter: RateLimiter,
-    /// Rate limiter for frontier requests
-    frontiers_limiter: RateLimiter,
     clock: Arc<SteadyClock>,
-    workers: ThreadPoolImpl,
+    workers: Arc<ThreadPoolImpl>,
 }
 
 struct Threads {
@@ -132,6 +130,8 @@ impl Bootstrapper {
         config: BootstrapConfig,
         clock: Arc<SteadyClock>,
     ) -> Self {
+        let workers = Arc::new(ThreadPoolImpl::create(1, "Bootstrap work"));
+
         Self {
             block_processor,
             threads: Mutex::new(None),
@@ -150,16 +150,18 @@ impl Bootstrapper {
                 config: config.clone(),
                 network,
                 limiter: RateLimiter::new(config.rate_limit),
+                frontiers_limiter: RateLimiter::new(config.frontier_rate_limit),
+                workers: workers.clone(),
+                stats: stats.clone(),
             })),
             condition: Arc::new(Condvar::new()),
             database_limiter: RateLimiter::new(config.database_rate_limit),
-            frontiers_limiter: RateLimiter::new(config.frontier_rate_limit),
             config,
             stats,
             ledger,
             message_sender: Mutex::new(message_sender),
             clock,
-            workers: ThreadPoolImpl::create(1, "Bootstrap work"),
+            workers,
         }
     }
 
@@ -203,57 +205,16 @@ impl Bootstrapper {
 
         let mut guard = self.mutex.lock().unwrap();
         if sent {
-            guard.running_queries.modify(id, |query| {
-                // After the request has been sent, the peer has a limited time to respond
-                query.response_cutoff = self.clock.now() + self.config.request_timeout;
-            });
+            guard.query_sent(id, self.clock.now());
         } else {
-            guard.running_queries.remove(id);
+            guard.send_query_failed(id);
         }
 
         sent
     }
 
     fn create_asc_pull_request(&self, query: &RunningQuery) -> Message {
-        debug_assert!(query.source != QuerySource::Invalid);
-
-        {
-            let mut guard = self.mutex.lock().unwrap();
-            debug_assert!(!guard.running_queries.contains(query.id));
-            guard.running_queries.insert(query.clone());
-        }
-
-        let req_type = match query.query_type {
-            QueryType::BlocksByHash | QueryType::BlocksByAccount => {
-                let start_type = if query.query_type == QueryType::BlocksByHash {
-                    HashType::Block
-                } else {
-                    HashType::Account
-                };
-
-                AscPullReqType::Blocks(BlocksReqPayload {
-                    start_type,
-                    start: query.start,
-                    count: query.count as u8,
-                })
-            }
-            QueryType::AccountInfoByHash => AscPullReqType::AccountInfo(AccountInfoReqPayload {
-                target: query.start,
-                target_type: HashType::Block, // Query account info by block hash
-            }),
-            QueryType::Invalid => panic!("invalid query type"),
-            QueryType::Frontiers => {
-                AscPullReqType::Frontiers(rsnano_messages::FrontiersReqPayload {
-                    start: query.start.into(),
-                    count: FrontiersReqPayload::MAX_FRONTIERS,
-                })
-            }
-        };
-
-        Message::AscPullReq(AscPullReq {
-            id: query.id,
-            req_type,
-        })
+        self.mutex.lock().unwrap().create_asc_pull_request(query)
     }
 
     pub fn priority_len(&self) -> usize {
@@ -323,7 +284,7 @@ impl Bootstrapper {
                 return None;
             }
 
-            match waiter.wait(&mut *guard) {
+            match waiter.wait(&mut *guard, self.clock.now()) {
                 WaitResult::BeginWait => {
                     interval = INITIAL_INTERVAL;
                 }
@@ -581,65 +542,13 @@ impl Bootstrapper {
     }
 
     fn run_frontiers(&self) {
-        let mut guard = self.mutex.lock().unwrap();
-        while !guard.stopped {
-            drop(guard);
-
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::LoopFrontiers);
-            self.run_one_frontier();
-
-            guard = self.mutex.lock().unwrap();
+        loop {
+            let frontier_scan = FrontierScan::new();
+            let Some((channel, message, id)) = self.wait_for(frontier_scan) else {
+                break;
+            };
+            self.send(&channel, &message, id);
         }
-    }
-
-    fn run_one_frontier(&self) {
-        // No need to wait for blockprocessor, as we are not processing blocks
-        self.wait(|i| !i.candidate_accounts.priority_half_full());
-        self.wait(|_| self.frontiers_limiter.should_pass(1));
-        self.wait(|_| self.workers.num_queued_tasks() < self.config.frontier_scan.max_pending);
-        let Some(channel) = self.wait_channel() else {
-            return;
-        };
-        let frontier = self.wait_frontier();
-        if frontier.is_zero() {
-            return;
-        }
-        self.request_frontiers(frontier, &channel, QuerySource::Frontiers);
-    }
-
-    fn request_frontiers(&self, start: Account, channel: &Channel, source: QuerySource) {
-        let id = thread_rng().next_u64();
-        let now = self.clock.now();
-        let query = RunningQuery {
-            query_type: QueryType::Frontiers,
-            source,
-            start: start.into(),
-            account: Account::zero(),
-            hash: BlockHash::zero(),
-            count: 0,
-            id,
-            sent: now,
-            response_cutoff: now + self.config.request_timeout * 4,
-        };
-        let message = self.create_asc_pull_request(&query);
-        self.send(channel, &message, id);
-    }
-
-    fn wait_frontier(&self) -> Account {
-        let mut result = Account::zero();
-        self.wait(|i| {
-            result = i.account_ranges.next(self.clock.now());
-            if !result.is_zero() {
-                self.stats
-                    .inc(StatType::BootstrapNext, DetailType::NextFrontier);
-                true
-            } else {
-                false
-            }
-        });
-
-        result
     }
 
     fn run_dependencies(&self) {
@@ -999,7 +908,7 @@ impl Bootstrapper {
         self.mutex
             .lock()
             .unwrap()
-            .container_info(&self.database_limiter, &self.frontiers_limiter)
+            .container_info(&self.database_limiter)
     }
 }
 
@@ -1125,17 +1034,21 @@ impl BootstrapExt for Arc<Bootstrapper> {
 
 pub(super) struct BootstrapLogic {
     stopped: bool,
-    candidate_accounts: CandidateAccounts,
+    pub candidate_accounts: CandidateAccounts,
     pub scoring: PeerScoring,
     database_scan: DatabaseScan,
     pub running_queries: RunningQueryContainer,
     throttle: Throttle,
-    account_ranges: AccountRanges,
+    pub account_ranges: AccountRanges,
     sync_dependencies_interval: Instant,
     pub config: BootstrapConfig,
     network: Arc<RwLock<Network>>,
     /// Rate limiter for all types of requests
     pub limiter: RateLimiter,
+    /// Rate limiter for frontier requests
+    pub frontiers_limiter: RateLimiter,
+    pub workers: Arc<ThreadPoolImpl>,
+    pub stats: Arc<Stats>,
 }
 
 impl BootstrapLogic {
@@ -1363,15 +1276,81 @@ impl BootstrapLogic {
         }
     }
 
-    pub fn container_info(
-        &self,
-        database_limiter: &RateLimiter,
-        frontiers_limiter: &RateLimiter,
-    ) -> ContainerInfo {
+    pub fn query_sent(&mut self, id: u64, now: Timestamp) {
+        self.running_queries.modify(id, |query| {
+            // After the request has been sent, the peer has a limited time to respond
+            query.response_cutoff = now + self.config.request_timeout;
+        });
+    }
+
+    pub fn send_query_failed(&mut self, id: u64) {
+        self.running_queries.remove(id);
+    }
+
+    pub fn request_frontiers(
+        &mut self,
+        id: u64,
+        now: Timestamp,
+        start: Account,
+        source: QuerySource,
+    ) -> Message {
+        let query = RunningQuery {
+            query_type: QueryType::Frontiers,
+            source,
+            start: start.into(),
+            account: Account::zero(),
+            hash: BlockHash::zero(),
+            count: 0,
+            id,
+            sent: now,
+            response_cutoff: now + self.config.request_timeout * 4,
+        };
+        self.create_asc_pull_request(&query)
+    }
+
+    pub fn create_asc_pull_request(&mut self, query: &RunningQuery) -> Message {
+        debug_assert!(query.source != QuerySource::Invalid);
+        debug_assert!(!self.running_queries.contains(query.id));
+        self.running_queries.insert(query.clone());
+
+        let req_type = match query.query_type {
+            QueryType::BlocksByHash | QueryType::BlocksByAccount => {
+                let start_type = if query.query_type == QueryType::BlocksByHash {
+                    HashType::Block
+                } else {
+                    HashType::Account
+                };
+
+                AscPullReqType::Blocks(BlocksReqPayload {
+                    start_type,
+                    start: query.start,
+                    count: query.count as u8,
+                })
+            }
+            QueryType::AccountInfoByHash => AscPullReqType::AccountInfo(AccountInfoReqPayload {
+                target: query.start,
+                target_type: HashType::Block, // Query account info by block hash
+            }),
+            QueryType::Invalid => panic!("invalid query type"),
+            QueryType::Frontiers => {
+                AscPullReqType::Frontiers(rsnano_messages::FrontiersReqPayload {
+                    start: query.start.into(),
+                    count: FrontiersReqPayload::MAX_FRONTIERS,
+                })
+            }
+        };
+
+        Message::AscPullReq(AscPullReq {
+            id: query.id,
+            req_type,
+        })
+    }
+
+    pub fn container_info(&self, database_limiter: &RateLimiter) -> ContainerInfo {
         let limiters: ContainerInfo = [
             ("total", self.limiter.size(), 0),
             ("database", database_limiter.size(), 0),
-            ("frontiers", frontiers_limiter.size(), 0),
+            ("frontiers", self.frontiers_limiter.size(), 0),
         ]
         .into();
 
