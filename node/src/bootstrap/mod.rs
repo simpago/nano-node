@@ -1,10 +1,9 @@
-mod account_ranges;
 mod bootstrap_responder;
 mod bootstrapper;
 mod candidate_accounts;
 mod crawlers;
 mod database_scan;
-mod heads_container;
+mod frontier_scan;
 mod peer_scoring;
 mod running_query_container;
 mod throttle;

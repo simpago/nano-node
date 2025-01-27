@@ -1,7 +1,7 @@
 use super::{
-    account_ranges::{AccountRanges, AccountRangesConfig},
     crawlers::{AccountDatabaseCrawler, PendingDatabaseCrawler},
     database_scan::DatabaseScan,
+    frontier_scan::{AccountRanges, AccountRangesConfig},
     peer_scoring::PeerScoring,
     running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
     throttle::Throttle,
