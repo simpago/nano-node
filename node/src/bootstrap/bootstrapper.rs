@@ -26,7 +26,7 @@ use rsnano_messages::{
     AccountInfoAckPayload, AccountInfoReqPayload, AscPullAck, AscPullAckType, AscPullReq,
     AscPullReqType, BlocksAckPayload, BlocksReqPayload, FrontiersReqPayload, HashType, Message,
 };
-use rsnano_network::{bandwidth_limiter::RateLimiter, ChannelId, Network, TrafficType};
+use rsnano_network::{bandwidth_limiter::RateLimiter, Channel, ChannelId, Network, TrafficType};
 use rsnano_nullable_clock::{SteadyClock, Timestamp};
 use std::{
     cmp::{max, min},
@@ -183,9 +183,9 @@ impl Bootstrapper {
         }
     }
 
-    fn send(&self, channel_id: ChannelId, request: &Message, id: u64) -> bool {
-        let sent = self.message_sender.lock().unwrap().try_send(
-            channel_id,
+    fn send(&self, channel: &Channel, request: &Message, id: u64) -> bool {
+        let sent = self.message_sender.lock().unwrap().try_send_channel(
+            channel,
             &request,
             TrafficType::BootstrapRequests,
         );
@@ -306,7 +306,7 @@ impl Bootstrapper {
     }
 
     /* Waits for a channel that is not full */
-    fn wait_channel(&self) -> Option<ChannelId> {
+    fn wait_channel(&self) -> Option<Arc<Channel>> {
         // Limit the number of in-flight requests
         self.wait(|l| l.running_queries.len() < l.config.max_requests);
 
@@ -314,14 +314,13 @@ impl Bootstrapper {
         self.wait(|l| l.limiter.should_pass(1));
 
         // Wait until a channel is available
-
-        let mut channel_id: Option<ChannelId> = None;
+        let mut channel: Option<Arc<Channel>> = None;
         self.wait(|i| {
-            channel_id = i.scoring.channel().map(|c| c.channel_id());
-            channel_id.is_some() // Wait until a channel is available
+            channel = i.scoring.channel();
+            channel.is_some() // Wait until a channel is available
         });
 
-        channel_id
+        channel
     }
 
     fn wait_priority(&self) -> PriorityResult {
@@ -361,7 +360,7 @@ impl Bootstrapper {
         &self,
         account: Account,
         count: usize,
-        channel_id: ChannelId,
+        channel: &Channel,
         source: QuerySource,
     ) -> bool {
         let account_info = {
@@ -373,7 +372,7 @@ impl Bootstrapper {
 
         let request = self.create_blocks_request(id, account, account_info, count, source, now);
 
-        self.send(channel_id, &request, id)
+        self.send(channel, &request, id)
     }
 
     fn create_blocks_request(
@@ -479,7 +478,7 @@ impl Bootstrapper {
 
     fn run_one_priority(&self) {
         self.wait_blockprocessor();
-        let Some(channel_id) = self.wait_channel() else {
+        let Some(channel) = self.wait_channel() else {
             return;
         };
 
@@ -496,12 +495,7 @@ impl Bootstrapper {
             BootstrapResponder::MAX_BLOCKS,
         );
 
-        let sent = self.request(
-            result.account,
-            pull_count,
-            channel_id,
-            QuerySource::Priority,
-        );
+        let sent = self.request(result.account, pull_count, &channel, QuerySource::Priority);
 
         // Only cooldown accounts that are likely to have more blocks
         // This is to avoid requesting blocks from the same frontier multiple times, before the block processor had a chance to process them
@@ -527,14 +521,14 @@ impl Bootstrapper {
 
     fn run_one_database(&self, should_throttle: bool) {
         self.wait_blockprocessor();
-        let Some(channel_id) = self.wait_channel() else {
+        let Some(channel) = self.wait_channel() else {
             return;
         };
         let account = self.wait_database(should_throttle);
         if account.is_zero() {
             return;
         }
-        self.request(account, 2, channel_id, QuerySource::Database);
+        self.request(account, 2, &channel, QuerySource::Database);
     }
 
     fn run_database(&self) {
@@ -552,7 +546,7 @@ impl Bootstrapper {
 
     fn run_one_dependency(&self) {
         // No need to wait for blockprocessor, as we are not processing blocks
-        let Some(channel_id) = self.wait_channel() else {
+        let Some(channel) = self.wait_channel() else {
             return;
         };
         let blocking = self.wait_blocking();
@@ -565,7 +559,7 @@ impl Bootstrapper {
         let request =
             self.create_account_info_request(id, blocking, QuerySource::Dependencies, now);
 
-        self.send(channel_id, &request, id);
+        self.send(&channel, &request, id);
     }
 
     fn run_frontiers(&self) {
@@ -593,12 +587,12 @@ impl Bootstrapper {
         if frontier.is_zero() {
             return;
         }
-        self.request_frontiers(frontier, channel, QuerySource::Frontiers);
+        self.request_frontiers(frontier, &channel, QuerySource::Frontiers);
     }
 
-    fn request_frontiers(&self, start: Account, channel: ChannelId, source: QuerySource) {
+    fn request_frontiers(&self, start: Account, channel: &Channel, source: QuerySource) {
         let id = thread_rng().next_u64();
-        let timestamp = self.clock.now();
+        let now = self.clock.now();
         let query = RunningQuery {
             query_type: QueryType::Frontiers,
             source,
@@ -607,8 +601,8 @@ impl Bootstrapper {
             hash: BlockHash::zero(),
             count: 0,
             id,
-            response_cutoff: timestamp + self.config.request_timeout * 4,
-            sent: timestamp,
+            sent: now,
+            response_cutoff: now + self.config.request_timeout * 4,
         };
         let message = self.create_asc_pull_request(&query);
         self.send(channel, &message, id);

@@ -78,18 +78,14 @@ impl MessageFlooder {
 
     pub fn flood(&mut self, message: &Message, traffic_type: TrafficType, scale: f32) {
         let buffer = self.message_serializer.serialize(message);
-        let channels = self.network.read().unwrap().random_fanout_realtime(scale);
+        let channels;
+        {
+            let network = self.network.read().unwrap();
+            channels = network.random_fanout_realtime(scale);
+        }
 
-        let network_info = self.network.read().unwrap();
         for channel in channels {
-            try_send_serialized_message(
-                &network_info,
-                &self.stats,
-                channel.channel_id(),
-                buffer,
-                message,
-                traffic_type,
-            );
+            try_send_serialized_message(&channel, &self.stats, buffer, message, traffic_type);
         }
     }
 }

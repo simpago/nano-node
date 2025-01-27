@@ -1,6 +1,6 @@
 use crate::stats::{Direction, StatType, Stats};
 use rsnano_messages::{Message, MessageSerializer, ProtocolInfo};
-use rsnano_network::{ChannelId, Network, TrafficType};
+use rsnano_network::{Channel, ChannelId, Network, TrafficType};
 use std::sync::{Arc, RwLock};
 use tracing::trace;
 
@@ -63,19 +63,32 @@ impl MessageSender {
     ) -> bool {
         let buffer = self.message_serializer.serialize(message);
         let sent = {
-            let network_info = self.network.read().unwrap();
-            try_send_serialized_message(
-                &network_info,
-                &self.stats,
-                channel_id,
-                buffer,
-                message,
-                traffic_type,
-            )
+            let network = self.network.read().unwrap();
+            let Some(channel) = network.get(channel_id) else {
+                return false;
+            };
+            try_send_serialized_message(&channel, &self.stats, buffer, message, traffic_type)
         };
 
         if let Some(callback) = &self.published_callback {
             callback(channel_id, message);
+        }
+
+        sent
+    }
+
+    pub fn try_send_channel(
+        &mut self,
+        channel: &Channel,
+        message: &Message,
+        traffic_type: TrafficType,
+    ) -> bool {
+        let buffer = self.message_serializer.serialize(message);
+        let sent =
+            { try_send_serialized_message(&channel, &self.stats, buffer, message, traffic_type) };
+
+        if let Some(callback) = &self.published_callback {
+            callback(channel.channel_id(), message);
         }
 
         sent
@@ -114,22 +127,21 @@ impl MessageSender {
 }
 
 pub(crate) fn try_send_serialized_message(
-    network: &Network,
+    channel: &Channel,
     stats: &Stats,
-    channel_id: ChannelId,
     buffer: &[u8],
     message: &Message,
     traffic_type: TrafficType,
 ) -> bool {
-    let sent = network.try_send_buffer(channel_id, buffer, traffic_type);
+    let sent = channel.send(buffer, traffic_type);
 
     if sent {
         stats.inc_dir_aggregate(StatType::Message, message.into(), Direction::Out);
-        trace!(%channel_id, message = ?message, "Message sent");
+        trace!(peer=%channel.peer_addr(), message = ?message, "Message sent");
     } else {
         let detail_type = message.into();
         stats.inc_dir_aggregate(StatType::Drop, detail_type, Direction::Out);
-        trace!(%channel_id, message = ?message, "Message dropped");
+        trace!(peer=%channel.peer_addr(), message = ?message, "Message dropped");
     }
 
     sent
