@@ -174,8 +174,8 @@ TEST (peer_container, DISABLED_list_fanout)
 	nano::test::system system{ 1 };
 	auto node = system.nodes[0];
 	ASSERT_EQ (0, node->network.size ());
-	ASSERT_EQ (0.0, node->network.size_sqrt ());
-	ASSERT_EQ (0, node->network.fanout ());
+	ASSERT_EQ (0.0f, node->network.size_log ());
+	ASSERT_EQ (1, node->network.fanout ());
 	ASSERT_TRUE (node->network.list (node->network.fanout ()).empty ());
 
 	auto add_peer = [&node, &system] () {
@@ -185,26 +185,27 @@ TEST (peer_container, DISABLED_list_fanout)
 
 	add_peer ();
 	ASSERT_TIMELY_EQ (5s, 1, node->network.size ());
-	ASSERT_EQ (1.f, node->network.size_sqrt ());
+	ASSERT_EQ (0.0f, node->network.size_log ());
 	ASSERT_EQ (1, node->network.fanout ());
 	ASSERT_EQ (1, node->network.list (node->network.fanout ()).size ());
 
 	add_peer ();
-	ASSERT_TIMELY_EQ (5s, 2, node->network.size ());
-	ASSERT_EQ (std::sqrt (2.f), node->network.size_sqrt ());
+	add_peer ();
+	ASSERT_TIMELY_EQ (5s, 3, node->network.size ());
+	ASSERT_EQ (std::log (3.0f), node->network.size_log ());
 	ASSERT_EQ (2, node->network.fanout ());
 	ASSERT_EQ (2, node->network.list (node->network.fanout ()).size ());
 
 	unsigned number_of_peers = 10;
-	for (unsigned i = 2; i < number_of_peers; ++i)
+	for (unsigned i = 3; i < number_of_peers; ++i)
 	{
 		add_peer ();
 	}
 
 	ASSERT_TIMELY_EQ (5s, number_of_peers, node->network.size ());
-	ASSERT_EQ (std::sqrt (float (number_of_peers)), node->network.size_sqrt ());
-	ASSERT_EQ (4, node->network.fanout ());
-	ASSERT_EQ (4, node->network.list (node->network.fanout ()).size ());
+	ASSERT_EQ (std::log (float (number_of_peers)), node->network.size_log ());
+	ASSERT_EQ (3, node->network.fanout ());
+	ASSERT_EQ (3, node->network.list (node->network.fanout ()).size ());
 }
 
 // Test to make sure we don't repeatedly send keepalive messages to nodes that aren't responding
