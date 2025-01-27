@@ -43,15 +43,15 @@ pub(crate) enum QuerySource {
 /// Information about a running query that hasn't been responded yet
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct RunningQuery {
+    pub id: u64,
     pub query_type: QueryType,
     pub source: QuerySource,
     pub start: HashOrAccount,
     pub account: Account,
     pub hash: BlockHash,
     pub count: usize,
-    pub cutoff: Timestamp,
-    pub timestamp: Timestamp,
-    pub id: u64,
+    pub sent: Timestamp,
+    pub response_cutoff: Timestamp,
 }
 
 impl RunningQuery {
@@ -64,8 +64,8 @@ impl RunningQuery {
             account: Account::from(2),
             hash: BlockHash::from(3),
             count: 4,
-            cutoff: Timestamp::new_test_instance() + Duration::from_secs(30),
-            timestamp: Timestamp::new_test_instance(),
+            response_cutoff: Timestamp::new_test_instance() + Duration::from_secs(30),
+            sent: Timestamp::new_test_instance(),
             id: 42,
         }
     }
@@ -290,12 +290,12 @@ mod tests {
         let query = RunningQuery::new_test_instance();
         container.insert(query.clone());
         let new_cutoff = Timestamp::new_test_instance() + Duration::from_secs(999);
-        let modified = container.modify(query.id, |q| q.cutoff = new_cutoff);
+        let modified = container.modify(query.id, |q| q.response_cutoff = new_cutoff);
         assert!(modified);
         assert_eq!(
             container.get(query.id),
             Some(&RunningQuery {
-                cutoff: new_cutoff,
+                response_cutoff: new_cutoff,
                 ..query
             })
         );

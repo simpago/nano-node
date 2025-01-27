@@ -204,7 +204,7 @@ impl Bootstrapper {
         if sent {
             guard.running_queries.modify(id, |query| {
                 // After the request has been sent, the peer has a limited time to respond
-                query.cutoff = self.clock.now() + self.config.request_timeout;
+                query.response_cutoff = self.clock.now() + self.config.request_timeout;
             });
         } else {
             guard.running_queries.remove(id);
@@ -443,8 +443,8 @@ impl Bootstrapper {
         let query = RunningQuery {
             id,
             account,
-            timestamp: now,
-            cutoff: now + self.config.request_timeout * 4,
+            sent: now,
+            response_cutoff: now + self.config.request_timeout * 4,
             query_type,
             start,
             source,
@@ -470,8 +470,8 @@ impl Bootstrapper {
             hash,
             count: 0,
             id,
-            cutoff: now + self.config.request_timeout * 4,
-            timestamp: now,
+            response_cutoff: now + self.config.request_timeout * 4,
+            sent: now,
         };
 
         self.create_asc_pull_request(&query)
@@ -607,8 +607,8 @@ impl Bootstrapper {
             hash: BlockHash::zero(),
             count: 0,
             id,
-            cutoff: timestamp + self.config.request_timeout * 4,
-            timestamp,
+            response_cutoff: timestamp + self.config.request_timeout * 4,
+            sent: timestamp,
         };
         let message = self.create_asc_pull_request(&query);
         self.send(channel, &message, id);
@@ -689,7 +689,7 @@ impl Bootstrapper {
 
         self.stats.sample(
             Sample::BootstrapTagDuration,
-            tag.timestamp.elapsed(self.clock.now()).as_millis() as i64,
+            tag.sent.elapsed(self.clock.now()).as_millis() as i64,
             (0, self.config.request_timeout.as_millis() as i64),
         );
 
@@ -1320,7 +1320,7 @@ impl BootstrapLogic {
             self.config.throttle_coefficient,
         ));
 
-        let should_timeout = |query: &RunningQuery| query.cutoff < now;
+        let should_timeout = |query: &RunningQuery| query.response_cutoff < now;
 
         while let Some(front) = self.running_queries.front() {
             if !should_timeout(front) {
