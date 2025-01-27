@@ -6,7 +6,7 @@ use super::{
     peer_scoring::PeerScoring,
     running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
     throttle::Throttle,
-    BootstrapWaiter, CandidateAccounts, CandidateAccountsConfig, PriorityDownResult,
+    BootstrapAction, CandidateAccounts, CandidateAccountsConfig, PriorityDownResult,
     PriorityResult, PriorityUpResult,
 };
 use crate::{
@@ -251,7 +251,7 @@ impl Bootstrapper {
 
     fn wait_for<W, T>(&self, mut waiter: W) -> Option<T>
     where
-        W: BootstrapWaiter<T>,
+        W: BootstrapAction<T>,
     {
         const INITIAL_INTERVAL: Duration = Duration::from_millis(5);
         let mut interval = INITIAL_INTERVAL;
@@ -261,7 +261,7 @@ impl Bootstrapper {
                 return None;
             }
 
-            match waiter.wait(&mut *guard, self.clock.now()) {
+            match waiter.run(&mut *guard, self.clock.now()) {
                 WaitResult::BeginWait => {
                     interval = INITIAL_INTERVAL;
                 }

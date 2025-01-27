@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use crate::{
     bootstrap::{
-        channel_waiter::ChannelWaiter, running_query_container::QuerySource, BootstrapLogic,
-        BootstrapWaiter, WaitResult,
+        channel_waiter::ChannelWaiter, running_query_container::QuerySource, BootstrapAction,
+        BootstrapLogic, WaitResult,
     },
     stats::{DetailType, StatType},
     utils::ThreadPool,
@@ -86,7 +86,7 @@ impl FrontierScan {
         waiter: &mut ChannelWaiter,
         now: Timestamp,
     ) -> Option<FrontierScanState> {
-        match waiter.wait(logic, now) {
+        match waiter.run(logic, now) {
             WaitResult::BeginWait => Some(FrontierScanState::WaitChannel(waiter.clone())),
             WaitResult::ContinueWait => None,
             WaitResult::Finished(channel) => Some(FrontierScanState::WaitFrontier(channel)),
@@ -123,8 +123,8 @@ impl FrontierScan {
     }
 }
 
-impl BootstrapWaiter<()> for FrontierScan {
-    fn wait(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<()> {
+impl BootstrapAction<()> for FrontierScan {
+    fn run(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<()> {
         let mut state_changed = false;
         loop {
             match self.next_state(logic, now) {
