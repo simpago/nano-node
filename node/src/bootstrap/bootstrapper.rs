@@ -4,6 +4,7 @@ use super::{
     database_scan::DatabaseScan,
     frontier_scan::{AccountRanges, AccountRangesConfig, FrontierScan},
     peer_scoring::PeerScoring,
+    priority_query::PriorityQuery,
     running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
     throttle::Throttle,
     BootstrapAction, CandidateAccounts, CandidateAccountsConfig, PriorityDownResult,
@@ -132,7 +133,6 @@ impl Bootstrapper {
         let workers = Arc::new(ThreadPoolImpl::create(1, "Bootstrap work"));
 
         Self {
-            block_processor,
             threads: Mutex::new(None),
             mutex: Arc::new(Mutex::new(BootstrapLogic {
                 stopped: false,
@@ -153,7 +153,10 @@ impl Bootstrapper {
                 workers: workers.clone(),
                 stats: stats.clone(),
                 message_sender,
+                block_processor: block_processor.clone(),
+                ledger: ledger.clone(),
             })),
+            block_processor,
             condition: Arc::new(Condvar::new()),
             database_limiter: RateLimiter::new(config.database_rate_limit),
             config,
@@ -249,9 +252,9 @@ impl Bootstrapper {
         self.wait_for(ChannelWaiter::new())
     }
 
-    fn wait_for<W, T>(&self, mut waiter: W) -> Option<T>
+    fn wait_for<A, T>(&self, mut action: A) -> Option<T>
     where
-        W: BootstrapAction<T>,
+        A: BootstrapAction<T>,
     {
         const INITIAL_INTERVAL: Duration = Duration::from_millis(5);
         let mut interval = INITIAL_INTERVAL;
@@ -261,7 +264,7 @@ impl Bootstrapper {
                 return None;
             }
 
-            match waiter.run(&mut *guard, self.clock.now()) {
+            match action.run(&mut *guard, self.clock.now()) {
                 WaitResult::BeginWait => {
                     interval = INITIAL_INTERVAL;
                 }
@@ -282,7 +285,7 @@ impl Bootstrapper {
     fn wait_priority(&self) -> PriorityResult {
         let mut result = PriorityResult::default();
         self.wait(|i| {
-            result = i.next_priority(&self.stats, self.clock.now());
+            result = i.next_priority(self.clock.now());
             !result.account.is_zero()
         });
         result
@@ -433,8 +436,8 @@ impl Bootstrapper {
     }
 
     fn run_one_priority(&self) {
-        self.wait_blockprocessor();
-        let Some(channel) = self.wait_channel() else {
+        let prio_query = PriorityQuery::new();
+        let Some(channel) = self.wait_for(prio_query) else {
             return;
         };
 
@@ -523,34 +526,24 @@ impl Bootstrapper {
             let frontier_scan = FrontierScan::new();
             match self.wait_for(frontier_scan) {
                 Some((channel, req)) => {
-                    let id = thread_rng().next_u64();
-                    let now = self.clock.now();
-
-                    let AscPullReqType::Frontiers(f) = &req else {
-                        panic!("incorrect message type");
-                    };
-                    let query = RunningQuery {
-                        query_type: QueryType::Frontiers,
-                        source: QuerySource::Frontiers,
-                        start: f.start.into(),
-                        account: Account::zero(),
-                        hash: BlockHash::zero(),
-                        count: 0,
-                        id,
-                        sent: now,
-                        response_cutoff: now + self.config.request_timeout * 4,
-                    };
-
-                    let mut guard = self.mutex.lock().unwrap();
-                    debug_assert!(!guard.running_queries.contains(query.id));
-                    guard.running_queries.insert(query.clone());
-                    let message = Message::AscPullReq(AscPullReq { id, req_type: req });
-                    let _sent = guard.send(&channel, &message, id, now);
-                    // TODO what to do if message could not be sent?
+                    self.send_request(&channel, req);
                 }
                 None => break,
             }
         }
+    }
+
+    fn send_request(&self, channel: &Channel, req_type: AscPullReqType) {
+        let id = thread_rng().next_u64();
+        let now = self.clock.now();
+        let req = AscPullReq { id, req_type };
+        let query = RunningQuery::from_request(&req, now, self.config.request_timeout);
+
+        let mut guard = self.mutex.lock().unwrap();
+        guard.running_queries.insert(query);
+        let message = Message::AscPullReq(req);
+        let _sent = guard.send(&channel, &message, id, now);
+        // TODO what to do if message could not be sent?
     }
 
     fn run_dependencies(&self) {
@@ -1052,6 +1045,8 @@ pub(super) struct BootstrapLogic {
     pub workers: Arc<ThreadPoolImpl>,
     pub stats: Arc<Stats>,
     pub message_sender: MessageSender,
+    pub block_processor: Arc<BlockProcessor>,
+    pub ledger: Arc<Ledger>,
 }
 
 impl BootstrapLogic {
@@ -1177,7 +1172,7 @@ impl BootstrapLogic {
             .count()
     }
 
-    fn next_priority(&mut self, stats: &Stats, now: Timestamp) -> PriorityResult {
+    pub fn next_priority(&mut self, now: Timestamp) -> PriorityResult {
         let next = self.candidate_accounts.next_priority(now, |account| {
             self.running_queries
                 .count_by_account(account, QuerySource::Priority)
@@ -1188,7 +1183,8 @@ impl BootstrapLogic {
             return Default::default();
         }
 
-        stats.inc(StatType::BootstrapNext, DetailType::NextPriority);
+        self.stats
+            .inc(StatType::BootstrapNext, DetailType::NextPriority);
 
         next
     }

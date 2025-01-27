@@ -21,7 +21,6 @@ enum FrontierScanState {
     WaitWorkers,
     WaitChannel(ChannelWaiter),
     WaitFrontier(Arc<Channel>),
-    Send(Arc<Channel>, Account),
     Done(Arc<Channel>, AscPullReqType),
 }
 
@@ -44,7 +43,6 @@ impl FrontierScan {
             FrontierScanState::WaitWorkers => Self::wait_workers(logic),
             FrontierScanState::WaitChannel(waiter) => Self::wait_channel(logic, waiter, now),
             FrontierScanState::WaitFrontier(channel) => Self::wait_frontier(logic, channel, now),
-            FrontierScanState::Send(channel, start) => Self::send(channel.clone(), *start),
             FrontierScanState::Done(_, _) => None,
         }
     }
@@ -102,17 +100,11 @@ impl FrontierScan {
             logic
                 .stats
                 .inc(StatType::BootstrapNext, DetailType::NextFrontier);
-            Some(FrontierScanState::Send(channel.clone(), start))
+            let request = Self::request_frontiers(start);
+            Some(FrontierScanState::Done(channel.clone(), request))
         } else {
             None
         }
-    }
-
-    fn send(channel: Arc<Channel>, start: Account) -> Option<FrontierScanState> {
-        Some(FrontierScanState::Done(
-            channel,
-            Self::request_frontiers(start),
-        ))
     }
 
     fn request_frontiers(start: Account) -> AscPullReqType {

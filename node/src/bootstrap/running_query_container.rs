@@ -1,4 +1,5 @@
 use rsnano_core::{Account, BlockHash, HashOrAccount};
+use rsnano_messages::{AscPullReq, AscPullReqType};
 use rsnano_nullable_clock::Timestamp;
 use std::{
     collections::{HashMap, VecDeque},
@@ -67,6 +68,23 @@ impl RunningQuery {
             response_cutoff: Timestamp::new_test_instance() + Duration::from_secs(30),
             sent: Timestamp::new_test_instance(),
             id: 42,
+        }
+    }
+
+    pub fn from_request(request: &AscPullReq, now: Timestamp, timeout: Duration) -> Self {
+        let AscPullReqType::Frontiers(f) = &request.req_type else {
+            panic!("incorrect message type");
+        };
+        Self {
+            query_type: QueryType::Frontiers,
+            source: QuerySource::Frontiers,
+            start: f.start.into(),
+            account: Account::zero(),
+            hash: BlockHash::zero(),
+            count: 0,
+            id: request.id,
+            sent: now,
+            response_cutoff: now + timeout * 4,
         }
     }
 }

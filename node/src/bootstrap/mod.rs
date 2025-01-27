@@ -6,6 +6,7 @@ mod crawlers;
 mod database_scan;
 mod frontier_scan;
 mod peer_scoring;
+mod priority_query;
 mod running_query_container;
 mod throttle;
 
