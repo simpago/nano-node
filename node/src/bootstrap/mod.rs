@@ -1,6 +1,7 @@
 mod bootstrap_responder;
 mod bootstrapper;
 mod candidate_accounts;
+mod channel_waiter;
 mod crawlers;
 mod database_scan;
 mod frontier_scan;
@@ -11,3 +12,13 @@ mod throttle;
 pub use bootstrap_responder::*;
 pub use bootstrapper::*;
 pub(crate) use candidate_accounts::*;
+
+pub(self) trait BootstrapWaiter<T> {
+    fn wait(&mut self, logic: &mut BootstrapLogic) -> WaitResult<T>;
+}
+
+pub(self) enum WaitResult<T> {
+    BeginWait,
+    ContinueWait,
+    Finished(T),
+}

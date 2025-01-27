@@ -1,16 +1,17 @@
 use super::{
+    channel_waiter::ChannelWaiter,
     crawlers::{AccountDatabaseCrawler, PendingDatabaseCrawler},
     database_scan::DatabaseScan,
     frontier_scan::{AccountRanges, AccountRangesConfig},
     peer_scoring::PeerScoring,
     running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
     throttle::Throttle,
-    CandidateAccounts, CandidateAccountsConfig, PriorityDownResult, PriorityResult,
-    PriorityUpResult,
+    BootstrapWaiter, CandidateAccounts, CandidateAccountsConfig, PriorityDownResult,
+    PriorityResult, PriorityUpResult,
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, BlockSource, LedgerNotifications},
-    bootstrap::BootstrapResponder,
+    bootstrap::{BootstrapResponder, WaitResult},
     stats::{DetailType, Direction, Sample, StatType, Stats},
     transport::MessageSender,
     utils::{ThreadPool, ThreadPoolImpl},
@@ -1122,19 +1123,19 @@ impl BootstrapExt for Arc<Bootstrapper> {
     }
 }
 
-struct BootstrapLogic {
+pub(super) struct BootstrapLogic {
     stopped: bool,
     candidate_accounts: CandidateAccounts,
-    scoring: PeerScoring,
+    pub scoring: PeerScoring,
     database_scan: DatabaseScan,
-    running_queries: RunningQueryContainer,
+    pub running_queries: RunningQueryContainer,
     throttle: Throttle,
     account_ranges: AccountRanges,
     sync_dependencies_interval: Instant,
-    config: BootstrapConfig,
+    pub config: BootstrapConfig,
     network: Arc<RwLock<Network>>,
     /// Rate limiter for all types of requests
-    limiter: RateLimiter,
+    pub limiter: RateLimiter,
 }
 
 impl BootstrapLogic {
@@ -1554,96 +1555,5 @@ fn process_frontiers(
         guard
             .candidate_accounts
             .priority_set(&account, CandidateAccounts::PRIORITY_CUTOFF);
-    }
-}
-
-trait BootstrapWaiter<T> {
-    fn wait(&mut self, logic: &mut BootstrapLogic) -> WaitResult<T>;
-}
-
-/// Waits until a channel becomes available
-struct ChannelWaiter {
-    state: ChannelWaitState,
-}
-
-impl ChannelWaiter {
-    fn new() -> Self {
-        Self {
-            state: ChannelWaitState::Initial,
-        }
-    }
-
-    fn transition_state(&mut self, logic: &mut BootstrapLogic) -> bool {
-        if let Some(new_state) = self.get_next_state(logic) {
-            self.state = new_state;
-            true // State changed
-        } else {
-            false // State did not change
-        }
-    }
-
-    fn get_next_state(&self, logic: &mut BootstrapLogic) -> Option<ChannelWaitState> {
-        match &self.state {
-            ChannelWaitState::Initial => Some(ChannelWaitState::WaitRunningQueries),
-            ChannelWaitState::WaitRunningQueries => Self::wait_running_queries(logic),
-            ChannelWaitState::WaitLimiter => Self::wait_limiter(logic),
-            ChannelWaitState::WaitScoring => Self::wait_scoring(logic),
-            ChannelWaitState::Found(_) => None,
-        }
-    }
-
-    /// Limit the number of in-flight requests
-    fn wait_running_queries(logic: &BootstrapLogic) -> Option<ChannelWaitState> {
-        if logic.running_queries.len() < logic.config.max_requests {
-            Some(ChannelWaitState::WaitLimiter)
-        } else {
-            None
-        }
-    }
-
-    /// Wait until more requests can be sent
-    fn wait_limiter(logic: &BootstrapLogic) -> Option<ChannelWaitState> {
-        if logic.limiter.should_pass(1) {
-            Some(ChannelWaitState::WaitScoring)
-        } else {
-            None
-        }
-    }
-
-    /// Wait until a channel is available
-    fn wait_scoring(logic: &mut BootstrapLogic) -> Option<ChannelWaitState> {
-        let channel = logic.scoring.channel();
-        if let Some(channel) = channel {
-            Some(ChannelWaitState::Found(channel))
-        } else {
-            None
-        }
-    }
-}
-
-enum ChannelWaitState {
-    Initial,
-    WaitRunningQueries,
-    WaitLimiter,
-    WaitScoring,
-    Found(Arc<Channel>),
-}
-
-enum WaitResult<T> {
-    BeginWait,
-    ContinueWait,
-    Finished(T),
-}
-
-impl BootstrapWaiter<Arc<Channel>> for ChannelWaiter {
-    fn wait(&mut self, logic: &mut BootstrapLogic) -> WaitResult<Arc<Channel>> {
-        let state_changed = self.transition_state(logic);
-        if let ChannelWaitState::Found(channel) = &self.state {
-            WaitResult::Finished(channel.clone())
-        } else if state_changed {
-            WaitResult::BeginWait
-        } else {
-            WaitResult::ContinueWait
-        }
     }
 }
