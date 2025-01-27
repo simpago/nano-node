@@ -412,4 +412,11 @@ mod tests {
         // Wraps around:
         assert_eq!(frontier_scan.next(now), Account::from(1));
     }
+
+    #[test]
+    fn container_info() {
+        let frontier_scan = FrontierScan::new(Default::default(), Arc::new(Stats::default()));
+        let info = frontier_scan.container_info();
+        assert_eq!(info, [("total_processed", 0, 0)].into());
+    }
 }
