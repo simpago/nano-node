@@ -82,11 +82,11 @@ impl FrontierScan {
 
     fn wait_channel(
         logic: &mut BootstrapLogic,
-        waiter: &mut ChannelWaiter,
+        channel_waiter: &mut ChannelWaiter,
         now: Timestamp,
     ) -> Option<FrontierScanState> {
-        match waiter.run(logic, now) {
-            WaitResult::BeginWait => Some(FrontierScanState::WaitChannel(waiter.clone())),
+        match channel_waiter.run(logic, now) {
+            WaitResult::BeginWait => Some(FrontierScanState::WaitChannel(channel_waiter.clone())),
             WaitResult::ContinueWait => None,
             WaitResult::Finished(channel) => Some(FrontierScanState::WaitFrontier(channel)),
         }

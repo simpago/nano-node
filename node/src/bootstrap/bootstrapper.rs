@@ -523,11 +523,12 @@ impl Bootstrapper {
             let frontier_scan = FrontierScan::new();
             match self.wait_for(frontier_scan) {
                 Some((channel, req)) => {
+                    let id = thread_rng().next_u64();
+                    let now = self.clock.now();
+
                     let AscPullReqType::Frontiers(f) = &req else {
                         panic!("incorrect message type");
                     };
-                    let id = thread_rng().next_u64();
-                    let now = self.clock.now();
                     let query = RunningQuery {
                         query_type: QueryType::Frontiers,
                         source: QuerySource::Frontiers,
@@ -539,6 +540,7 @@ impl Bootstrapper {
                         sent: now,
                         response_cutoff: now + self.config.request_timeout * 4,
                     };
+
                     let mut guard = self.mutex.lock().unwrap();
                     debug_assert!(!guard.running_queries.contains(query.id));
                     guard.running_queries.insert(query.clone());
