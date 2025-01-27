@@ -38,13 +38,13 @@ impl FrontierHead {
 }
 
 #[derive(Default)]
-pub(super) struct OrderedHeads {
+pub(super) struct HeadsContainer {
     sequenced: Vec<Account>,
     by_start: BTreeMap<Account, FrontierHead>,
     by_timestamp: BTreeMap<Timestamp, Vec<Account>>,
 }
 
-impl OrderedHeads {
+impl HeadsContainer {
     pub fn push_back(&mut self, head: FrontierHead) {
         let start = head.start;
         let timestamp = head.timestamp;
@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn empty() {
-        let heads = OrderedHeads::default();
+        let heads = HeadsContainer::default();
 
         assert_eq!(heads.len(), 0);
         assert!(heads.iter().next().is_none());
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn push_back_one_head() {
-        let mut heads = OrderedHeads::default();
+        let mut heads = HeadsContainer::default();
 
         heads.push_back(FrontierHead::new(1, 10));
 
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn push_back_multiple() {
-        let mut heads = OrderedHeads::default();
+        let mut heads = HeadsContainer::default();
 
         heads.push_back(FrontierHead::new(1, 10));
         heads.push_back(FrontierHead::new(10, 20));
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn order_by_timestamp() {
-        let mut heads = OrderedHeads::default();
+        let mut heads = HeadsContainer::default();
 
         let now = Timestamp::new_test_instance();
 
@@ -174,13 +174,13 @@ mod tests {
     #[test]
     #[should_panic = "head not found"]
     fn modify_unknown_start_panics() {
-        let mut heads = OrderedHeads::default();
+        let mut heads = HeadsContainer::default();
         heads.modify(&Account::from(123), |_| {});
     }
 
     #[test]
     fn modify_nothing() {
-        let mut heads = OrderedHeads::default();
+        let mut heads = HeadsContainer::default();
         heads.push_back(FrontierHead::new(1, 10));
 
         heads.modify(&Account::from(1), |_| {});
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn modify_timestamp() {
-        let mut heads = OrderedHeads::default();
+        let mut heads = HeadsContainer::default();
         heads.push_back(FrontierHead::new(1, 10));
 
         let now = Timestamp::new_test_instance();
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn modify_duplicate_timestamp() {
-        let mut heads = OrderedHeads::default();
+        let mut heads = HeadsContainer::default();
         heads.push_back(FrontierHead::new(1, 10));
         heads.push_back(FrontierHead::new(10, 20));
 
@@ -228,7 +228,7 @@ mod tests {
 
     #[test]
     fn find_first_less_than_or_equal_to() {
-        let mut heads = OrderedHeads::default();
+        let mut heads = HeadsContainer::default();
         heads.push_back(FrontierHead::new(1, 10));
         heads.push_back(FrontierHead::new(10, 20));
 
@@ -265,7 +265,7 @@ mod tests {
 
     #[test]
     fn ignore_duplicate_insert() {
-        let mut heads = OrderedHeads::default();
+        let mut heads = HeadsContainer::default();
         heads.push_back(FrontierHead::new(1, 10));
         heads.push_back(FrontierHead::new(1, 10));
         assert_eq!(heads.len(), 1);

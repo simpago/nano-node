@@ -1,4 +1,4 @@
-use super::ordered_heads::OrderedHeads;
+use super::ordered_heads::HeadsContainer;
 use crate::{
     bootstrap::ordered_heads::FrontierHead,
     stats::{DetailType, StatType, Stats},
@@ -35,7 +35,7 @@ impl Default for FrontierScanConfig {
 pub struct FrontierScan {
     config: FrontierScanConfig,
     stats: Arc<Stats>,
-    heads: OrderedHeads,
+    heads: HeadsContainer,
 }
 
 impl FrontierScan {
@@ -43,7 +43,7 @@ impl FrontierScan {
         // Divide nano::account numeric range into consecutive and equal ranges
         let max_account = Account::MAX.number();
         let range_size = max_account / config.head_parallelism;
-        let mut heads = OrderedHeads::default();
+        let mut heads = HeadsContainer::default();
 
         for i in 0..config.head_parallelism {
             // Start at 1 to avoid the burn account
