@@ -1,7 +1,7 @@
 use super::{
     crawlers::{AccountDatabaseCrawler, PendingDatabaseCrawler},
     database_scan::DatabaseScan,
-    frontier_scan::{FrontierScan, FrontierScanConfig},
+    frontier_scan::{AccountRanges, AccountRangesConfig},
     peer_scoring::PeerScoring,
     running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
     throttle::Throttle,
@@ -59,7 +59,7 @@ pub struct BootstrapConfig {
     pub max_requests: usize,
     pub optimistic_request_percentage: u8,
     pub candidate_accounts: CandidateAccountsConfig,
-    pub frontier_scan: FrontierScanConfig,
+    pub frontier_scan: AccountRangesConfig,
 }
 
 impl Default for BootstrapConfig {
@@ -139,7 +139,7 @@ impl Bootstrapper {
                 candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
                 scoring: PeerScoring::new(config.clone()),
                 database_scan: DatabaseScan::new(ledger.clone()),
-                frontiers: FrontierScan::new(config.frontier_scan.clone(), stats.clone()),
+                account_ranges: AccountRanges::new(config.frontier_scan.clone(), stats.clone()),
                 running_queries: RunningQueryContainer::default(),
                 throttle: Throttle::new(compute_throttle_size(
                     ledger.account_count(),
@@ -617,7 +617,7 @@ impl Bootstrapper {
     fn wait_frontier(&self) -> Account {
         let mut result = Account::zero();
         self.wait(|i| {
-            result = i.frontiers.next(self.clock.now());
+            result = i.account_ranges.next(self.clock.now());
             if !result.is_zero() {
                 self.stats
                     .inc(StatType::BootstrapNext, DetailType::NextFrontier);
@@ -744,7 +744,7 @@ impl Bootstrapper {
 
                 {
                     let mut guard = self.mutex.lock().unwrap();
-                    guard.frontiers.process(query.start.into(), &frontiers);
+                    guard.account_ranges.process(query.start.into(), &frontiers);
                 }
 
                 // Allow some overfill to avoid unnecessarily dropping responses
@@ -1118,7 +1118,7 @@ struct BootstrapLogic {
     database_scan: DatabaseScan,
     running_queries: RunningQueryContainer,
     throttle: Throttle,
-    frontiers: FrontierScan,
+    account_ranges: AccountRanges,
     sync_dependencies_interval: Instant,
     config: BootstrapConfig,
     network: Arc<RwLock<Network>>,
@@ -1373,7 +1373,7 @@ impl BootstrapLogic {
             .leaf("throttle_success", self.throttle.successes(), 0)
             .node("accounts", self.candidate_accounts.container_info())
             .node("database_scan", self.database_scan.container_info())
-            .node("frontiers", self.frontiers.container_info())
+            .node("frontiers", self.account_ranges.container_info())
             .node("peers", self.scoring.container_info())
             .node("limiters", limiters)
             .finish()
