@@ -273,9 +273,9 @@ impl CandidateAccounts {
     }
 
     /// Sets information about the account chain that contains the block hash
-    pub fn sync_dependencies(&mut self) -> (usize, usize) {
+    /// Returns the number of inserted accounts
+    pub fn sync_dependencies(&mut self) -> usize {
         let mut inserted = 0;
-        let mut insert_failed = 0;
 
         // Sample all accounts with a known dependency account (> account 0)
         let begin = Account::zero().inc().unwrap();
@@ -284,24 +284,18 @@ impl CandidateAccounts {
                 break;
             }
 
-            if !self.blocked(&entry.dependency_account)
-                && !self.prioritized(&entry.dependency_account)
-            {
-                if Self::priority_set_impl(
-                    &entry.dependency_account,
-                    Self::PRIORITY_INITIAL,
-                    &self.blocking,
-                    &mut self.priorities,
-                ) {
-                    inserted += 1;
-                } else {
-                    insert_failed += 1;
-                }
+            if Self::priority_set_impl(
+                &entry.dependency_account,
+                Self::PRIORITY_INITIAL,
+                &self.blocking,
+                &mut self.priorities,
+            ) {
+                inserted += 1;
             }
         }
 
         self.trim_overflow();
-        (inserted, insert_failed)
+        inserted
     }
 
     pub fn blocked(&self, account: &Account) -> bool {
@@ -366,7 +360,7 @@ impl Default for CandidateAccounts {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct PriorityResult {
     pub account: Account,
     pub priority: Priority,
@@ -397,6 +391,14 @@ mod tests {
     }
 
     #[test]
+    fn blocking_unknown_account_does_nothing() {
+        let mut candidates = CandidateAccounts::default();
+        let blocked = candidates.block(Account::from(1), BlockHash::from(2));
+        assert!(!blocked);
+        assert_eq!(candidates.blocked_len(), 0);
+    }
+
+    #[test]
     fn unblock() {
         let mut candidates = CandidateAccounts::default();
         let account = Account::from(1);
@@ -407,6 +409,45 @@ mod tests {
 
         assert!(candidates.unblock(account, None));
         assert_eq!(candidates.blocked(&account), false);
+    }
+
+    #[test]
+    fn unblock_zero_account() {
+        let mut candidates = CandidateAccounts::default();
+        assert!(!candidates.unblock(Account::zero(), None));
+    }
+
+    #[test]
+    fn unblock_unknown_account() {
+        let mut candidates = CandidateAccounts::default();
+        assert!(!candidates.unblock(Account::from(1), None));
+    }
+
+    #[test]
+    fn unblock_with_unfulfilled_dependency_does_nothing() {
+        let mut candidates = CandidateAccounts::default();
+        let account = Account::from(1);
+        let hash = BlockHash::from(2);
+        candidates.priority_set_initial(&account);
+        candidates.block(account, hash);
+
+        let unblocked = candidates.unblock(account, Some(BlockHash::from(3)));
+        assert!(!unblocked);
+        assert!(candidates.blocked(&account));
+    }
+
+    #[test]
+    fn unblock_with_unknown_dependency_does_nothing() {
+        let mut candidates = CandidateAccounts::default();
+        let account = Account::from(1);
+        let dependency = BlockHash::from(2);
+        let unknown_dependency = BlockHash::from(3);
+        candidates.priority_set_initial(&account);
+        candidates.block(account, dependency);
+
+        let unblocked = candidates.unblock(account, Some(unknown_dependency));
+        assert!(!unblocked);
+        assert!(candidates.blocked(&account));
     }
 
     #[test]
@@ -501,6 +542,338 @@ mod tests {
         let prio = Priority::new(10.0);
         candidates.priority_set(&account, prio);
         assert_eq!(candidates.priority(&account), prio);
+    }
+
+    #[test]
+    fn priority_up_for_zero_account_fails() {
+        let mut candidates = CandidateAccounts::default();
+        let result = candidates.priority_up(&Account::zero());
+        assert_eq!(result, PriorityUpResult::InvalidAccount);
+        assert_eq!(candidates.blocked_len(), 0);
+        assert_eq!(candidates.priority_len(), 0);
+    }
+
+    #[test]
+    fn priority_up_for_blocked_account_fails() {
+        let mut candidates = CandidateAccounts::default();
+        let account = Account::from(1);
+        candidates.priority_set_initial(&account);
+        candidates.block(account, BlockHash::from(2));
+        let result = candidates.priority_up(&account);
+        assert_eq!(result, PriorityUpResult::AccountBlocked);
+        assert_eq!(candidates.blocked_len(), 1);
+    }
+
+    #[test]
+    fn priority_down_for_zero_account_fails() {
+        let mut candidates = CandidateAccounts::default();
+        let result = candidates.priority_down(&Account::zero());
+        assert_eq!(result, PriorityDownResult::InvalidAccount);
+        assert_eq!(candidates.blocked_len(), 0);
+        assert_eq!(candidates.priority_len(), 0);
+    }
+
+    #[test]
+    fn priority_set_for_zero_account_fails() {
+        let mut candidates = CandidateAccounts::default();
+        let success = candidates.priority_set_initial(&Account::zero());
+        assert_eq!(success, false);
+        assert_eq!(candidates.blocked_len(), 0);
+        assert_eq!(candidates.priority_len(), 0);
+    }
+
+    #[test]
+    fn priority_set_fails_for_blocked_account() {
+        let mut candidates = CandidateAccounts::default();
+        let account = Account::from(1);
+        candidates.priority_set_initial(&account);
+        candidates.block(account, BlockHash::from(2));
+        let success = candidates.priority_set(&account, Priority::new(42.0));
+
+        assert_eq!(success, false);
+        assert_eq!(candidates.blocked_len(), 1);
+        assert_eq!(candidates.priority_len(), 0);
+    }
+
+    #[test]
+    fn priority_erase() {
+        let mut candidates = CandidateAccounts::default();
+        let account1 = Account::from(1);
+        let account2 = Account::from(2);
+        candidates.priority_set_initial(&account1);
+        candidates.priority_set_initial(&account2);
+        let removed = candidates.priority_erase(&account1);
+        assert!(removed);
+        assert!(!candidates.prioritized(&account1));
+        assert!(candidates.prioritized(&account2));
+    }
+
+    #[test]
+    fn priority_erase_zero_account() {
+        let mut candidates = CandidateAccounts::default();
+        assert!(!candidates.priority_erase(&Account::zero()));
+    }
+
+    #[test]
+    fn timestamp_set_for_unknown_account_does_nothing() {
+        let mut candidates = CandidateAccounts::default();
+        candidates.timestamp_set(&Account::from(1), Timestamp::new_test_instance());
+        assert_eq!(candidates.priority_len(), 0);
+    }
+
+    #[test]
+    fn timestamp_set() {
+        let mut candidates = CandidateAccounts::default();
+        let account = Account::from(1);
+        candidates.priority_set_initial(&account);
+        let new_timestamp = Timestamp::new_test_instance() + Duration::from_secs(1000);
+        candidates.timestamp_set(&account, new_timestamp);
+        assert_eq!(
+            candidates.priorities.get(&account).unwrap().timestamp,
+            Some(new_timestamp)
+        );
+    }
+
+    #[test]
+    fn timestamp_reset() {
+        let mut candidates = CandidateAccounts::default();
+        let account = Account::from(1);
+        candidates.priority_set_initial(&account);
+        candidates.timestamp_reset(&account);
+        assert_eq!(candidates.priorities.get(&account).unwrap().timestamp, None);
+    }
+
+    #[test]
+    fn trim_priorities_on_overflow() {
+        let mut candidates = CandidateAccounts::new(CandidateAccountsConfig {
+            priorities_max: 2,
+            ..Default::default()
+        });
+        let account1 = Account::from(1);
+        let account2 = Account::from(2);
+        let account3 = Account::from(3);
+        candidates.priority_set(&account1, Priority::new(2.0));
+        candidates.priority_set(&account2, Priority::new(1.0));
+        candidates.priority_set(&account3, Priority::new(3.0));
+
+        assert_eq!(candidates.priority_len(), 2);
+        assert!(candidates.prioritized(&account1));
+        assert!(candidates.prioritized(&account3));
+        assert!(!candidates.prioritized(&account2));
+    }
+
+    #[test]
+    fn trim_bocked_on_overflow() {
+        let mut candidates = CandidateAccounts::new(CandidateAccountsConfig {
+            blocking_max: 2,
+            ..Default::default()
+        });
+        let account1 = Account::from(1);
+        let account2 = Account::from(2);
+        let account3 = Account::from(3);
+        candidates.priority_up(&account1);
+        candidates.priority_up(&account2);
+        candidates.priority_up(&account3);
+        candidates.block(account1, BlockHash::from(1));
+        candidates.block(account2, BlockHash::from(2));
+        candidates.block(account3, BlockHash::from(3));
+
+        assert_eq!(candidates.blocked_len(), 2);
+        assert!(candidates.blocked(&account2));
+        assert!(candidates.blocked(&account3));
+        assert!(!candidates.blocked(&account1));
+    }
+
+    #[test]
+    fn next_priority_empty() {
+        let candidates = CandidateAccounts::default();
+        let next = candidates.next_priority(Timestamp::new_test_instance(), |_| true);
+        assert_eq!(next, PriorityResult::default());
+    }
+
+    #[test]
+    fn next_priority() {
+        let mut candidates = CandidateAccounts::default();
+        let account = Account::from(1);
+        candidates.priority_set_initial(&account);
+        let now = Timestamp::new_test_instance();
+        let next = candidates.next_priority(now, |_| true);
+        assert_eq!(
+            next,
+            PriorityResult {
+                account,
+                priority: CandidateAccounts::PRIORITY_INITIAL,
+                fails: 0
+            }
+        );
+    }
+
+    #[test]
+    fn next_priority_none_above_cutoff() {
+        let mut candidates = CandidateAccounts::default();
+        let now = Timestamp::new_test_instance();
+        let account = Account::from(1);
+        candidates.priority_up(&account);
+        candidates.timestamp_set(&account, now);
+        let next = candidates.next_priority(now, |_| true);
+        assert_eq!(next, PriorityResult::default());
+    }
+
+    #[test]
+    fn next_priority_cutoff() {
+        let config = CandidateAccountsConfig::default();
+        let mut candidates = CandidateAccounts::new(config.clone());
+        let account1 = Account::from(1);
+        let account2 = Account::from(2);
+        candidates.priority_set(&account1, Priority::new(100.0));
+        candidates.priority_set(&account2, Priority::new(1.0));
+        let now = Timestamp::new_test_instance();
+        candidates.timestamp_set(&account1, now - config.cooldown + Duration::from_millis(1));
+        candidates.timestamp_set(&account2, now - config.cooldown);
+        let next = candidates.next_priority(now, |_| true);
+        assert_eq!(
+            next,
+            PriorityResult {
+                account: account2,
+                priority: Priority::new(1.0),
+                fails: 0
+            }
+        );
+    }
+
+    #[test]
+    fn next_priority_filter() {
+        let config = CandidateAccountsConfig::default();
+        let mut candidates = CandidateAccounts::new(config.clone());
+        let account1 = Account::from(1);
+        let account2 = Account::from(2);
+        let account3 = Account::from(2);
+        candidates.priority_set_initial(&account1);
+        candidates.priority_set_initial(&account2);
+        candidates.priority_set_initial(&account3);
+        let now = Timestamp::new_test_instance();
+        let next = candidates.next_priority(now, |a| *a == account2);
+        assert_eq!(
+            next,
+            PriorityResult {
+                account: account2,
+                priority: CandidateAccounts::PRIORITY_INITIAL,
+                fails: 0
+            }
+        );
+    }
+
+    #[test]
+    fn next_blocking_empty() {
+        let candidates = CandidateAccounts::default();
+        assert_eq!(candidates.next_blocking(|_| true), BlockHash::zero());
+    }
+
+    #[test]
+    fn next_blocking() {
+        let mut candidates = CandidateAccounts::default();
+        let account = Account::from(1);
+        let dependency = BlockHash::from(2);
+        candidates.priority_set_initial(&account);
+        candidates.block(account, dependency);
+        assert_eq!(candidates.next_blocking(|_| true), dependency);
+    }
+
+    #[test]
+    fn next_blocking_filter() {
+        let mut candidates = CandidateAccounts::default();
+        let account1 = Account::from(1);
+        let account2 = Account::from(2);
+        let account3 = Account::from(3);
+        let dependency = BlockHash::from(2);
+        candidates.priority_set_initial(&account1);
+        candidates.priority_set_initial(&account2);
+        candidates.priority_set_initial(&account3);
+        candidates.block(account1, BlockHash::from(1000));
+        candidates.block(account2, dependency);
+        candidates.block(account3, BlockHash::from(2000));
+        assert_eq!(candidates.next_blocking(|h| *h == dependency), dependency);
+    }
+
+    #[test]
+    fn sync_dependencies_empty() {
+        let mut candidates = CandidateAccounts::default();
+        let inserted = candidates.sync_dependencies();
+        assert_eq!(inserted, 0);
+    }
+
+    #[test]
+    fn sync_dependencies_insert_one_account() {
+        let mut candidates = CandidateAccounts::default();
+        let account = Account::from(1);
+        let dependency_account = Account::from(2);
+        let dependency = BlockHash::from(100);
+        candidates.priority_set_initial(&account);
+        candidates.block(account, dependency);
+        candidates.dependency_update(&dependency, dependency_account);
+
+        let inserted = candidates.sync_dependencies();
+
+        assert_eq!(inserted, 1);
+        assert!(candidates.prioritized(&dependency_account));
+    }
+
+    #[test]
+    fn sync_dependencies_doesnt_insert_when_dependency_account_already_prioritized() {
+        let mut candidates = CandidateAccounts::default();
+        let account = Account::from(1);
+        let dependency_account = Account::from(2);
+        let dependency = BlockHash::from(100);
+        candidates.priority_set_initial(&account);
+        candidates.block(account, dependency);
+        candidates.dependency_update(&dependency, dependency_account);
+        candidates.priority_set_initial(&dependency_account);
+
+        let inserted = candidates.sync_dependencies();
+
+        assert_eq!(inserted, 0);
+    }
+
+    #[test]
+    fn sync_dependencies_doesnt_insert_when_max_accounts_prioritized() {
+        let config = CandidateAccountsConfig {
+            priorities_max: 2,
+            ..Default::default()
+        };
+        let mut candidates = CandidateAccounts::new(config);
+        let account = Account::from(1);
+        let dependency_account = Account::from(2);
+        let dependency = BlockHash::from(100);
+        candidates.priority_set_initial(&account);
+        candidates.block(account, dependency);
+        candidates.dependency_update(&dependency, dependency_account);
+        candidates.priority_set_initial(&Account::from(9999));
+        candidates.priority_set_initial(&Account::from(8888));
+
+        let inserted = candidates.sync_dependencies();
+
+        assert_eq!(inserted, 0);
+    }
+
+    #[test]
+    fn blocked_half_full() {
+        let config = CandidateAccountsConfig {
+            blocking_max: 3,
+            ..Default::default()
+        };
+        let mut candidates = CandidateAccounts::new(config);
+        let account1 = Account::from(1);
+        let account2 = Account::from(2);
+
+        assert!(!candidates.blocked_half_full());
+
+        candidates.priority_set_initial(&account1);
+        candidates.block(account1, BlockHash::from(1));
+        assert!(!candidates.blocked_half_full());
+
+        candidates.priority_set_initial(&account2);
+        candidates.block(account2, BlockHash::from(2));
+        assert!(candidates.blocked_half_full());
     }
 
     #[test]

@@ -1335,17 +1335,19 @@ impl BootstrapLogic {
         if self.sync_dependencies_interval.elapsed() >= Duration::from_secs(60) {
             self.sync_dependencies_interval = Instant::now();
             stats.inc(StatType::Bootstrap, DetailType::SyncDependencies);
-            let (inserted, insert_failed) = self.candidate_accounts.sync_dependencies();
-            stats.add(
-                StatType::BootstrapAccountSets,
-                DetailType::PriorityInsert,
-                inserted as u64,
-            );
-            stats.add(
-                StatType::BootstrapAccountSets,
-                DetailType::PrioritizeFailed,
-                insert_failed as u64,
-            );
+            let inserted = self.candidate_accounts.sync_dependencies();
+            if inserted > 0 {
+                stats.add(
+                    StatType::BootstrapAccountSets,
+                    DetailType::PriorityInsert,
+                    inserted as u64,
+                );
+                stats.add(
+                    StatType::BootstrapAccountSets,
+                    DetailType::DependencySynced,
+                    inserted as u64,
+                );
+            }
         }
     }
 
