@@ -581,7 +581,7 @@ fn bootstrap_fork_open() {
     let mut system = System::new();
     let mut node_config = System::default_config();
     // Reduce cooldown to speed up fork resolution
-    node_config.bootstrap.account_sets.cooldown = Duration::from_millis(100);
+    node_config.bootstrap.candidate_accounts.cooldown = Duration::from_millis(100);
     // Make sure we can process the full account number range
     node_config.bootstrap.frontier_scan.head_parallelism = 3;
     // Disable rate limiting to speed up the scan
@@ -732,7 +732,7 @@ fn fork_bootstrap_flip() {
 
     let mut config2 = System::default_config();
     // Reduce cooldown to speed up fork resolution
-    config2.bootstrap.account_sets.cooldown = Duration::from_millis(100);
+    config2.bootstrap.candidate_accounts.cooldown = Duration::from_millis(100);
     let node2 = system.build_node().config(config2).disconnected().finish();
     node1
         .wallets
@@ -788,7 +788,7 @@ fn fork_multi_flip() {
 
     config.peering_port = Some(get_available_port());
     // Reduce cooldown to speed up fork resolution
-    config.bootstrap.account_sets.cooldown = Duration::from_millis(100);
+    config.bootstrap.candidate_accounts.cooldown = Duration::from_millis(100);
     let node2 = system.build_node().config(config).flags(flags).finish();
 
     let mut lattice = UnsavedBlockLatticeBuilder::new();

@@ -1,4 +1,4 @@
-use crate::bootstrap::{AccountSetsConfig, BootstrapConfig};
+use crate::bootstrap::{BootstrapConfig, CandidateAccountsConfig};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -37,7 +37,7 @@ impl From<&BootstrapConfig> for BootstrapToml {
             request_timeout: Some(config.request_timeout.as_millis() as u64),
             throttle_coefficient: Some(config.throttle_coefficient),
             throttle_wait: Some(config.throttle_wait.as_millis() as u64),
-            account_sets: Some((&config.account_sets).into()),
+            account_sets: Some((&config.candidate_accounts).into()),
             block_processor_threshold: Some(config.block_processor_theshold),
             max_requests: Some(config.max_requests),
             optimistic_request_percentage: Some(config.optimistic_request_percentage),
@@ -55,7 +55,7 @@ pub struct AccountSetsToml {
 
 impl Default for AccountSetsToml {
     fn default() -> Self {
-        let config = AccountSetsConfig::default();
+        let config = CandidateAccountsConfig::default();
         Self {
             consideration_count: Some(config.consideration_count),
             priorities_max: Some(config.priorities_max),
@@ -65,8 +65,8 @@ impl Default for AccountSetsToml {
     }
 }
 
-impl From<&AccountSetsConfig> for AccountSetsToml {
-    fn from(value: &AccountSetsConfig) -> Self {
+impl From<&CandidateAccountsConfig> for AccountSetsToml {
+    fn from(value: &CandidateAccountsConfig) -> Self {
         Self {
             consideration_count: Some(value.consideration_count),
             priorities_max: Some(value.priorities_max),
@@ -76,9 +76,9 @@ impl From<&AccountSetsConfig> for AccountSetsToml {
     }
 }
 
-impl From<&AccountSetsToml> for AccountSetsConfig {
+impl From<&AccountSetsToml> for CandidateAccountsConfig {
     fn from(toml: &AccountSetsToml) -> Self {
-        let mut config = AccountSetsConfig::default();
+        let mut config = CandidateAccountsConfig::default();
 
         if let Some(blocking_max) = toml.blocking_max {
             config.blocking_max = blocking_max;

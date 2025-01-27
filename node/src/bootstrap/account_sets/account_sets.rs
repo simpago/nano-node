@@ -8,14 +8,14 @@ use rsnano_nullable_clock::Timestamp;
 use std::{cmp::min, time::Duration};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct AccountSetsConfig {
+pub struct CandidateAccountsConfig {
     pub consideration_count: usize,
     pub priorities_max: usize,
     pub blocking_max: usize,
     pub cooldown: Duration,
 }
 
-impl Default for AccountSetsConfig {
+impl Default for CandidateAccountsConfig {
     fn default() -> Self {
         Self {
             consideration_count: 4,
@@ -42,14 +42,15 @@ pub(crate) enum PriorityDownResult {
     InvalidAccount,
 }
 
-/// This struct tracks various account sets which are shared among the multiple bootstrap threads
-pub(crate) struct AccountSets {
-    config: AccountSetsConfig,
+/// This struct tracks accounts which are candidates for the next bootstrap request or which are
+/// blocked
+pub(crate) struct CandidateAccounts {
+    config: CandidateAccountsConfig,
     priorities: PriorityContainer,
     blocking: BlockingContainer,
 }
 
-impl AccountSets {
+impl CandidateAccounts {
     pub const PRIORITY_INITIAL: Priority = Priority::new(2.0);
     pub const PRIORITY_INCREASE: Priority = Priority::new(2.0);
     pub const PRIORITY_DIVIDE: f64 = 2.0;
@@ -57,7 +58,7 @@ impl AccountSets {
     pub const PRIORITY_CUTOFF: Priority = Priority::new(0.15);
     pub const MAX_FAILS: usize = 3;
 
-    pub fn new(config: AccountSetsConfig) -> Self {
+    pub fn new(config: CandidateAccountsConfig) -> Self {
         Self {
             config,
             priorities: Default::default(),
@@ -105,7 +106,7 @@ impl AccountSets {
 
         let change_result = self.priorities.modify(account, |entry| {
             let priority = entry.priority / Self::PRIORITY_DIVIDE;
-            if entry.fails >= AccountSets::MAX_FAILS
+            if entry.fails >= CandidateAccounts::MAX_FAILS
                 || entry.fails as f64 >= entry.priority.as_f64()
                 || priority <= Self::PRIORITY_CUTOFF
             {
@@ -359,7 +360,7 @@ impl AccountSets {
     }
 }
 
-impl Default for AccountSets {
+impl Default for CandidateAccounts {
     fn default() -> Self {
         Self::new(Default::default())
     }
@@ -378,125 +379,140 @@ mod tests {
 
     #[test]
     fn empty_blocked() {
-        let sets = AccountSets::default();
-        assert_eq!(sets.blocked(&Account::from(1)), false);
+        let candidates = CandidateAccounts::default();
+        assert_eq!(candidates.blocked(&Account::from(1)), false);
     }
 
     #[test]
     fn block() {
-        let mut sets = AccountSets::default();
+        let mut candidates = CandidateAccounts::default();
         let account = Account::from(1);
         let hash = BlockHash::from(2);
-        sets.priority_up(&account);
+        candidates.priority_up(&account);
 
-        sets.block(account, hash);
+        candidates.block(account, hash);
 
-        assert!(sets.blocked(&account));
-        assert_eq!(sets.priority(&account), Priority::ZERO);
+        assert!(candidates.blocked(&account));
+        assert_eq!(candidates.priority(&account), Priority::ZERO);
     }
 
     #[test]
     fn unblock() {
-        let mut sets = AccountSets::default();
+        let mut candidates = CandidateAccounts::default();
         let account = Account::from(1);
         let hash = BlockHash::from(2);
-        sets.priority_up(&account);
+        candidates.priority_up(&account);
 
-        sets.block(account, hash);
+        candidates.block(account, hash);
 
-        assert!(sets.unblock(account, None));
-        assert_eq!(sets.blocked(&account), false);
+        assert!(candidates.unblock(account, None));
+        assert_eq!(candidates.blocked(&account), false);
     }
 
     #[test]
     fn priority_base() {
-        let sets = AccountSets::default();
-        assert_eq!(sets.priority(&Account::from(1)), Priority::ZERO);
+        let candidates = CandidateAccounts::default();
+        assert_eq!(candidates.priority(&Account::from(1)), Priority::ZERO);
     }
 
     #[test]
     fn priority_unblock() {
-        let mut sets = AccountSets::default();
+        let mut candidates = CandidateAccounts::default();
         let account = Account::from(1);
         let hash = BlockHash::from(2);
 
-        assert_eq!(sets.priority_up(&account), PriorityUpResult::Inserted);
-        assert_eq!(sets.priority(&account), AccountSets::PRIORITY_INITIAL);
+        assert_eq!(candidates.priority_up(&account), PriorityUpResult::Inserted);
+        assert_eq!(
+            candidates.priority(&account),
+            CandidateAccounts::PRIORITY_INITIAL
+        );
 
-        sets.block(account, hash);
-        sets.unblock(account, None);
+        candidates.block(account, hash);
+        candidates.unblock(account, None);
 
-        assert_eq!(sets.priority(&account), AccountSets::PRIORITY_INITIAL);
+        assert_eq!(
+            candidates.priority(&account),
+            CandidateAccounts::PRIORITY_INITIAL
+        );
     }
 
     #[test]
     fn priority_up_down() {
-        let mut sets = AccountSets::default();
+        let mut candidates = CandidateAccounts::default();
         let account = Account::from(1);
 
-        sets.priority_up(&account);
-        assert_eq!(sets.priority(&account), AccountSets::PRIORITY_INITIAL);
-
-        sets.priority_down(&account);
+        candidates.priority_up(&account);
         assert_eq!(
-            sets.priority(&account),
-            AccountSets::PRIORITY_INITIAL / AccountSets::PRIORITY_DIVIDE
+            candidates.priority(&account),
+            CandidateAccounts::PRIORITY_INITIAL
+        );
+
+        candidates.priority_down(&account);
+        assert_eq!(
+            candidates.priority(&account),
+            CandidateAccounts::PRIORITY_INITIAL / CandidateAccounts::PRIORITY_DIVIDE
         );
     }
 
     #[test]
     fn priority_down_empty() {
-        let mut sets = AccountSets::default();
+        let mut candidates = CandidateAccounts::default();
         let account = Account::from(1);
 
-        sets.priority_down(&account);
+        candidates.priority_down(&account);
 
-        assert_eq!(sets.priority(&account), Priority::ZERO);
+        assert_eq!(candidates.priority(&account), Priority::ZERO);
     }
 
     // Ensure priority value is bounded
     #[test]
     fn saturate_priority() {
-        let mut sets = AccountSets::default();
+        let mut candidates = CandidateAccounts::default();
         let account = Account::from(1);
 
         for _ in 0..100 {
-            sets.priority_up(&account);
+            candidates.priority_up(&account);
         }
-        assert_eq!(sets.priority(&account), AccountSets::PRIORITY_MAX);
+        assert_eq!(
+            candidates.priority(&account),
+            CandidateAccounts::PRIORITY_MAX
+        );
     }
 
     #[test]
     fn priority_down_saturate() {
-        let mut sets = AccountSets::default();
+        let mut candidates = CandidateAccounts::default();
         let account = Account::from(1);
-        sets.priority_up(&account);
-        assert_eq!(sets.priority(&account), AccountSets::PRIORITY_INITIAL);
+        candidates.priority_up(&account);
+        assert_eq!(
+            candidates.priority(&account),
+            CandidateAccounts::PRIORITY_INITIAL
+        );
         for _ in 0..10 {
-            sets.priority_down(&account);
+            candidates.priority_down(&account);
         }
-        assert_eq!(sets.prioritized(&account), false);
+        assert_eq!(candidates.prioritized(&account), false);
     }
 
     #[test]
     fn priority_set() {
-        let mut sets = AccountSets::default();
+        let mut candidates = CandidateAccounts::default();
         let account = Account::from(1);
         let prio = Priority::new(10.0);
-        sets.priority_set(&account, prio);
-        assert_eq!(sets.priority(&account), prio);
+        candidates.priority_set(&account, prio);
+        assert_eq!(candidates.priority(&account), prio);
     }
 
     #[test]
     fn container_info() {
-        let mut sets = AccountSets::default();
-        sets.priority_set_initial(&Account::from(1));
-        sets.priority_set_initial(&Account::from(2));
-        sets.priority_set_initial(&Account::from(3));
-        sets.block(Account::from(2), BlockHash::from(3));
-        sets.dependency_update(&BlockHash::from(3), Account::from(1000));
-        sets.block(Account::from(3), BlockHash::from(4));
-        let info = sets.container_info();
+        let mut candidates = CandidateAccounts::default();
+        candidates.priority_set_initial(&Account::from(1));
+        candidates.priority_set_initial(&Account::from(2));
+        candidates.priority_set_initial(&Account::from(3));
+        candidates.block(Account::from(2), BlockHash::from(3));
+        candidates.dependency_update(&BlockHash::from(3), Account::from(1000));
+        candidates.block(Account::from(3), BlockHash::from(4));
+        let info = candidates.container_info();
         assert_eq!(
             info,
             [

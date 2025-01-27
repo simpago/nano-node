@@ -732,20 +732,32 @@ mod tests {
 
         // Bootstrap Ascending Account Sets section
         assert_ne!(
-            deserialized.node.bootstrap.account_sets.blocking_max,
-            default_cfg.node.bootstrap.account_sets.blocking_max
+            deserialized.node.bootstrap.candidate_accounts.blocking_max,
+            default_cfg.node.bootstrap.candidate_accounts.blocking_max
         );
         assert_ne!(
-            deserialized.node.bootstrap.account_sets.consideration_count,
-            default_cfg.node.bootstrap.account_sets.consideration_count
+            deserialized
+                .node
+                .bootstrap
+                .candidate_accounts
+                .consideration_count,
+            default_cfg
+                .node
+                .bootstrap
+                .candidate_accounts
+                .consideration_count
         );
         assert_ne!(
-            deserialized.node.bootstrap.account_sets.cooldown,
-            default_cfg.node.bootstrap.account_sets.cooldown
+            deserialized.node.bootstrap.candidate_accounts.cooldown,
+            default_cfg.node.bootstrap.candidate_accounts.cooldown
         );
         assert_ne!(
-            deserialized.node.bootstrap.account_sets.priorities_max,
-            default_cfg.node.bootstrap.account_sets.priorities_max
+            deserialized
+                .node
+                .bootstrap
+                .candidate_accounts
+                .priorities_max,
+            default_cfg.node.bootstrap.candidate_accounts.priorities_max
         );
 
         // Bootstrap Server section

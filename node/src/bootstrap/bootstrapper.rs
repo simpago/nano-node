@@ -5,7 +5,8 @@ use super::{
     peer_scoring::PeerScoring,
     running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
     throttle::Throttle,
-    AccountSets, AccountSetsConfig, PriorityDownResult, PriorityResult, PriorityUpResult,
+    CandidateAccounts, CandidateAccountsConfig, PriorityDownResult, PriorityResult,
+    PriorityUpResult,
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, BlockSource, LedgerNotifications},
@@ -57,7 +58,7 @@ pub struct BootstrapConfig {
     pub min_protocol_version: u8,
     pub max_requests: usize,
     pub optimistic_request_percentage: u8,
-    pub account_sets: AccountSetsConfig,
+    pub candidate_accounts: CandidateAccountsConfig,
     pub frontier_scan: FrontierScanConfig,
 }
 
@@ -82,7 +83,7 @@ impl Default for BootstrapConfig {
             min_protocol_version: 0x14, // TODO don't hard code
             max_requests: 1024,
             optimistic_request_percentage: 75,
-            account_sets: Default::default(),
+            candidate_accounts: Default::default(),
             frontier_scan: Default::default(),
         }
     }
@@ -135,7 +136,7 @@ impl Bootstrapper {
             threads: Mutex::new(None),
             mutex: Arc::new(Mutex::new(BootstrapLogic {
                 stopped: false,
-                accounts: AccountSets::new(config.account_sets.clone()),
+                candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
                 scoring: PeerScoring::new(config.clone()),
                 database_scan: DatabaseScan::new(ledger.clone()),
                 frontiers: FrontierScan::new(config.frontier_scan.clone(), stats.clone()),
@@ -255,11 +256,11 @@ impl Bootstrapper {
     }
 
     pub fn priority_len(&self) -> usize {
-        self.mutex.lock().unwrap().accounts.priority_len()
+        self.mutex.lock().unwrap().candidate_accounts.priority_len()
     }
 
     pub fn blocked_len(&self) -> usize {
-        self.mutex.lock().unwrap().accounts.blocked_len()
+        self.mutex.lock().unwrap().candidate_accounts.blocked_len()
     }
 
     pub fn score_len(&self) -> usize {
@@ -267,11 +268,19 @@ impl Bootstrapper {
     }
 
     pub fn prioritized(&self, account: &Account) -> bool {
-        self.mutex.lock().unwrap().accounts.prioritized(account)
+        self.mutex
+            .lock()
+            .unwrap()
+            .candidate_accounts
+            .prioritized(account)
     }
 
     pub fn blocked(&self, account: &Account) -> bool {
-        self.mutex.lock().unwrap().accounts.blocked(account)
+        self.mutex
+            .lock()
+            .unwrap()
+            .candidate_accounts
+            .blocked(account)
     }
 
     /* Waits for a condition to be satisfied with incremental backoff */
@@ -501,7 +510,7 @@ impl Bootstrapper {
             self.mutex
                 .lock()
                 .unwrap()
-                .accounts
+                .candidate_accounts
                 .timestamp_set(&result.account, self.clock.now());
         }
     }
@@ -574,7 +583,7 @@ impl Bootstrapper {
 
     fn run_one_frontier(&self) {
         // No need to wait for blockprocessor, as we are not processing blocks
-        self.wait(|i| !i.accounts.priority_half_full());
+        self.wait(|i| !i.candidate_accounts.priority_half_full());
         self.wait(|_| self.frontiers_limiter.should_pass(1));
         self.wait(|_| self.workers.num_queued_tasks() < self.config.frontier_scan.max_pending);
         let Some(channel) = self.wait_channel() else {
@@ -829,7 +838,7 @@ impl Bootstrapper {
                                 stats.inc(StatType::Bootstrap, DetailType::TimestampReset);
                                 {
                                     let mut guard = data.lock().unwrap();
-                                    guard.accounts.timestamp_reset(&account);
+                                    guard.candidate_accounts.timestamp_reset(&account);
                                 }
                                 condition.notify_all();
                             }),
@@ -854,7 +863,7 @@ impl Bootstrapper {
 
                 {
                     let mut guard = self.mutex.lock().unwrap();
-                    match guard.accounts.priority_down(&query.account) {
+                    match guard.candidate_accounts.priority_down(&query.account) {
                         PriorityDownResult::Deprioritized => {
                             self.stats
                                 .inc(StatType::BootstrapAccountSets, DetailType::Deprioritize);
@@ -876,7 +885,7 @@ impl Bootstrapper {
                         PriorityDownResult::InvalidAccount => {}
                     }
 
-                    guard.accounts.timestamp_reset(&query.account);
+                    guard.candidate_accounts.timestamp_reset(&query.account);
 
                     if query.source == QuerySource::Database {
                         guard.throttle.add(false);
@@ -908,7 +917,7 @@ impl Bootstrapper {
         {
             let mut guard = self.mutex.lock().unwrap();
             let updated = guard
-                .accounts
+                .candidate_accounts
                 .dependency_update(&query.hash, response.account);
             if updated > 0 {
                 self.stats.add(
@@ -924,8 +933,8 @@ impl Bootstrapper {
             }
 
             if guard
-                .accounts
-                .priority_set(&response.account, AccountSets::PRIORITY_CUTOFF)
+                .candidate_accounts
+                .priority_set(&response.account, CandidateAccounts::PRIORITY_CUTOFF)
             {
                 self.priority_inserted();
             } else {
@@ -1012,7 +1021,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
             };
             let mut guard = self_l.mutex.lock().unwrap();
             for block in blocks {
-                guard.accounts.unblock(block.account(), None);
+                guard.candidate_accounts.unblock(block.account(), None);
             }
         });
 
@@ -1020,7 +1029,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
             .mutex
             .lock()
             .unwrap()
-            .accounts
+            .candidate_accounts
             .priority_set_initial(genesis_account);
 
         if inserted {
@@ -1104,7 +1113,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
 
 struct BootstrapLogic {
     stopped: bool,
-    accounts: AccountSets,
+    candidate_accounts: CandidateAccounts,
     scoring: PeerScoring,
     database_scan: DatabaseScan,
     running_queries: RunningQueryContainer,
@@ -1139,7 +1148,7 @@ impl BootstrapLogic {
                     let saved_block = saved_block.unwrap();
                     let account = saved_block.account();
                     // If we've inserted any block in to an account, unmark it as blocked
-                    if self.accounts.unblock(account, None) {
+                    if self.candidate_accounts.unblock(account, None) {
                         stats.inc(StatType::BootstrapAccountSets, DetailType::Unblock);
                         stats.inc(
                             StatType::BootstrapAccountSets,
@@ -1149,7 +1158,7 @@ impl BootstrapLogic {
                         stats.inc(StatType::BootstrapAccountSets, DetailType::UnblockFailed);
                     }
 
-                    match self.accounts.priority_up(&account) {
+                    match self.candidate_accounts.priority_up(&account) {
                         PriorityUpResult::Updated => {
                             stats.inc(StatType::BootstrapAccountSets, DetailType::Prioritize);
                         }
@@ -1166,7 +1175,7 @@ impl BootstrapLogic {
                     if saved_block.is_send() {
                         let destination = saved_block.destination().unwrap();
                         // Unblocking automatically inserts account into priority set
-                        if self.accounts.unblock(destination, Some(hash)) {
+                        if self.candidate_accounts.unblock(destination, Some(hash)) {
                             stats.inc(StatType::BootstrapAccountSets, DetailType::Unblock);
                             stats.inc(
                                 StatType::BootstrapAccountSets,
@@ -1175,7 +1184,7 @@ impl BootstrapLogic {
                         } else {
                             stats.inc(StatType::BootstrapAccountSets, DetailType::UnblockFailed);
                         }
-                        if self.accounts.priority_set_initial(&destination) {
+                        if self.candidate_accounts.priority_set_initial(&destination) {
                             stats.inc(StatType::BootstrapAccountSets, DetailType::PriorityInsert);
                         } else {
                             stats.inc(StatType::BootstrapAccountSets, DetailType::PrioritizeFailed);
@@ -1190,7 +1199,7 @@ impl BootstrapLogic {
 
                     if !account.is_zero() && !source.is_zero() {
                         // Mark account as blocked because it is missing the source block
-                        let blocked = self.accounts.block(*account, source);
+                        let blocked = self.candidate_accounts.block(*account, source);
                         if blocked {
                             stats.inc(
                                 StatType::BootstrapAccountSets,
@@ -1206,12 +1215,12 @@ impl BootstrapLogic {
             BlockStatus::GapPrevious => {
                 // Prevent live traffic from evicting accounts from the priority list
                 if source == BlockSource::Live
-                    && !self.accounts.priority_half_full()
-                    && !self.accounts.blocked_half_full()
+                    && !self.candidate_accounts.priority_half_full()
+                    && !self.candidate_accounts.blocked_half_full()
                 {
                     if block.block_type() == BlockType::State {
                         let account = block.account_field().unwrap();
-                        if self.accounts.priority_set_initial(&account) {
+                        if self.candidate_accounts.priority_set_initial(&account) {
                             stats.inc(StatType::BootstrapAccountSets, DetailType::PriorityInsert);
                         } else {
                             stats.inc(StatType::BootstrapAccountSets, DetailType::PrioritizeFailed);
@@ -1221,7 +1230,7 @@ impl BootstrapLogic {
             }
             BlockStatus::GapEpochOpenPending => {
                 // Epoch open blocks for accounts that don't have any pending blocks yet
-                if self.accounts.priority_erase(account) {
+                if self.candidate_accounts.priority_erase(account) {
                     stats.inc(StatType::BootstrapAccountSets, DetailType::PriorityErase);
                 }
             }
@@ -1241,7 +1250,7 @@ impl BootstrapLogic {
     }
 
     fn next_priority(&mut self, stats: &Stats, now: Timestamp) -> PriorityResult {
-        let next = self.accounts.next_priority(now, |account| {
+        let next = self.candidate_accounts.next_priority(now, |account| {
             self.running_queries
                 .count_by_account(account, QuerySource::Priority)
                 < 4
@@ -1289,7 +1298,7 @@ impl BootstrapLogic {
     /* Waits for next available blocking block */
     fn next_blocking(&self, stats: &Stats) -> BlockHash {
         let blocking = self
-            .accounts
+            .candidate_accounts
             .next_blocking(|hash| self.count_tags_by_hash(hash, QuerySource::Dependencies) == 0);
 
         if blocking.is_zero() {
@@ -1326,7 +1335,7 @@ impl BootstrapLogic {
         if self.sync_dependencies_interval.elapsed() >= Duration::from_secs(60) {
             self.sync_dependencies_interval = Instant::now();
             stats.inc(StatType::Bootstrap, DetailType::SyncDependencies);
-            let (inserted, insert_failed) = self.accounts.sync_dependencies();
+            let (inserted, insert_failed) = self.candidate_accounts.sync_dependencies();
             stats.add(
                 StatType::BootstrapAccountSets,
                 DetailType::PriorityInsert,
@@ -1360,7 +1369,7 @@ impl BootstrapLogic {
             )
             .leaf("throttle", self.throttle.len(), 0)
             .leaf("throttle_success", self.throttle.successes(), 0)
-            .node("accounts", self.accounts.container_info())
+            .node("accounts", self.candidate_accounts.container_info())
             .node("database_scan", self.database_scan.container_info())
             .node("frontiers", self.frontiers.container_info())
             .node("peers", self.scoring.container_info())
@@ -1530,7 +1539,7 @@ fn process_frontiers(
     for account in result {
         // Use the lowest possible priority here
         guard
-            .accounts
-            .priority_set(&account, AccountSets::PRIORITY_CUTOFF);
+            .candidate_accounts
+            .priority_set(&account, CandidateAccounts::PRIORITY_CUTOFF);
     }
 }

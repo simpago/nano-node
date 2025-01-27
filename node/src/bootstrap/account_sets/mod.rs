@@ -4,5 +4,6 @@ mod priority;
 mod priority_container;
 
 pub(crate) use account_sets::{
-    AccountSets, AccountSetsConfig, PriorityDownResult, PriorityResult, PriorityUpResult,
+    CandidateAccounts, CandidateAccountsConfig, PriorityDownResult, PriorityResult,
+    PriorityUpResult,
 };

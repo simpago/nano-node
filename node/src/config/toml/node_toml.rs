@@ -247,7 +247,7 @@ impl NodeConfig {
                 config.enable_frontier_scan = *enable;
             }
             if let Some(account_sets) = &ascending_toml.account_sets {
-                config.account_sets = account_sets.into();
+                config.candidate_accounts = account_sets.into();
             }
             if let Some(block_wait_count) = ascending_toml.block_processor_threshold {
                 config.block_processor_theshold = block_wait_count;
@@ -520,7 +520,7 @@ mod tests {
         assert_eq!(ascending.optimistic_request_percentage, 42);
         assert_eq!(ascending.database_warmup_ratio, 108);
 
-        let sets = &cfg.bootstrap.account_sets;
+        let sets = &cfg.bootstrap.candidate_accounts;
         assert_eq!(sets.blocking_max, 200);
         assert_eq!(sets.consideration_count, 201);
         assert_eq!(sets.cooldown, Duration::from_millis(203));
