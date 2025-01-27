@@ -4,10 +4,12 @@ use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
 /// Waits until a channel becomes available
+#[derive(Clone)]
 pub(super) struct ChannelWaiter {
     state: ChannelWaitState,
 }
 
+#[derive(Clone)]
 enum ChannelWaitState {
     Initial,
     WaitRunningQueries,
