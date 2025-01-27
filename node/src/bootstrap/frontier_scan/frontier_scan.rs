@@ -1,14 +1,11 @@
-use rand::{thread_rng, RngCore};
 use rsnano_core::Account;
+use rsnano_messages::{AscPullReqType, FrontiersReqPayload};
 use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
 use crate::{
-    bootstrap::{
-        channel_waiter::ChannelWaiter, running_query_container::QuerySource, BootstrapAction,
-        BootstrapLogic, WaitResult,
-    },
+    bootstrap::{channel_waiter::ChannelWaiter, BootstrapAction, BootstrapLogic, WaitResult},
     stats::{DetailType, StatType},
     utils::ThreadPool,
 };
@@ -25,6 +22,7 @@ enum FrontierScanState {
     WaitChannel(ChannelWaiter),
     WaitFrontier(Arc<Channel>),
     Send(Arc<Channel>, Account),
+    Done(Arc<Channel>, AscPullReqType),
 }
 
 impl FrontierScan {
@@ -46,7 +44,8 @@ impl FrontierScan {
             FrontierScanState::WaitWorkers => Self::wait_workers(logic),
             FrontierScanState::WaitChannel(waiter) => Self::wait_channel(logic, waiter, now),
             FrontierScanState::WaitFrontier(channel) => Self::wait_frontier(logic, channel, now),
-            FrontierScanState::Send(channel, start) => Self::send(logic, channel, *start, now),
+            FrontierScanState::Send(channel, start) => Self::send(channel.clone(), *start),
+            FrontierScanState::Done(_, _) => None,
         }
     }
 
@@ -109,25 +108,33 @@ impl FrontierScan {
         }
     }
 
-    fn send(
-        logic: &mut BootstrapLogic,
-        channel: &Channel,
-        start: Account,
-        now: Timestamp,
-    ) -> Option<FrontierScanState> {
-        let id = thread_rng().next_u64();
-        let message = logic.request_frontiers(id, now, start, QuerySource::Frontiers);
-        let _sent = logic.send(channel, &message, id, now);
-        // TODO what to do if message could not be sent?
-        Some(FrontierScanState::Initial)
+    fn send(channel: Arc<Channel>, start: Account) -> Option<FrontierScanState> {
+        Some(FrontierScanState::Done(
+            channel,
+            Self::request_frontiers(start),
+        ))
+    }
+
+    fn request_frontiers(start: Account) -> AscPullReqType {
+        AscPullReqType::Frontiers(FrontiersReqPayload {
+            start,
+            count: FrontiersReqPayload::MAX_FRONTIERS,
+        })
     }
 }
 
-impl BootstrapAction<()> for FrontierScan {
-    fn run(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<()> {
+impl BootstrapAction<(Arc<Channel>, AscPullReqType)> for FrontierScan {
+    fn run(
+        &mut self,
+        logic: &mut BootstrapLogic,
+        now: Timestamp,
+    ) -> WaitResult<(Arc<Channel>, AscPullReqType)> {
         let mut state_changed = false;
         loop {
             match self.next_state(logic, now) {
+                Some(FrontierScanState::Done(channel, request)) => {
+                    return WaitResult::Finished((channel, request))
+                }
                 Some(new_state) => {
                     self.state = new_state;
                     state_changed = true;

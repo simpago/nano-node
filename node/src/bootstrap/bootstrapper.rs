@@ -519,8 +519,36 @@ impl Bootstrapper {
     }
 
     fn run_frontiers(&self) {
-        let frontier_scan = FrontierScan::new();
-        self.wait_for(frontier_scan);
+        loop {
+            let frontier_scan = FrontierScan::new();
+            match self.wait_for(frontier_scan) {
+                Some((channel, req)) => {
+                    let AscPullReqType::Frontiers(f) = &req else {
+                        panic!("incorrect message type");
+                    };
+                    let id = thread_rng().next_u64();
+                    let now = self.clock.now();
+                    let query = RunningQuery {
+                        query_type: QueryType::Frontiers,
+                        source: QuerySource::Frontiers,
+                        start: f.start.into(),
+                        account: Account::zero(),
+                        hash: BlockHash::zero(),
+                        count: 0,
+                        id,
+                        sent: now,
+                        response_cutoff: now + self.config.request_timeout * 4,
+                    };
+                    let mut guard = self.mutex.lock().unwrap();
+                    debug_assert!(!guard.running_queries.contains(query.id));
+                    guard.running_queries.insert(query.clone());
+                    let message = Message::AscPullReq(AscPullReq { id, req_type: req });
+                    let _sent = guard.send(&channel, &message, id, now);
+                    // TODO what to do if message could not be sent?
+                }
+                None => break,
+            }
+        }
     }
 
     fn run_dependencies(&self) {
@@ -1258,27 +1286,6 @@ impl BootstrapLogic {
 
     pub fn send_query_failed(&mut self, id: u64) {
         self.running_queries.remove(id);
-    }
-
-    pub fn request_frontiers(
-        &mut self,
-        id: u64,
-        now: Timestamp,
-        start: Account,
-        source: QuerySource,
-    ) -> Message {
-        let query = RunningQuery {
-            query_type: QueryType::Frontiers,
-            source,
-            start: start.into(),
-            account: Account::zero(),
-            hash: BlockHash::zero(),
-            count: 0,
-            id,
-            sent: now,
-            response_cutoff: now + self.config.request_timeout * 4,
-        };
-        self.create_asc_pull_request(&query)
     }
 
     pub fn create_asc_pull_request(&mut self, query: &RunningQuery) -> Message {
