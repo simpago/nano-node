@@ -1,6 +1,6 @@
-use super::ordered_heads::HeadsContainer;
+use super::heads_container::HeadsContainer;
 use crate::{
-    bootstrap::ordered_heads::FrontierHead,
+    bootstrap::heads_container::FrontierHead,
     stats::{DetailType, StatType, Stats},
 };
 use primitive_types::U256;

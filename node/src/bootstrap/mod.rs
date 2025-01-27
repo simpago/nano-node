@@ -4,7 +4,7 @@ mod candidate_accounts;
 mod crawlers;
 mod database_scan;
 mod frontier_scan;
-mod ordered_heads;
+mod heads_container;
 mod peer_scoring;
 mod running_query_container;
 mod throttle;
