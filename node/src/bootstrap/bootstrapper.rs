@@ -154,7 +154,6 @@ impl Bootstrapper {
                 stats: stats.clone(),
                 message_sender,
                 block_processor: block_processor.clone(),
-                ledger: ledger.clone(),
             })),
             block_processor,
             condition: Arc::new(Condvar::new()),
@@ -280,15 +279,6 @@ impl Bootstrapper {
                 .unwrap()
                 .0;
         }
-    }
-
-    fn wait_priority(&self) -> PriorityResult {
-        let mut result = PriorityResult::default();
-        self.wait(|i| {
-            result = i.next_priority(self.clock.now());
-            !result.account.is_zero()
-        });
-        result
     }
 
     fn wait_database(&self, should_throttle: bool) -> Account {
@@ -437,14 +427,9 @@ impl Bootstrapper {
 
     fn run_one_priority(&self) {
         let prio_query = PriorityQuery::new();
-        let Some(channel) = self.wait_for(prio_query) else {
+        let Some((channel, result)) = self.wait_for(prio_query) else {
             return;
         };
-
-        let result = self.wait_priority();
-        if result.account.is_zero() {
-            return;
-        }
 
         // Decide how many blocks to request
         let min_pull_count = 2;
@@ -1046,7 +1031,6 @@ pub(super) struct BootstrapLogic {
     pub stats: Arc<Stats>,
     pub message_sender: MessageSender,
     pub block_processor: Arc<BlockProcessor>,
-    pub ledger: Arc<Ledger>,
 }
 
 impl BootstrapLogic {
