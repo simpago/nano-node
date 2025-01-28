@@ -178,32 +178,12 @@ impl Bootstrapper {
         }
     }
 
-    pub fn priority_len(&self) -> usize {
-        self.mutex.lock().unwrap().candidate_accounts.priority_len()
-    }
-
-    pub fn blocked_len(&self) -> usize {
-        self.mutex.lock().unwrap().candidate_accounts.blocked_len()
-    }
-
-    pub fn score_len(&self) -> usize {
-        self.mutex.lock().unwrap().scoring.len()
-    }
-
     pub fn prioritized(&self, account: &Account) -> bool {
         self.mutex
             .lock()
             .unwrap()
             .candidate_accounts
             .prioritized(account)
-    }
-
-    pub fn blocked(&self, account: &Account) -> bool {
-        self.mutex
-            .lock()
-            .unwrap()
-            .candidate_accounts
-            .blocked(account)
     }
 
     fn wait_for<A, T>(&self, mut action: A) -> Option<T>

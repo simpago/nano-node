@@ -137,6 +137,7 @@ impl RunningQueryContainer {
         self.sequenced.len()
     }
 
+    #[allow(dead_code)]
     pub fn contains(&self, id: u64) -> bool {
         self.by_id.contains_key(&id)
     }

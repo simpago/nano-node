@@ -306,10 +306,12 @@ impl CandidateAccounts {
         self.priorities.contains(account)
     }
 
+    #[allow(dead_code)]
     pub fn priority_len(&self) -> usize {
         self.priorities.len()
     }
 
+    #[allow(dead_code)]
     pub fn blocked_len(&self) -> usize {
         self.blocking.len()
     }

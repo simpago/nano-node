@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::{
     channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapLogic, WaitResult,
 };
@@ -7,6 +5,7 @@ use rsnano_core::Account;
 use rsnano_messages::{AccountInfoReqPayload, AscPullReqType, HashType};
 use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
+use std::sync::Arc;
 
 pub(super) struct DependencyQuery {
     state: DependencyQueryState,
