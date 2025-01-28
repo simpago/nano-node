@@ -1,13 +1,13 @@
 use crate::bootstrap::state::BootstrapState;
-use crate::bootstrap::{
-    channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, WaitResult,
-};
+use crate::bootstrap::{AscPullQuerySpec, BootstrapAction, WaitResult};
 use crate::stats::{DetailType, StatType, Stats};
 use rsnano_core::Account;
 use rsnano_messages::{AccountInfoReqPayload, AscPullReqType, HashType};
 use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
+
+use super::channel_waiter::ChannelWaiter;
 
 pub(super) struct DependencyRequester {
     state: DependencyState,

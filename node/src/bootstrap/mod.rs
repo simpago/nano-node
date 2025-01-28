@@ -2,7 +2,6 @@ mod block_inspector;
 mod bootstrap_responder;
 mod bootstrapper;
 mod candidate_accounts;
-mod channel_waiter;
 mod cleanup;
 mod crawlers;
 mod frontier_scan;

@@ -1,8 +1,5 @@
 use crate::{
-    bootstrap::{
-        channel_waiter::ChannelWaiter, state::BootstrapState, AscPullQuerySpec, BootstrapAction,
-        WaitResult,
-    },
+    bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapAction, WaitResult},
     stats::{DetailType, StatType, Stats},
     utils::{ThreadPool, ThreadPoolImpl},
 };
@@ -11,6 +8,8 @@ use rsnano_messages::{AscPullReqType, FrontiersReqPayload};
 use rsnano_network::{bandwidth_limiter::RateLimiter, Channel};
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
+
+use super::channel_waiter::ChannelWaiter;
 
 pub(crate) struct FrontierRequester {
     state: FrontierState,

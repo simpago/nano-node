@@ -1,3 +1,4 @@
+mod channel_waiter;
 mod dependency_requester;
 mod frontier_requester;
 mod priority_requester;

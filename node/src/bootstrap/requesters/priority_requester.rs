@@ -1,6 +1,6 @@
 use crate::bootstrap::{
-    channel_waiter::ChannelWaiter, state::BootstrapState, AscPullQuerySpec, BootstrapAction,
-    BootstrapConfig, BootstrapResponder, WaitResult,
+    state::BootstrapState, AscPullQuerySpec, BootstrapAction, BootstrapConfig, BootstrapResponder,
+    WaitResult,
 };
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
@@ -14,6 +14,8 @@ use rsnano_messages::{AscPullReqType, BlocksReqPayload, HashType};
 use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
 use std::{cmp::min, sync::Arc};
+
+use super::channel_waiter::ChannelWaiter;
 
 pub(super) struct PriorityRequester {
     state: PriorityState,

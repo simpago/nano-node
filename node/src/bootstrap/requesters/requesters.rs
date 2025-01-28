@@ -1,5 +1,4 @@
 use crate::bootstrap::{
-    channel_waiter::ChannelWaiter,
     running_query_container::{QueryType, RunningQuery},
     state::BootstrapState,
     AscPullQuerySpec, BootstrapAction, BootstrapConfig,
@@ -27,8 +26,8 @@ use std::{
 };
 
 use super::{
-    dependency_requester::DependencyRequester, frontier_requester::FrontierRequester,
-    priority_requester::PriorityRequester,
+    channel_waiter::ChannelWaiter, dependency_requester::DependencyRequester,
+    frontier_requester::FrontierRequester, priority_requester::PriorityRequester,
 };
 
 /// Manages the threads that send out AscPullReqs
