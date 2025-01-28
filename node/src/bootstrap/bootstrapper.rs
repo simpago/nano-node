@@ -642,38 +642,28 @@ impl BootstrapExt for Arc<Bootstrapper> {
             return;
         }
 
+        let frontiers = if self.config.enable_frontier_scan {
+            Some(spawn_query(
+                "Bootstrap front",
+                FrontierScan::new(),
+                self.clone(),
+            ))
+        } else {
+            None
+        };
+
         let priorities = if self.config.enable_scan {
-            let self_l = Arc::clone(self);
-            Some(
-                std::thread::Builder::new()
-                    .name("Bootstrap".to_string())
-                    .spawn(Box::new(move || self_l.run_queries(PriorityQuery::new())))
-                    .unwrap(),
-            )
+            Some(spawn_query("Bootstrap", PriorityQuery::new(), self.clone()))
         } else {
             None
         };
 
         let dependencies = if self.config.enable_dependency_walker {
-            let self_l = Arc::clone(self);
-            Some(
-                std::thread::Builder::new()
-                    .name("Bootstrap walkr".to_string())
-                    .spawn(Box::new(move || self_l.run_queries(DependencyQuery::new())))
-                    .unwrap(),
-            )
-        } else {
-            None
-        };
-
-        let frontiers = if self.config.enable_frontier_scan {
-            let self_l = Arc::clone(self);
-            Some(
-                std::thread::Builder::new()
-                    .name("Bootstrap front".to_string())
-                    .spawn(Box::new(move || self_l.run_queries(FrontierScan::new())))
-                    .unwrap(),
-            )
+            Some(spawn_query(
+                "Bootstrap walkr",
+                DependencyQuery::new(),
+                self.clone(),
+            ))
         } else {
             None
         };
@@ -1134,4 +1124,18 @@ fn process_frontiers(
             .candidate_accounts
             .priority_set(&account, CandidateAccounts::PRIORITY_CUTOFF);
     }
+}
+
+fn spawn_query<T>(
+    name: impl Into<String>,
+    query_factory: T,
+    bootstrapper: Arc<Bootstrapper>,
+) -> JoinHandle<()>
+where
+    T: BootstrapAction<AscPullQuerySpec> + Send + 'static,
+{
+    std::thread::Builder::new()
+        .name(name.into())
+        .spawn(Box::new(move || bootstrapper.run_queries(query_factory)))
+        .unwrap()
 }
