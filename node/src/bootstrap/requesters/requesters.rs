@@ -1,9 +1,6 @@
-use super::{
+use crate::bootstrap::{
     bootstrap_state::BootstrapState,
     channel_waiter::ChannelWaiter,
-    dependency_requester::DependencyRequester,
-    frontier_scan::FrontierRequester,
-    priority_requester::PriorityRequester,
     running_query_container::{QueryType, RunningQuery},
     AscPullQuerySpec, BootstrapAction, BootstrapConfig,
 };
@@ -29,8 +26,13 @@ use std::{
     time::Duration,
 };
 
+use super::{
+    dependency_requester::DependencyRequester, frontier_requester::FrontierRequester,
+    priority_requester::PriorityRequester,
+};
+
 /// Manages the threads that send out AscPullReqs
-pub(super) struct Requesters {
+pub(crate) struct Requesters {
     limiter: Arc<RateLimiter>,
     config: BootstrapConfig,
     workers: Arc<ThreadPoolImpl>,
@@ -46,7 +48,7 @@ pub(super) struct Requesters {
 }
 
 impl Requesters {
-    pub(super) fn new(
+    pub(crate) fn new(
         limiter: Arc<RateLimiter>,
         config: BootstrapConfig,
         workers: Arc<ThreadPoolImpl>,
@@ -154,7 +156,7 @@ impl Requesters {
     }
 }
 
-pub(super) struct RequesterThreads {
+pub struct RequesterThreads {
     pub priorities: Option<JoinHandle<()>>,
     pub dependencies: Option<JoinHandle<()>>,
     pub frontiers: Option<JoinHandle<()>>,

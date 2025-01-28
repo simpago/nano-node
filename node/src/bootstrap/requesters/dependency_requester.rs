@@ -1,4 +1,4 @@
-use super::{
+use crate::bootstrap::{
     channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapState, WaitResult,
 };
 use crate::stats::{DetailType, StatType, Stats};

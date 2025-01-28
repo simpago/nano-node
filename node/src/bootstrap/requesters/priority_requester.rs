@@ -1,4 +1,4 @@
-use super::{
+use crate::bootstrap::{
     bootstrap_state::BootstrapState, channel_waiter::ChannelWaiter, AscPullQuerySpec,
     BootstrapAction, BootstrapConfig, BootstrapResponder, WaitResult,
 };
