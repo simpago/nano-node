@@ -1,20 +1,23 @@
-use rsnano_core::{Account, BlockHash};
-use rsnano_messages::{AscPullReqType, FrontiersReqPayload};
-use rsnano_network::Channel;
-use rsnano_nullable_clock::Timestamp;
-use std::sync::Arc;
-
 use crate::{
     bootstrap::{
         channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapLogic,
         WaitResult,
     },
-    stats::{DetailType, StatType},
-    utils::ThreadPool,
+    stats::{DetailType, StatType, Stats},
+    utils::{ThreadPool, ThreadPoolImpl},
 };
+use rsnano_core::{Account, BlockHash};
+use rsnano_messages::{AscPullReqType, FrontiersReqPayload};
+use rsnano_network::{bandwidth_limiter::RateLimiter, Channel};
+use rsnano_nullable_clock::Timestamp;
+use std::sync::Arc;
 
 pub(crate) struct FrontierQuery {
     state: FrontierQueryState,
+    stats: Arc<Stats>,
+    frontiers_limiter: RateLimiter,
+    workers: Arc<ThreadPoolImpl>,
+    max_pending: usize,
 }
 
 enum FrontierQueryState {
@@ -28,9 +31,18 @@ enum FrontierQueryState {
 }
 
 impl FrontierQuery {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(
+        workers: Arc<ThreadPoolImpl>,
+        stats: Arc<Stats>,
+        rate_limit: usize,
+        max_pending: usize,
+    ) -> Self {
         Self {
             state: FrontierQueryState::Initial,
+            stats,
+            frontiers_limiter: RateLimiter::new(rate_limit),
+            workers,
+            max_pending,
         }
     }
 
@@ -40,19 +52,20 @@ impl FrontierQuery {
         now: Timestamp,
     ) -> Option<FrontierQueryState> {
         match &mut self.state {
-            FrontierQueryState::Initial => Self::initialize(logic),
+            FrontierQueryState::Initial => self.initialize(),
             FrontierQueryState::WaitCandidateAccounts => Self::wait_candidate_accounts(logic),
-            FrontierQueryState::WaitLimiter => Self::wait_limiter(logic),
-            FrontierQueryState::WaitWorkers => Self::wait_workers(logic),
+            FrontierQueryState::WaitLimiter => self.wait_limiter(),
+            FrontierQueryState::WaitWorkers => self.wait_workers(),
             FrontierQueryState::WaitChannel(waiter) => Self::wait_channel(logic, waiter, now),
-            FrontierQueryState::WaitFrontier(channel) => Self::wait_frontier(logic, channel, now),
+            FrontierQueryState::WaitFrontier(channel) => {
+                Self::wait_frontier(logic, channel, &self.stats, now)
+            }
             FrontierQueryState::Done(_, _) => None,
         }
     }
 
-    fn initialize(logic: &BootstrapLogic) -> Option<FrontierQueryState> {
-        logic
-            .stats
+    fn initialize(&self) -> Option<FrontierQueryState> {
+        self.stats
             .inc(StatType::Bootstrap, DetailType::LoopFrontiers);
         Some(FrontierQueryState::WaitCandidateAccounts)
     }
@@ -65,16 +78,16 @@ impl FrontierQuery {
         }
     }
 
-    fn wait_limiter(logic: &BootstrapLogic) -> Option<FrontierQueryState> {
-        if logic.frontiers_limiter.should_pass(1) {
+    fn wait_limiter(&self) -> Option<FrontierQueryState> {
+        if self.frontiers_limiter.should_pass(1) {
             Some(FrontierQueryState::WaitWorkers)
         } else {
             None
         }
     }
 
-    fn wait_workers(logic: &BootstrapLogic) -> Option<FrontierQueryState> {
-        if logic.workers.num_queued_tasks() < logic.config.frontier_scan.max_pending {
+    fn wait_workers(&self) -> Option<FrontierQueryState> {
+        if self.workers.num_queued_tasks() < self.max_pending {
             Some(FrontierQueryState::WaitChannel(ChannelWaiter::new()))
         } else {
             None
@@ -96,13 +109,12 @@ impl FrontierQuery {
     fn wait_frontier(
         logic: &mut BootstrapLogic,
         channel: &Arc<Channel>,
+        stats: &Stats,
         now: Timestamp,
     ) -> Option<FrontierQueryState> {
         let start = logic.account_ranges.next(now);
         if !start.is_zero() {
-            logic
-                .stats
-                .inc(StatType::BootstrapNext, DetailType::NextFrontier);
+            stats.inc(StatType::BootstrapNext, DetailType::NextFrontier);
             let request = Self::request_frontiers(start);
             Some(FrontierQueryState::Done(channel.clone(), request))
         } else {

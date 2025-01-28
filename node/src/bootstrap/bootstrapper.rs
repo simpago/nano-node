@@ -5,7 +5,6 @@ use super::{
     priority_query::PriorityQuery,
     response_handler::ResponseHandler,
     running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
-    throttle::Throttle,
     AscPullQuerySpec, BootstrapAction, CandidateAccounts, CandidateAccountsConfig, PriorityResult,
     PriorityUpResult,
 };
@@ -25,7 +24,7 @@ use rsnano_messages::{
 use rsnano_network::{bandwidth_limiter::RateLimiter, Channel, ChannelId, Network, TrafficType};
 use rsnano_nullable_clock::{SteadyClock, Timestamp};
 use std::{
-    cmp::{max, min},
+    cmp::min,
     sync::{Arc, Condvar, Mutex, RwLock},
     thread::JoinHandle,
     time::{Duration, Instant},
@@ -92,6 +91,7 @@ pub struct Bootstrapper {
     config: BootstrapConfig,
     clock: Arc<SteadyClock>,
     response_handler: ResponseHandler,
+    workers: Arc<ThreadPoolImpl>,
 }
 
 struct Threads {
@@ -119,16 +119,10 @@ impl Bootstrapper {
             scoring: PeerScoring::new(config.clone()),
             account_ranges: AccountRanges::new(config.frontier_scan.clone(), stats.clone()),
             running_queries: RunningQueryContainer::default(),
-            throttle: Throttle::new(compute_throttle_size(
-                ledger.account_count(),
-                config.throttle_coefficient,
-            )),
             sync_dependencies_interval: Instant::now(),
             config: config.clone(),
             network,
             limiter: RateLimiter::new(config.rate_limit),
-            frontiers_limiter: RateLimiter::new(config.frontier_rate_limit),
-            workers: workers.clone(),
             stats: stats.clone(),
             message_sender,
             block_processor: block_processor.clone(),
@@ -142,7 +136,7 @@ impl Bootstrapper {
             stats.clone(),
             block_processor,
             condition.clone(),
-            workers,
+            workers.clone(),
             ledger.clone(),
             config.clone(),
         );
@@ -156,6 +150,7 @@ impl Bootstrapper {
             ledger,
             clock,
             response_handler,
+            workers,
         }
     }
 
@@ -364,7 +359,12 @@ impl BootstrapExt for Arc<Bootstrapper> {
         let frontiers = if self.config.enable_frontier_scan {
             Some(spawn_query(
                 "Bootstrap front",
-                FrontierQuery::new(),
+                FrontierQuery::new(
+                    self.workers.clone(),
+                    self.stats.clone(),
+                    self.config.frontier_rate_limit,
+                    self.config.frontier_scan.max_pending,
+                ),
                 self.clone(),
             ))
         } else {
@@ -407,16 +407,12 @@ pub(super) struct BootstrapLogic {
     pub candidate_accounts: CandidateAccounts,
     pub scoring: PeerScoring,
     pub running_queries: RunningQueryContainer,
-    throttle: Throttle,
     pub account_ranges: AccountRanges,
     sync_dependencies_interval: Instant,
     pub config: BootstrapConfig,
     network: Arc<RwLock<Network>>,
     /// Rate limiter for all types of requests
     pub limiter: RateLimiter,
-    /// Rate limiter for frontier requests
-    pub frontiers_limiter: RateLimiter,
-    pub workers: Arc<ThreadPoolImpl>,
     pub stats: Arc<Stats>,
     pub message_sender: MessageSender,
     pub block_processor: Arc<BlockProcessor>,
@@ -581,15 +577,9 @@ impl BootstrapLogic {
 
     fn cleanup_and_sync(&mut self, now: Timestamp) {
         self.stats.inc(StatType::Bootstrap, DetailType::LoopCleanup);
-        let account_count = self.ledger.account_count();
         let channels = self.network.read().unwrap().list_realtime_channels(0);
         self.scoring.sync(channels);
         self.scoring.timeout();
-
-        self.throttle.resize(compute_throttle_size(
-            account_count,
-            self.config.throttle_coefficient,
-        ));
 
         let should_timeout = |query: &RunningQuery| query.response_cutoff < now;
 
@@ -660,11 +650,7 @@ impl BootstrapLogic {
     }
 
     pub fn container_info(&self) -> ContainerInfo {
-        let limiters: ContainerInfo = [
-            ("total", self.limiter.size(), 0),
-            ("frontiers", self.frontiers_limiter.size(), 0),
-        ]
-        .into();
+        let limiters: ContainerInfo = [("total", self.limiter.size(), 0)].into();
 
         ContainerInfo::builder()
             .leaf(
@@ -672,25 +658,12 @@ impl BootstrapLogic {
                 self.running_queries.len(),
                 RunningQueryContainer::ELEMENT_SIZE,
             )
-            .leaf("throttle", self.throttle.len(), 0)
-            .leaf("throttle_success", self.throttle.successes(), 0)
             .node("accounts", self.candidate_accounts.container_info())
             .node("frontiers", self.account_ranges.container_info())
             .node("peers", self.scoring.container_info())
             .node("limiters", limiters)
             .finish()
     }
-}
-
-// Calculates a lookback size based on the size of the ledger where larger ledgers have a larger sample count
-fn compute_throttle_size(account_count: u64, throttle_coefficient: usize) -> usize {
-    let target = if account_count > 0 {
-        throttle_coefficient * ((account_count as f64).ln() as usize)
-    } else {
-        0
-    };
-    const MIN_SIZE: usize = 16;
-    max(target, MIN_SIZE)
 }
 
 impl From<&Message> for QueryType {
