@@ -17,6 +17,7 @@ impl Throttle {
         }
     }
 
+    #[allow(dead_code)]
     pub fn throttled(&self) -> bool {
         self.successes == 0
     }

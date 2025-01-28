@@ -1,7 +1,6 @@
 use super::{
     channel_waiter::ChannelWaiter,
     crawlers::{AccountDatabaseCrawler, PendingDatabaseCrawler},
-    database_scan::DatabaseScan,
     frontier_scan::{AccountRanges, AccountRangesConfig, FrontierScan},
     peer_scoring::PeerScoring,
     priority_query::PriorityQuery,
@@ -42,7 +41,6 @@ use tracing::{debug, warn};
 pub struct BootstrapConfig {
     pub enable: bool,
     pub enable_scan: bool,
-    pub enable_database_scan: bool,
     pub enable_dependency_walker: bool,
     pub enable_frontier_scan: bool,
     /// Maximum number of un-responded requests per channel, should be lower or equal to bootstrap server max queue size
@@ -69,7 +67,6 @@ impl Default for BootstrapConfig {
         Self {
             enable: true,
             enable_scan: true,
-            enable_database_scan: false,
             enable_dependency_walker: true,
             enable_frontier_scan: true,
             channel_limit: 16,
@@ -115,7 +112,6 @@ pub struct Bootstrapper {
 struct Threads {
     cleanup: JoinHandle<()>,
     priorities: Option<JoinHandle<()>>,
-    database: Option<JoinHandle<()>>,
     dependencies: Option<JoinHandle<()>>,
     frontiers: Option<JoinHandle<()>>,
 }
@@ -138,7 +134,6 @@ impl Bootstrapper {
                 stopped: false,
                 candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
                 scoring: PeerScoring::new(config.clone()),
-                database_scan: DatabaseScan::new(ledger.clone()),
                 account_ranges: AccountRanges::new(config.frontier_scan.clone(), stats.clone()),
                 running_queries: RunningQueryContainer::default(),
                 throttle: Throttle::new(compute_throttle_size(
@@ -175,9 +170,6 @@ impl Bootstrapper {
                 handle.join().unwrap();
             }
             threads.cleanup.join().unwrap();
-            if let Some(database) = threads.database {
-                database.join().unwrap();
-            }
             if let Some(dependencies) = threads.dependencies {
                 dependencies.join().unwrap();
             }
@@ -238,14 +230,6 @@ impl Bootstrapper {
         }
     }
 
-    /* Ensure there is enough space in blockprocessor for queuing new blocks */
-    fn wait_blockprocessor(&self) {
-        self.wait(|_| {
-            self.block_processor.queue_len(BlockSource::Bootstrap)
-                < self.config.block_processor_theshold
-        });
-    }
-
     /* Waits for a channel that is not full */
     fn wait_channel(&self) -> Option<Arc<Channel>> {
         self.wait_for(ChannelWaiter::new())
@@ -279,21 +263,6 @@ impl Bootstrapper {
                 .unwrap()
                 .0;
         }
-    }
-
-    fn wait_database(&self, should_throttle: bool) -> Account {
-        let mut result = Account::zero();
-        self.wait(|i| {
-            result = i.next_database(
-                should_throttle,
-                &self.database_limiter,
-                &self.stats,
-                self.config.database_warmup_ratio,
-            );
-            !result.is_zero()
-        });
-
-        result
     }
 
     fn wait_blocking(&self) -> BlockHash {
@@ -459,31 +428,6 @@ impl Bootstrapper {
             drop(guard);
             self.stats.inc(StatType::Bootstrap, DetailType::Loop);
             self.run_one_priority();
-            guard = self.mutex.lock().unwrap();
-        }
-    }
-
-    fn run_one_database(&self, should_throttle: bool) {
-        self.wait_blockprocessor();
-        let Some(channel) = self.wait_channel() else {
-            return;
-        };
-        let account = self.wait_database(should_throttle);
-        if account.is_zero() {
-            return;
-        }
-        self.request(account, 2, &channel, QuerySource::Database);
-    }
-
-    fn run_database(&self) {
-        let mut guard = self.mutex.lock().unwrap();
-        while !guard.stopped {
-            // Avoid high churn rate of database requests
-            let should_throttle = !guard.database_scan.warmed_up() && guard.throttle.throttled();
-            drop(guard);
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::LoopDatabase);
-            self.run_one_database(should_throttle);
             guard = self.mutex.lock().unwrap();
         }
     }
@@ -960,18 +904,6 @@ impl BootstrapExt for Arc<Bootstrapper> {
             None
         };
 
-        let database = if self.config.enable_database_scan {
-            let self_l = Arc::clone(self);
-            Some(
-                std::thread::Builder::new()
-                    .name("Bootstrap db".to_string())
-                    .spawn(Box::new(move || self_l.run_database()))
-                    .unwrap(),
-            )
-        } else {
-            None
-        };
-
         let dependencies = if self.config.enable_dependency_walker {
             let self_l = Arc::clone(self);
             Some(
@@ -1005,7 +937,6 @@ impl BootstrapExt for Arc<Bootstrapper> {
         *self.threads.lock().unwrap() = Some(Threads {
             cleanup: timeout,
             priorities,
-            database,
             frontiers,
             dependencies,
         });
@@ -1016,7 +947,6 @@ pub(super) struct BootstrapLogic {
     stopped: bool,
     pub candidate_accounts: CandidateAccounts,
     pub scoring: PeerScoring,
-    database_scan: DatabaseScan,
     pub running_queries: RunningQueryContainer,
     throttle: Throttle,
     pub account_ranges: AccountRanges,
@@ -1173,36 +1103,6 @@ impl BootstrapLogic {
         next
     }
 
-    /* Gets the next account from the database */
-    fn next_database(
-        &mut self,
-        should_throttle: bool,
-        database_limiter: &RateLimiter,
-        stats: &Stats,
-        warmup_ratio: usize,
-    ) -> Account {
-        debug_assert!(warmup_ratio > 0);
-
-        // Throttling increases the weight of database requests
-        if !database_limiter.should_pass(if should_throttle { warmup_ratio } else { 1 }) {
-            return Account::zero();
-        }
-
-        let account = self.database_scan.next(|account| {
-            self.running_queries
-                .count_by_account(account, QuerySource::Database)
-                == 0
-        });
-
-        if account.is_zero() {
-            return account;
-        }
-
-        stats.inc(StatType::BootstrapNext, DetailType::NextDatabase);
-
-        account
-    }
-
     /* Waits for next available blocking block */
     fn next_blocking(&self, stats: &Stats) -> BlockHash {
         let blocking = self
@@ -1349,7 +1249,6 @@ impl BootstrapLogic {
             .leaf("throttle", self.throttle.len(), 0)
             .leaf("throttle_success", self.throttle.successes(), 0)
             .node("accounts", self.candidate_accounts.container_info())
-            .node("database_scan", self.database_scan.container_info())
             .node("frontiers", self.account_ranges.container_info())
             .node("peers", self.scoring.container_info())
             .node("limiters", limiters)

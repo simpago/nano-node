@@ -5,7 +5,6 @@ use std::time::Duration;
 #[derive(Deserialize, Serialize)]
 pub struct BootstrapToml {
     pub enable: Option<bool>,
-    pub enable_databaser_scan: Option<bool>,
     pub enable_dependency_walker: Option<bool>,
     pub enable_frontier_scan: Option<bool>,
     pub block_processor_threshold: Option<usize>,
@@ -26,7 +25,6 @@ impl From<&BootstrapConfig> for BootstrapToml {
     fn from(config: &BootstrapConfig) -> Self {
         Self {
             enable: Some(config.enable),
-            enable_databaser_scan: Some(config.enable_database_scan),
             enable_dependency_walker: Some(config.enable_dependency_walker),
             enable_frontier_scan: Some(config.enable_frontier_scan),
             channel_limit: Some(config.channel_limit),

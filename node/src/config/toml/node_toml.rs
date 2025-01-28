@@ -240,9 +240,6 @@ impl NodeConfig {
             if let Some(enable) = &ascending_toml.enable_dependency_walker {
                 config.enable_dependency_walker = *enable;
             }
-            if let Some(enable) = &ascending_toml.enable_databaser_scan {
-                config.enable_database_scan = *enable;
-            }
             if let Some(enable) = &ascending_toml.enable_frontier_scan {
                 config.enable_frontier_scan = *enable;
             }
@@ -478,7 +475,6 @@ mod tests {
 
         let ascending_toml = BootstrapToml {
             enable: Some(false),
-            enable_databaser_scan: Some(false),
             enable_dependency_walker: Some(false),
             enable_frontier_scan: Some(false),
             block_processor_threshold: Some(100),
@@ -505,7 +501,6 @@ mod tests {
 
         let ascending = &cfg.bootstrap;
         assert_eq!(ascending.enable, false);
-        assert_eq!(ascending.enable_database_scan, false);
         assert_eq!(ascending.enable_dependency_walker, false);
         assert_eq!(ascending.enable_frontier_scan, false);
         assert_eq!(ascending.block_processor_theshold, 100);
@@ -533,7 +528,6 @@ mod tests {
         let toml = NodeToml::from(&cfg);
         let ascending_toml = toml.bootstrap.as_ref().unwrap();
         assert_eq!(ascending_toml.enable, Some(true));
-        assert_eq!(ascending_toml.enable_databaser_scan, Some(false));
         assert_eq!(ascending_toml.enable_frontier_scan, Some(true));
         assert_eq!(ascending_toml.enable_dependency_walker, Some(true));
         assert_eq!(ascending_toml.block_processor_threshold, Some(1000));

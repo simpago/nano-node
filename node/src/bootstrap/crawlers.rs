@@ -116,38 +116,6 @@ impl<'a> PendingDatabaseCrawler<'a> {
         }
     }
 
-    // Advance to the next account
-    pub fn advance(&mut self) {
-        let Some(it) = &mut self.it else {
-            return;
-        };
-
-        let starting_account = self.current.as_ref().unwrap().0.receiving_account;
-
-        // First try advancing sequentially
-        for _ in 0..Self::SEQUENTIAL_ATTEMPTS {
-            self.current = it.next();
-            match &self.current {
-                Some((key, _)) => {
-                    // Break if we've reached the next account
-                    if key.receiving_account != starting_account {
-                        return;
-                    }
-                }
-                None => {
-                    self.it = None;
-                    self.current = None;
-                    break;
-                }
-            }
-        }
-
-        if self.it.is_some() {
-            // If that fails, perform a fresh lookup
-            self.seek(starting_account.inc_or_max());
-        }
-    }
-
     pub fn advance_to(&mut self, account: &Account) {
         let Some(it) = &mut self.it else {
             return;
