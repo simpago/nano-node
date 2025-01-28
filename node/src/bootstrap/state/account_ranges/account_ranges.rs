@@ -1,6 +1,6 @@
 use super::heads_container::HeadsContainer;
 use crate::{
-    bootstrap::account_ranges::heads_container::FrontierHead,
+    bootstrap::state::account_ranges::heads_container::FrontierHead,
     stats::{DetailType, StatType, Stats},
 };
 use primitive_types::U256;

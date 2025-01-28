@@ -1,4 +1,4 @@
-use super::{running_query_container::RunningQuery, state::BootstrapState};
+use super::state::{BootstrapState, RunningQuery};
 use crate::stats::{DetailType, StatType, Stats};
 use rsnano_network::Network;
 use rsnano_nullable_clock::SteadyClock;

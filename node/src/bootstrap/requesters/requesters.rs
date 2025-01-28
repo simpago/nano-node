@@ -1,8 +1,5 @@
-use crate::bootstrap::{
-    running_query_container::{QueryType, RunningQuery},
-    state::BootstrapState,
-    AscPullQuerySpec, BootstrapAction, BootstrapConfig,
-};
+use crate::bootstrap::state::{QueryType, RunningQuery};
+use crate::bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapAction, BootstrapConfig};
 use crate::{
     block_processing::BlockProcessor,
     bootstrap::WaitResult,

@@ -1,3 +1,4 @@
+use crate::{bootstrap::AscPullQuerySpec, stats::DetailType};
 use rsnano_core::{Account, BlockHash, HashOrAccount};
 use rsnano_messages::{AscPullReqType, HashType};
 use rsnano_nullable_clock::Timestamp;
@@ -6,10 +7,6 @@ use std::{
     mem::size_of,
     time::Duration,
 };
-
-use crate::stats::DetailType;
-
-use super::AscPullQuerySpec;
 
 #[derive(Default, PartialEq, Eq, Debug, Clone, Copy)]
 pub(crate) enum QueryType {

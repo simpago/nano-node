@@ -1,14 +1,12 @@
-use crate::bootstrap::{
-    account_ranges::AccountRanges,
-    running_query_container::{QuerySource, RunningQueryContainer},
-    BootstrapConfig, CandidateAccounts, PriorityResult,
+use super::{
+    AccountRanges, CandidateAccounts, PeerScoring, PriorityResult, QuerySource,
+    RunningQueryContainer,
 };
+use crate::bootstrap::BootstrapConfig;
 use crate::stats::Stats;
 use rsnano_core::{utils::ContainerInfo, BlockHash};
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
-
-use super::PeerScoring;
 
 pub(crate) struct BootstrapState {
     pub candidate_accounts: CandidateAccounts,
