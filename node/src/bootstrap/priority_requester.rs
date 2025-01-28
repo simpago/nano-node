@@ -15,7 +15,7 @@ use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
 use std::{cmp::min, sync::Arc};
 
-pub(super) struct PriorityQuery {
+pub(super) struct PriorityRequester {
     state: PriorityState,
     ledger: Arc<Ledger>,
     block_processor: Arc<BlockProcessor>,
@@ -24,7 +24,7 @@ pub(super) struct PriorityQuery {
     config: BootstrapConfig,
 }
 
-impl PriorityQuery {
+impl PriorityRequester {
     pub(super) fn new(
         ledger: Arc<Ledger>,
         block_processor: Arc<BlockProcessor>,
@@ -51,7 +51,7 @@ enum PriorityState {
     Done(AscPullQuerySpec),
 }
 
-impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
+impl BootstrapAction<AscPullQuerySpec> for PriorityRequester {
     fn run(&mut self, state: &mut BootstrapState, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
         let mut state_changed = false;
         loop {

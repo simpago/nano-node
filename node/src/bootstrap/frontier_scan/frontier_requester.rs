@@ -12,8 +12,8 @@ use rsnano_network::{bandwidth_limiter::RateLimiter, Channel};
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
-pub(crate) struct FrontierQuery {
-    state: FrontierQueryState,
+pub(crate) struct FrontierRequester {
+    state: FrontierState,
     stats: Arc<Stats>,
     frontiers_limiter: RateLimiter,
     workers: Arc<ThreadPoolImpl>,
@@ -21,7 +21,7 @@ pub(crate) struct FrontierQuery {
     channel_waiter: Arc<dyn Fn() -> ChannelWaiter + Send + Sync>,
 }
 
-enum FrontierQueryState {
+enum FrontierState {
     Initial,
     WaitCandidateAccounts,
     WaitLimiter,
@@ -31,7 +31,7 @@ enum FrontierQueryState {
     Done(Arc<Channel>, AscPullReqType),
 }
 
-impl FrontierQuery {
+impl FrontierRequester {
     pub(crate) fn new(
         workers: Arc<ThreadPoolImpl>,
         stats: Arc<Stats>,
@@ -40,7 +40,7 @@ impl FrontierQuery {
         channel_waiter: Arc<dyn Fn() -> ChannelWaiter + Send + Sync>,
     ) -> Self {
         Self {
-            state: FrontierQueryState::Initial,
+            state: FrontierState::Initial,
             stats,
             frontiers_limiter: RateLimiter::new(rate_limit),
             workers,
@@ -49,50 +49,46 @@ impl FrontierQuery {
         }
     }
 
-    fn next_state(
-        &mut self,
-        state: &mut BootstrapState,
-        now: Timestamp,
-    ) -> Option<FrontierQueryState> {
+    fn next_state(&mut self, state: &mut BootstrapState, now: Timestamp) -> Option<FrontierState> {
         match &mut self.state {
-            FrontierQueryState::Initial => self.initialize(),
-            FrontierQueryState::WaitCandidateAccounts => Self::wait_candidate_accounts(state),
-            FrontierQueryState::WaitLimiter => self.wait_limiter(),
-            FrontierQueryState::WaitWorkers => self.wait_workers(),
-            FrontierQueryState::WaitChannel(waiter) => Self::wait_channel(state, waiter, now),
-            FrontierQueryState::WaitFrontier(channel) => {
+            FrontierState::Initial => self.initialize(),
+            FrontierState::WaitCandidateAccounts => Self::wait_candidate_accounts(state),
+            FrontierState::WaitLimiter => self.wait_limiter(),
+            FrontierState::WaitWorkers => self.wait_workers(),
+            FrontierState::WaitChannel(waiter) => Self::wait_channel(state, waiter, now),
+            FrontierState::WaitFrontier(channel) => {
                 Self::wait_frontier(state, channel, &self.stats, now)
             }
-            FrontierQueryState::Done(_, _) => None,
+            FrontierState::Done(_, _) => None,
         }
     }
 
-    fn initialize(&self) -> Option<FrontierQueryState> {
+    fn initialize(&self) -> Option<FrontierState> {
         self.stats
             .inc(StatType::Bootstrap, DetailType::LoopFrontiers);
-        Some(FrontierQueryState::WaitCandidateAccounts)
+        Some(FrontierState::WaitCandidateAccounts)
     }
 
-    fn wait_candidate_accounts(state: &BootstrapState) -> Option<FrontierQueryState> {
+    fn wait_candidate_accounts(state: &BootstrapState) -> Option<FrontierState> {
         if state.candidate_accounts.priority_half_full() {
             None
         } else {
-            Some(FrontierQueryState::WaitLimiter)
+            Some(FrontierState::WaitLimiter)
         }
     }
 
-    fn wait_limiter(&self) -> Option<FrontierQueryState> {
+    fn wait_limiter(&self) -> Option<FrontierState> {
         if self.frontiers_limiter.should_pass(1) {
-            Some(FrontierQueryState::WaitWorkers)
+            Some(FrontierState::WaitWorkers)
         } else {
             None
         }
     }
 
-    fn wait_workers(&self) -> Option<FrontierQueryState> {
+    fn wait_workers(&self) -> Option<FrontierState> {
         if self.workers.num_queued_tasks() < self.max_pending {
             let waiter = (self.channel_waiter)();
-            Some(FrontierQueryState::WaitChannel(waiter))
+            Some(FrontierState::WaitChannel(waiter))
         } else {
             None
         }
@@ -102,11 +98,11 @@ impl FrontierQuery {
         state: &mut BootstrapState,
         channel_waiter: &mut ChannelWaiter,
         now: Timestamp,
-    ) -> Option<FrontierQueryState> {
+    ) -> Option<FrontierState> {
         match channel_waiter.run(state, now) {
-            WaitResult::BeginWait => Some(FrontierQueryState::WaitChannel(channel_waiter.clone())),
+            WaitResult::BeginWait => Some(FrontierState::WaitChannel(channel_waiter.clone())),
             WaitResult::ContinueWait => None,
-            WaitResult::Finished(channel) => Some(FrontierQueryState::WaitFrontier(channel)),
+            WaitResult::Finished(channel) => Some(FrontierState::WaitFrontier(channel)),
         }
     }
 
@@ -115,12 +111,12 @@ impl FrontierQuery {
         channel: &Arc<Channel>,
         stats: &Stats,
         now: Timestamp,
-    ) -> Option<FrontierQueryState> {
+    ) -> Option<FrontierState> {
         let start = state.account_ranges.next(now);
         if !start.is_zero() {
             stats.inc(StatType::BootstrapNext, DetailType::NextFrontier);
             let request = Self::request_frontiers(start);
-            Some(FrontierQueryState::Done(channel.clone(), request))
+            Some(FrontierState::Done(channel.clone(), request))
         } else {
             None
         }
@@ -134,13 +130,13 @@ impl FrontierQuery {
     }
 }
 
-impl BootstrapAction<AscPullQuerySpec> for FrontierQuery {
+impl BootstrapAction<AscPullQuerySpec> for FrontierRequester {
     fn run(&mut self, state: &mut BootstrapState, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
         let mut state_changed = false;
         loop {
             match self.next_state(state, now) {
-                Some(FrontierQueryState::Done(channel, request)) => {
-                    self.state = FrontierQueryState::Initial;
+                Some(FrontierState::Done(channel, request)) => {
+                    self.state = FrontierState::Initial;
 
                     let spec = AscPullQuerySpec {
                         channel,

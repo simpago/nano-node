@@ -2,9 +2,9 @@ use super::{
     block_inspector::BlockInspector,
     bootstrap_state::BootstrapState,
     cleanup::BootstrapCleanup,
-    dependency_requester::DependencyQuery,
-    frontier_scan::{AccountRangesConfig, FrontierQuery},
-    priority_requester::PriorityQuery,
+    dependency_requester::DependencyRequester,
+    frontier_scan::{AccountRangesConfig, FrontierRequester},
+    priority_requester::PriorityRequester,
     response_handler::ResponseHandler,
     running_query_container::{QueryType, RunningQuery},
     AscPullQuerySpec, BootstrapAction, CandidateAccountsConfig,
@@ -381,7 +381,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
         let frontiers = if self.config.enable_frontier_scan {
             Some(spawn_query(
                 "Bootstrap front",
-                FrontierQuery::new(
+                FrontierRequester::new(
                     self.workers.clone(),
                     self.stats.clone(),
                     self.config.frontier_rate_limit,
@@ -397,7 +397,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
         let priorities = if self.config.enable_scan {
             Some(spawn_query(
                 "Bootstrap",
-                PriorityQuery::new(
+                PriorityRequester::new(
                     self.ledger.clone(),
                     self.block_processor.clone(),
                     self.stats.clone(),
@@ -413,7 +413,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
         let dependencies = if self.config.enable_dependency_walker {
             Some(spawn_query(
                 "Bootstrap walkr",
-                DependencyQuery::new(self.stats.clone(), channel_waiter),
+                DependencyRequester::new(self.stats.clone(), channel_waiter),
                 self.clone(),
             ))
         } else {

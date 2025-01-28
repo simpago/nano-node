@@ -8,53 +8,49 @@ use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
-pub(super) struct DependencyQuery {
-    state: DependencyQueryState,
+pub(super) struct DependencyRequester {
+    state: DependencyState,
     stats: Arc<Stats>,
     channel_waiter: Arc<dyn Fn() -> ChannelWaiter + Send + Sync>,
 }
 
-enum DependencyQueryState {
+enum DependencyState {
     Initial,
     WaitChannel(ChannelWaiter),
     WaitBlocking(Arc<Channel>),
     Done(AscPullQuerySpec),
 }
 
-impl DependencyQuery {
+impl DependencyRequester {
     pub(super) fn new(
         stats: Arc<Stats>,
         channel_waiter: Arc<dyn Fn() -> ChannelWaiter + Send + Sync>,
     ) -> Self {
         Self {
-            state: DependencyQueryState::Initial,
+            state: DependencyState::Initial,
             stats,
             channel_waiter,
         }
     }
 }
 
-impl BootstrapAction<AscPullQuerySpec> for DependencyQuery {
+impl BootstrapAction<AscPullQuerySpec> for DependencyRequester {
     fn run(&mut self, state: &mut BootstrapState, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
         let mut state_changed = false;
         loop {
             let new_state = match &mut self.state {
-                DependencyQueryState::Initial => {
+                DependencyState::Initial => {
                     self.stats
                         .inc(StatType::Bootstrap, DetailType::LoopDependencies);
                     let waiter = (self.channel_waiter)();
-                    Some(DependencyQueryState::WaitChannel(waiter))
+                    Some(DependencyState::WaitChannel(waiter))
                 }
-                DependencyQueryState::WaitChannel(waiter) => match waiter.run(state, now) {
-                    WaitResult::BeginWait => {
-                        Some(DependencyQueryState::WaitChannel(waiter.clone()))
-                    }
+                DependencyState::WaitChannel(waiter) => match waiter.run(state, now) {
+                    WaitResult::BeginWait => Some(DependencyState::WaitChannel(waiter.clone())),
                     WaitResult::ContinueWait => None,
-                    WaitResult::Finished(channel) => {
-                        Some(DependencyQueryState::WaitBlocking(channel))
-                    }
+                    WaitResult::Finished(channel) => Some(DependencyState::WaitBlocking(channel)),
                 },
-                DependencyQueryState::WaitBlocking(channel) => {
+                DependencyState::WaitBlocking(channel) => {
                     let next = state.next_blocking();
                     if next.is_zero() {
                         None
@@ -76,15 +72,15 @@ impl BootstrapAction<AscPullQuerySpec> for DependencyQuery {
                             cooldown_account: false,
                         };
 
-                        Some(DependencyQueryState::Done(spec))
+                        Some(DependencyState::Done(spec))
                     }
                 }
-                DependencyQueryState::Done(..) => None,
+                DependencyState::Done(..) => None,
             };
 
             match new_state {
-                Some(DependencyQueryState::Done(spec)) => {
-                    self.state = DependencyQueryState::Initial;
+                Some(DependencyState::Done(spec)) => {
+                    self.state = DependencyState::Initial;
                     return WaitResult::Finished(spec);
                 }
                 Some(s) => {
