@@ -1,4 +1,5 @@
 mod bootstrap_responder;
+mod bootstrap_state;
 mod bootstrapper;
 mod candidate_accounts;
 mod channel_waiter;
@@ -14,6 +15,7 @@ mod running_query_container;
 use std::sync::Arc;
 
 pub use bootstrap_responder::*;
+use bootstrap_state::BootstrapState;
 pub use bootstrapper::*;
 pub(crate) use candidate_accounts::*;
 use rsnano_core::{Account, BlockHash};

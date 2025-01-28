@@ -1,6 +1,6 @@
 use super::{
-    channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapConfig,
-    BootstrapResponder, BootstrapState, WaitResult,
+    bootstrap_state::BootstrapState, channel_waiter::ChannelWaiter, AscPullQuerySpec,
+    BootstrapAction, BootstrapConfig, BootstrapResponder, WaitResult,
 };
 use crate::{
     block_processing::{BlockProcessor, BlockSource},

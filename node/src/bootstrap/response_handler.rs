@@ -1,6 +1,7 @@
 use super::{
+    bootstrap_state::BootstrapState,
     running_query_container::{QueryType, RunningQuery},
-    BootstrapConfig, BootstrapState, CandidateAccounts, PriorityDownResult,
+    BootstrapConfig, CandidateAccounts, PriorityDownResult,
 };
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
