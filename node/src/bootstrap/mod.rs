@@ -30,7 +30,7 @@ pub(self) enum WaitResult<T> {
     Finished(T),
 }
 
-pub(super) struct AscPullQuerySpec {
+pub(self) struct AscPullQuerySpec {
     pub channel: Arc<Channel>,
     pub req_type: AscPullReqType,
     pub account: Account,

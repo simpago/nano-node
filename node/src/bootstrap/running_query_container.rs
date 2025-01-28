@@ -97,7 +97,12 @@ impl RunningQuery {
                     b.count,
                 ),
             },
-            _ => panic!("incorrect message type"),
+            AscPullReqType::AccountInfo(i) => (
+                QuerySource::Dependencies,
+                QueryType::AccountInfoByHash,
+                i.target,
+                0,
+            ),
         };
 
         Self {

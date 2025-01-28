@@ -3,7 +3,8 @@ use std::sync::Arc;
 use super::{
     channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapLogic, WaitResult,
 };
-use rsnano_core::BlockHash;
+use rsnano_core::Account;
+use rsnano_messages::{AccountInfoReqPayload, AscPullReqType, HashType};
 use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
 
@@ -15,7 +16,7 @@ enum DependencyQueryState {
     Initial,
     WaitChannel(ChannelWaiter),
     WaitBlocking(Arc<Channel>),
-    Done(Arc<Channel>, BlockHash),
+    Done(AscPullQuerySpec),
 }
 
 impl DependencyQuery {
@@ -26,12 +27,8 @@ impl DependencyQuery {
     }
 }
 
-impl BootstrapAction<(Arc<Channel>, BlockHash)> for DependencyQuery {
-    fn run(
-        &mut self,
-        logic: &mut BootstrapLogic,
-        now: Timestamp,
-    ) -> WaitResult<(Arc<Channel>, BlockHash)> {
+impl BootstrapAction<AscPullQuerySpec> for DependencyQuery {
+    fn run(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
         let mut state_changed = false;
         loop {
             let new_state = match &mut self.state {
@@ -52,24 +49,29 @@ impl BootstrapAction<(Arc<Channel>, BlockHash)> for DependencyQuery {
                     if next.is_zero() {
                         None
                     } else {
-                        //let req_type = rsnano_messages::AscPullReqType::Blocks(());
-                        //let spec = AscPullQuerySpec {
-                        //    channel: channel.clone(),
-                        //    req_type,
-                        //    account: todo!(),
-                        //    hash: todo!(),
-                        //    cooldown_account: todo!(),
-                        //};
+                        // Query account info by block hash
+                        let req_type = AscPullReqType::AccountInfo(AccountInfoReqPayload {
+                            target: next.into(),
+                            target_type: HashType::Block,
+                        });
 
-                        Some(DependencyQueryState::Done(channel.clone(), next))
+                        let spec = AscPullQuerySpec {
+                            channel: channel.clone(),
+                            req_type,
+                            account: Account::zero(),
+                            hash: next,
+                            cooldown_account: false,
+                        };
+
+                        Some(DependencyQueryState::Done(spec))
                     }
                 }
                 DependencyQueryState::Done(..) => None,
             };
 
             match new_state {
-                Some(DependencyQueryState::Done(channel, hash)) => {
-                    return WaitResult::Finished((channel, hash));
+                Some(DependencyQueryState::Done(spec)) => {
+                    return WaitResult::Finished(spec);
                 }
                 Some(s) => {
                     self.state = s;

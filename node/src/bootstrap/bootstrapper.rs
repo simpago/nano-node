@@ -22,8 +22,8 @@ use rsnano_core::{
 };
 use rsnano_ledger::{BlockStatus, Ledger};
 use rsnano_messages::{
-    AccountInfoAckPayload, AccountInfoReqPayload, AscPullAck, AscPullAckType, AscPullReq,
-    AscPullReqType, BlocksAckPayload, BlocksReqPayload, FrontiersReqPayload, HashType, Message,
+    AccountInfoAckPayload, AscPullAck, AscPullAckType, AscPullReq, AscPullReqType,
+    BlocksAckPayload, HashType, Message,
 };
 use rsnano_network::{bandwidth_limiter::RateLimiter, Channel, ChannelId, Network, TrafficType};
 use rsnano_nullable_clock::{SteadyClock, Timestamp};
@@ -178,11 +178,6 @@ impl Bootstrapper {
         }
     }
 
-    fn send(&self, channel: &Channel, request: &Message, id: u64) -> bool {
-        let mut guard = self.mutex.lock().unwrap();
-        guard.send(channel, request, id, self.clock.now())
-    }
-
     pub fn priority_len(&self) -> usize {
         self.mutex.lock().unwrap().candidate_accounts.priority_len()
     }
@@ -276,47 +271,10 @@ impl Bootstrapper {
 
     fn run_one_dependency(&self) {
         let dependency_query = DependencyQuery::new();
-        let Some((channel, blocking)) = self.wait_for(dependency_query) else {
+        let Some(spec) = self.wait_for(dependency_query) else {
             return;
         };
-
-        let now = self.clock.now();
-        let id = thread_rng().next_u64();
-        let query = RunningQuery {
-            query_type: QueryType::AccountInfoByHash,
-            source: QuerySource::Dependencies,
-            start: blocking.into(),
-            account: Account::zero(),
-            hash: blocking,
-            count: 0,
-            id,
-            response_cutoff: now + self.config.request_timeout * 4,
-            sent: now,
-        };
-
-        let request;
-        {
-            let mut guard = self.mutex.lock().unwrap();
-            debug_assert!(!guard.running_queries.contains(query.id));
-            guard.running_queries.insert(query.clone());
-
-            let req_type = match query.query_type {
-                QueryType::AccountInfoByHash => {
-                    AscPullReqType::AccountInfo(AccountInfoReqPayload {
-                        target: query.start,
-                        target_type: HashType::Block, // Query account info by block hash
-                    })
-                }
-                _ => unreachable!(),
-            };
-
-            request = Message::AscPullReq(AscPullReq {
-                id: query.id,
-                req_type,
-            });
-        }
-
-        self.send(&channel, &request, id);
+        self.send_request(spec);
     }
 
     fn send_request(&self, spec: AscPullQuerySpec) {
