@@ -1,10 +1,10 @@
+mod account_ranges;
 mod block_inspector;
 mod bootstrap_responder;
 mod bootstrapper;
 mod candidate_accounts;
 mod cleanup;
 mod crawlers;
-mod frontier_scan;
 mod requesters;
 mod response_handler;
 mod running_query_container;

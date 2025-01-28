@@ -1,5 +1,5 @@
 use crate::bootstrap::{
-    frontier_scan::AccountRanges,
+    account_ranges::AccountRanges,
     running_query_container::{QuerySource, RunningQueryContainer},
     BootstrapConfig, CandidateAccounts, PriorityResult,
 };
