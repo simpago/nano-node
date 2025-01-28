@@ -6,10 +6,10 @@ mod candidate_accounts;
 mod channel_waiter;
 mod cleanup;
 mod crawlers;
-mod dependency_query;
+mod dependency_requester;
 mod frontier_scan;
 mod peer_scoring;
-mod priority_query;
+mod priority_requester;
 mod response_handler;
 mod running_query_container;
 
