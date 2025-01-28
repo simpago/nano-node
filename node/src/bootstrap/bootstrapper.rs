@@ -1,6 +1,6 @@
 use super::{
     dependency_query::DependencyQuery,
-    frontier_scan::{AccountRanges, AccountRangesConfig, FrontierScan},
+    frontier_scan::{AccountRanges, AccountRangesConfig, FrontierQuery},
     peer_scoring::PeerScoring,
     priority_query::PriorityQuery,
     response_handler::ResponseHandler,
@@ -364,7 +364,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
         let frontiers = if self.config.enable_frontier_scan {
             Some(spawn_query(
                 "Bootstrap front",
-                FrontierScan::new(),
+                FrontierQuery::new(),
                 self.clone(),
             ))
         } else {

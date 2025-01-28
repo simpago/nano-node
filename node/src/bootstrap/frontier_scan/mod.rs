@@ -4,4 +4,4 @@ mod heads_container;
 
 pub use account_ranges::AccountRanges;
 pub use account_ranges::AccountRangesConfig;
-pub(super) use frontier_scan::FrontierScan;
+pub(super) use frontier_scan::FrontierQuery;
