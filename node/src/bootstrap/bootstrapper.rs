@@ -11,15 +11,14 @@ use super::{
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, BlockSource, LedgerNotifications},
-    bootstrap::{BootstrapResponder, WaitResult},
+    bootstrap::WaitResult,
     stats::{DetailType, Direction, Sample, StatType, Stats},
     transport::MessageSender,
     utils::{ThreadPool, ThreadPoolImpl},
 };
-use num::clamp;
-use rand::{thread_rng, Rng, RngCore};
+use rand::{thread_rng, RngCore};
 use rsnano_core::{
-    utils::ContainerInfo, Account, Block, BlockHash, BlockType, Frontier, HashOrAccount, SavedBlock,
+    utils::ContainerInfo, Account, Block, BlockHash, BlockType, Frontier, SavedBlock,
 };
 use rsnano_ledger::{BlockStatus, Ledger};
 use rsnano_messages::{
@@ -148,6 +147,7 @@ impl Bootstrapper {
                 stats: stats.clone(),
                 message_sender,
                 block_processor: block_processor.clone(),
+                ledger: ledger.clone(),
             })),
             block_processor,
             condition: Arc::new(Condvar::new()),
@@ -297,102 +297,35 @@ impl Bootstrapper {
 
     fn run_one_priority(&self) {
         let prio_query = PriorityQuery::new();
-        let Some((channel, result)) = self.wait_for(prio_query) else {
+        let Some(result) = self.wait_for(prio_query) else {
             return;
         };
 
-        // Decide how many blocks to request
-        let min_pull_count = 2;
-        let pull_count = clamp(
-            f64::from(result.priority) as usize,
-            min_pull_count,
-            BootstrapResponder::MAX_BLOCKS,
-        );
-
-        let account_info = {
-            let tx = self.ledger.read_txn();
-            self.ledger.store.account.get(&tx, &result.account)
+        let (query_type, start, pull_count) = match &result.req_type {
+            AscPullReqType::Blocks(blocks) => match blocks.start_type {
+                HashType::Account => (QueryType::BlocksByAccount, blocks.start, blocks.count),
+                HashType::Block => (QueryType::BlocksByHash, blocks.start, blocks.count),
+            },
+            _ => unreachable!(),
         };
-        let now = self.clock.now();
-        let account = result.account;
-        // Limit the max number of blocks to pull
-        debug_assert!(pull_count > 0);
-        debug_assert!(pull_count <= BootstrapResponder::MAX_BLOCKS);
-        let pull_count = min(pull_count, self.config.max_pull_count);
-
-        let tx = self.ledger.read_txn();
-        // Check if the account picked has blocks, if it does, start the pull from the highest block
-        let (start_type, query_type, start, hash) = match account_info {
-            Some(info) => {
-                // Probabilistically choose between requesting blocks from account frontier or confirmed frontier
-                // Optimistic requests start from the (possibly unconfirmed) account frontier and are vulnerable to bootstrap poisoning
-                // Safe requests start from the confirmed frontier and given enough time will eventually resolve forks
-                let optimistic_request =
-                    thread_rng().gen_range(0..100) < self.config.optimistic_request_percentage;
-
-                if optimistic_request {
-                    self.stats
-                        .inc(StatType::BootstrapRequestBlocks, DetailType::Optimistic);
-                    (
-                        HashType::Block,
-                        QueryType::BlocksByHash,
-                        HashOrAccount::from(info.head),
-                        info.head,
-                    )
-                } else {
-                    // Pessimistic (safe) request case
-                    self.stats
-                        .inc(StatType::BootstrapRequestBlocks, DetailType::Safe);
-
-                    let conf_info = self.ledger.store.confirmation_height.get(&tx, &account);
-                    if let Some(conf_info) = conf_info {
-                        (
-                            HashType::Block,
-                            QueryType::BlocksByHash,
-                            HashOrAccount::from(conf_info.frontier),
-                            BlockHash::from(conf_info.height),
-                        )
-                    } else {
-                        (
-                            HashType::Account,
-                            QueryType::BlocksByAccount,
-                            account.into(),
-                            BlockHash::zero(),
-                        )
-                    }
-                }
-            }
-            None => {
-                self.stats
-                    .inc(StatType::BootstrapRequestBlocks, DetailType::Base);
-                (
-                    HashType::Account,
-                    QueryType::BlocksByAccount,
-                    HashOrAccount::from(account),
-                    BlockHash::zero(),
-                )
-            }
-        };
-
-        let req_type = AscPullReqType::Blocks(BlocksReqPayload {
-            start_type,
-            start,
-            count: pull_count as u8,
-        });
 
         let id = thread_rng().next_u64();
-        let request = Message::AscPullReq(AscPullReq { id, req_type });
+        let now = self.clock.now();
+        let request = Message::AscPullReq(AscPullReq {
+            id,
+            req_type: result.req_type,
+        });
 
         let query = RunningQuery {
             id,
-            account,
+            account: result.account,
             sent: now,
             response_cutoff: now + self.config.request_timeout * 4,
             query_type,
             start,
             source: QuerySource::Priority,
-            hash,
-            count: pull_count,
+            hash: result.hash,
+            count: pull_count as usize,
         };
 
         {
@@ -401,12 +334,9 @@ impl Bootstrapper {
             logic.running_queries.insert(query.clone());
         }
 
-        let sent = self.send(&channel, &request, id);
+        let sent = self.send(&result.channel, &request, id);
 
-        // Only cooldown accounts that are likely to have more blocks
-        // This is to avoid requesting blocks from the same frontier multiple times, before the block processor had a chance to process them
-        // Not throttling accounts that are probably up-to-date allows us to evict them from the priority set faster
-        if sent && result.fails == 0 {
+        if sent && result.cooldown_account {
             self.mutex
                 .lock()
                 .unwrap()
@@ -689,10 +619,6 @@ impl Bootstrapper {
                         );
                     }
                 }
-
-                if query.source == QuerySource::Database {
-                    self.mutex.lock().unwrap().throttle.add(true);
-                }
                 true
             }
             VerifyResult::NothingNew => {
@@ -724,10 +650,6 @@ impl Bootstrapper {
                     }
 
                     guard.candidate_accounts.timestamp_reset(&query.account);
-
-                    if query.source == QuerySource::Database {
-                        guard.throttle.add(false);
-                    }
                 }
                 self.condition.notify_all();
                 true
@@ -954,6 +876,7 @@ pub(super) struct BootstrapLogic {
     pub stats: Arc<Stats>,
     pub message_sender: MessageSender,
     pub block_processor: Arc<BlockProcessor>,
+    pub ledger: Arc<Ledger>,
 }
 
 impl BootstrapLogic {

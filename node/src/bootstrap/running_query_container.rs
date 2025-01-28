@@ -36,7 +36,6 @@ pub(crate) enum QuerySource {
     #[default]
     Invalid,
     Priority,
-    Database,
     Dependencies,
     Frontiers,
 }
@@ -60,7 +59,7 @@ impl RunningQuery {
     pub fn new_test_instance() -> Self {
         Self {
             query_type: QueryType::BlocksByHash,
-            source: QuerySource::Database,
+            source: QuerySource::Priority,
             start: HashOrAccount::from(1),
             account: Account::from(2),
             hash: BlockHash::from(3),
