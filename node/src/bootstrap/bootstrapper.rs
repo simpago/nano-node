@@ -1,6 +1,6 @@
 use super::{
-    channel_waiter::ChannelWaiter,
     crawlers::{AccountDatabaseCrawler, PendingDatabaseCrawler},
+    dependency_query::DependencyQuery,
     frontier_scan::{AccountRanges, AccountRangesConfig, FrontierScan},
     peer_scoring::PeerScoring,
     priority_query::PriorityQuery,
@@ -183,10 +183,6 @@ impl Bootstrapper {
         guard.send(channel, request, id, self.clock.now())
     }
 
-    fn create_asc_pull_request(&self, query: &RunningQuery) -> Message {
-        self.mutex.lock().unwrap().create_asc_pull_request(query)
-    }
-
     pub fn priority_len(&self) -> usize {
         self.mutex.lock().unwrap().candidate_accounts.priority_len()
     }
@@ -213,25 +209,6 @@ impl Bootstrapper {
             .unwrap()
             .candidate_accounts
             .blocked(account)
-    }
-
-    /* Waits for a condition to be satisfied with incremental backoff */
-    fn wait(&self, mut predicate: impl FnMut(&mut BootstrapLogic) -> bool) {
-        let mut guard = self.mutex.lock().unwrap();
-        let mut interval = Duration::from_millis(5);
-        while !guard.stopped && !predicate(&mut guard) {
-            guard = self
-                .condition
-                .wait_timeout_while(guard, interval, |g| !g.stopped)
-                .unwrap()
-                .0;
-            interval = min(interval * 2, self.config.throttle_wait);
-        }
-    }
-
-    /* Waits for a channel that is not full */
-    fn wait_channel(&self) -> Option<Arc<Channel>> {
-        self.wait_for(ChannelWaiter::new())
     }
 
     fn wait_for<A, T>(&self, mut action: A) -> Option<T>
@@ -264,123 +241,26 @@ impl Bootstrapper {
         }
     }
 
-    fn wait_blocking(&self) -> BlockHash {
-        let mut result = BlockHash::zero();
-        self.wait(|i| {
-            result = i.next_blocking(&self.stats);
-            !result.is_zero()
-        });
-        result
-    }
+    fn run_frontiers(&self) {
+        loop {
+            let frontier_scan = FrontierScan::new();
+            let Some(spec) = self.wait_for(frontier_scan) else {
+                return;
+            };
 
-    fn create_account_info_request(
-        &self,
-        id: u64,
-        hash: BlockHash,
-        source: QuerySource,
-        now: Timestamp,
-    ) -> Message {
-        let query = RunningQuery {
-            query_type: QueryType::AccountInfoByHash,
-            source,
-            start: hash.into(),
-            account: Account::zero(),
-            hash,
-            count: 0,
-            id,
-            response_cutoff: now + self.config.request_timeout * 4,
-            sent: now,
-        };
-
-        self.create_asc_pull_request(&query)
-    }
-
-    fn run_one_priority(&self) {
-        let prio_query = PriorityQuery::new();
-        let Some(spec) = self.wait_for(prio_query) else {
-            return;
-        };
-
-        let id = thread_rng().next_u64();
-        let now = self.clock.now();
-        let query = RunningQuery::from_request(id, &spec, now, self.config.request_timeout);
-        let request = Message::AscPullReq(AscPullReq {
-            id,
-            req_type: spec.req_type,
-        });
-
-        {
-            let mut logic = self.mutex.lock().unwrap();
-            debug_assert!(!logic.running_queries.contains(query.id));
-            logic.running_queries.insert(query.clone());
-        }
-
-        let sent = self.send(&spec.channel, &request, id);
-
-        if sent && spec.cooldown_account {
-            self.mutex
-                .lock()
-                .unwrap()
-                .candidate_accounts
-                .timestamp_set(&spec.account, self.clock.now());
+            self.send_request(spec);
         }
     }
 
     fn run_priorities(&self) {
-        let mut guard = self.mutex.lock().unwrap();
-        while !guard.stopped {
-            drop(guard);
-            self.stats.inc(StatType::Bootstrap, DetailType::Loop);
-            self.run_one_priority();
-            guard = self.mutex.lock().unwrap();
-        }
-    }
-
-    fn run_one_dependency(&self) {
-        // No need to wait for blockprocessor, as we are not processing blocks
-        let Some(channel) = self.wait_channel() else {
-            return;
-        };
-        let blocking = self.wait_blocking();
-        if blocking.is_zero() {
-            return;
-        }
-
-        let now = self.clock.now();
-        let id = thread_rng().next_u64();
-        let request =
-            self.create_account_info_request(id, blocking, QuerySource::Dependencies, now);
-
-        self.send(&channel, &request, id);
-    }
-
-    fn run_frontiers(&self) {
         loop {
-            let frontier_scan = FrontierScan::new();
-            match self.wait_for(frontier_scan) {
-                Some(spec) => {
-                    self.send_request(spec);
-                }
-                None => break,
-            }
+            let prio_query = PriorityQuery::new();
+            let Some(spec) = self.wait_for(prio_query) else {
+                return;
+            };
+
+            self.send_request(spec);
         }
-    }
-
-    fn send_request(&self, spec: AscPullQuerySpec) {
-        let id = thread_rng().next_u64();
-        let now = self.clock.now();
-        let query = RunningQuery::from_request(id, &spec, now, self.config.request_timeout);
-
-        let req = AscPullReq {
-            id,
-            req_type: spec.req_type,
-        };
-
-        let mut guard = self.mutex.lock().unwrap();
-        guard.running_queries.insert(query);
-        let message = Message::AscPullReq(req);
-        let _sent = guard.send(&spec.channel, &message, id, now);
-        // TODO what to do if message could not be sent?
     }
 
     fn run_dependencies(&self) {
@@ -391,6 +271,70 @@ impl Bootstrapper {
                 .inc(StatType::Bootstrap, DetailType::LoopDependencies);
             self.run_one_dependency();
             guard = self.mutex.lock().unwrap();
+        }
+    }
+
+    fn run_one_dependency(&self) {
+        let dependency_query = DependencyQuery::new();
+        let Some((channel, blocking)) = self.wait_for(dependency_query) else {
+            return;
+        };
+
+        let now = self.clock.now();
+        let id = thread_rng().next_u64();
+        let query = RunningQuery {
+            query_type: QueryType::AccountInfoByHash,
+            source: QuerySource::Dependencies,
+            start: blocking.into(),
+            account: Account::zero(),
+            hash: blocking,
+            count: 0,
+            id,
+            response_cutoff: now + self.config.request_timeout * 4,
+            sent: now,
+        };
+
+        let request;
+        {
+            let mut guard = self.mutex.lock().unwrap();
+            debug_assert!(!guard.running_queries.contains(query.id));
+            guard.running_queries.insert(query.clone());
+
+            let req_type = match query.query_type {
+                QueryType::AccountInfoByHash => {
+                    AscPullReqType::AccountInfo(AccountInfoReqPayload {
+                        target: query.start,
+                        target_type: HashType::Block, // Query account info by block hash
+                    })
+                }
+                _ => unreachable!(),
+            };
+
+            request = Message::AscPullReq(AscPullReq {
+                id: query.id,
+                req_type,
+            });
+        }
+
+        self.send(&channel, &request, id);
+    }
+
+    fn send_request(&self, spec: AscPullQuerySpec) {
+        let id = thread_rng().next_u64();
+        let now = self.clock.now();
+        let query = RunningQuery::from_request(id, &spec, now, self.config.request_timeout);
+
+        let request = AscPullReq {
+            id,
+            req_type: spec.req_type,
+        };
+
+        let mut guard = self.mutex.lock().unwrap();
+        guard.running_queries.insert(query);
+        let message = Message::AscPullReq(request);
+        let sent = guard.send(&spec.channel, &message, id, now);
+        if sent && spec.cooldown_account {
+            guard.candidate_accounts.timestamp_set(&spec.account, now);
         }
     }
 
@@ -1005,7 +949,7 @@ impl BootstrapLogic {
     }
 
     /* Waits for next available blocking block */
-    fn next_blocking(&self, stats: &Stats) -> BlockHash {
+    pub fn next_blocking(&self) -> BlockHash {
         let blocking = self
             .candidate_accounts
             .next_blocking(|hash| self.count_tags_by_hash(hash, QuerySource::Dependencies) == 0);
@@ -1014,7 +958,8 @@ impl BootstrapLogic {
             return blocking;
         }
 
-        stats.inc(StatType::BootstrapNext, DetailType::NextBlocking);
+        self.stats
+            .inc(StatType::BootstrapNext, DetailType::NextBlocking);
 
         blocking
     }
@@ -1069,43 +1014,6 @@ impl BootstrapLogic {
 
     pub fn send_query_failed(&mut self, id: u64) {
         self.running_queries.remove(id);
-    }
-
-    pub fn create_asc_pull_request(&mut self, query: &RunningQuery) -> Message {
-        debug_assert!(!self.running_queries.contains(query.id));
-        self.running_queries.insert(query.clone());
-
-        let req_type = match query.query_type {
-            QueryType::BlocksByHash | QueryType::BlocksByAccount => {
-                let start_type = if query.query_type == QueryType::BlocksByHash {
-                    HashType::Block
-                } else {
-                    HashType::Account
-                };
-
-                AscPullReqType::Blocks(BlocksReqPayload {
-                    start_type,
-                    start: query.start,
-                    count: query.count as u8,
-                })
-            }
-            QueryType::AccountInfoByHash => AscPullReqType::AccountInfo(AccountInfoReqPayload {
-                target: query.start,
-                target_type: HashType::Block, // Query account info by block hash
-            }),
-            QueryType::Invalid => panic!("invalid query type"),
-            QueryType::Frontiers => {
-                AscPullReqType::Frontiers(rsnano_messages::FrontiersReqPayload {
-                    start: query.start.into(),
-                    count: FrontiersReqPayload::MAX_FRONTIERS,
-                })
-            }
-        };
-
-        Message::AscPullReq(AscPullReq {
-            id: query.id,
-            req_type,
-        })
     }
 
     pub fn send(&mut self, channel: &Channel, request: &Message, id: u64, now: Timestamp) -> bool {

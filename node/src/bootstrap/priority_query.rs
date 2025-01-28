@@ -39,7 +39,10 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
         let mut state_changed = false;
         loop {
             let new_state = match &mut self.state {
-                PriorityState::Initial => Some(PriorityState::WaitBlockProcessor),
+                PriorityState::Initial => {
+                    logic.stats.inc(StatType::Bootstrap, DetailType::Loop);
+                    Some(PriorityState::WaitBlockProcessor)
+                }
                 PriorityState::WaitBlockProcessor => {
                     if logic.block_processor.queue_len(BlockSource::Bootstrap)
                         < logic.config.block_processor_theshold

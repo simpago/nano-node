@@ -3,6 +3,7 @@ mod bootstrapper;
 mod candidate_accounts;
 mod channel_waiter;
 mod crawlers;
+mod dependency_query;
 mod frontier_scan;
 mod peer_scoring;
 mod priority_query;
