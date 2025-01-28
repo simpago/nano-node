@@ -1,6 +1,5 @@
-use super::{
+use crate::bootstrap::{
     frontier_scan::AccountRanges,
-    peer_scoring::PeerScoring,
     running_query_container::{QuerySource, RunningQueryContainer},
     BootstrapConfig, CandidateAccounts, PriorityResult,
 };
@@ -9,7 +8,9 @@ use rsnano_core::{utils::ContainerInfo, BlockHash};
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
-pub(super) struct BootstrapState {
+use super::PeerScoring;
+
+pub(crate) struct BootstrapState {
     pub candidate_accounts: CandidateAccounts,
     pub scoring: PeerScoring,
     pub running_queries: RunningQueryContainer,

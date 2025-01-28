@@ -1,6 +1,6 @@
 use super::{
-    bootstrap_state::BootstrapState,
     running_query_container::{QueryType, RunningQuery},
+    state::BootstrapState,
     BootstrapConfig, CandidateAccounts, PriorityDownResult,
 };
 use crate::{

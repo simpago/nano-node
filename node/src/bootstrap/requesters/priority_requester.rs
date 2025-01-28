@@ -1,6 +1,6 @@
 use crate::bootstrap::{
-    bootstrap_state::BootstrapState, channel_waiter::ChannelWaiter, AscPullQuerySpec,
-    BootstrapAction, BootstrapConfig, BootstrapResponder, WaitResult,
+    channel_waiter::ChannelWaiter, state::BootstrapState, AscPullQuerySpec, BootstrapAction,
+    BootstrapConfig, BootstrapResponder, WaitResult,
 };
 use crate::{
     block_processing::{BlockProcessor, BlockSource},

@@ -1,5 +1,6 @@
+use crate::bootstrap::state::BootstrapState;
 use crate::bootstrap::{
-    channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapState, WaitResult,
+    channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, WaitResult,
 };
 use crate::stats::{DetailType, StatType, Stats};
 use rsnano_core::Account;

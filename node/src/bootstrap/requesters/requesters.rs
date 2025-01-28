@@ -1,7 +1,7 @@
 use crate::bootstrap::{
-    bootstrap_state::BootstrapState,
     channel_waiter::ChannelWaiter,
     running_query_container::{QueryType, RunningQuery},
+    state::BootstrapState,
     AscPullQuerySpec, BootstrapAction, BootstrapConfig,
 };
 use crate::{

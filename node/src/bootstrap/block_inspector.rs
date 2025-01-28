@@ -1,4 +1,4 @@
-use super::{bootstrap_state::BootstrapState, PriorityUpResult};
+use super::{state::BootstrapState, PriorityUpResult};
 use crate::{
     block_processing::{BlockContext, BlockSource},
     stats::{DetailType, StatType, Stats},

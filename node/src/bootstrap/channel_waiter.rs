@@ -1,4 +1,4 @@
-use super::{BootstrapAction, BootstrapState, WaitResult};
+use super::{state::BootstrapState, BootstrapAction, WaitResult};
 use rsnano_network::{bandwidth_limiter::RateLimiter, Channel};
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;

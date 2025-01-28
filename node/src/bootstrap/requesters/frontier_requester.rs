@@ -1,6 +1,6 @@
 use crate::{
     bootstrap::{
-        channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapState,
+        channel_waiter::ChannelWaiter, state::BootstrapState, AscPullQuerySpec, BootstrapAction,
         WaitResult,
     },
     stats::{DetailType, StatType, Stats},

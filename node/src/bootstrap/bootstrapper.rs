@@ -1,7 +1,7 @@
 use super::{
-    block_inspector::BlockInspector, bootstrap_state::BootstrapState, cleanup::BootstrapCleanup,
-    frontier_scan::AccountRangesConfig, requesters::Requesters, response_handler::ResponseHandler,
-    running_query_container::QueryType, CandidateAccountsConfig,
+    block_inspector::BlockInspector, cleanup::BootstrapCleanup, frontier_scan::AccountRangesConfig,
+    requesters::Requesters, response_handler::ResponseHandler, running_query_container::QueryType,
+    state::BootstrapState, CandidateAccountsConfig,
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, LedgerNotifications},
