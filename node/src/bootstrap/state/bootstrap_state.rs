@@ -83,3 +83,9 @@ impl BootstrapState {
             .finish()
     }
 }
+
+impl Default for BootstrapState {
+    fn default() -> Self {
+        Self::new(Default::default(), Arc::new(Stats::default()))
+    }
+}

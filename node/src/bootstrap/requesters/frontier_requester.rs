@@ -1,7 +1,7 @@
 use crate::{
     bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapAction, WaitResult},
     stats::{DetailType, StatType, Stats},
-    utils::{ThreadPool, ThreadPoolImpl},
+    utils::ThreadPool,
 };
 use rsnano_core::{Account, BlockHash};
 use rsnano_messages::{AscPullReqType, FrontiersReqPayload};
@@ -15,7 +15,7 @@ pub(crate) struct FrontierRequester {
     state: FrontierState,
     stats: Arc<Stats>,
     frontiers_limiter: RateLimiter,
-    workers: Arc<ThreadPoolImpl>,
+    workers: Arc<dyn ThreadPool>,
     max_pending: usize,
     channel_waiter: Arc<dyn Fn() -> ChannelWaiter + Send + Sync>,
 }
@@ -32,7 +32,7 @@ enum FrontierState {
 
 impl FrontierRequester {
     pub(crate) fn new(
-        workers: Arc<ThreadPoolImpl>,
+        workers: Arc<dyn ThreadPool>,
         stats: Arc<Stats>,
         rate_limit: usize,
         max_pending: usize,
@@ -159,5 +159,30 @@ impl BootstrapAction<AscPullQuerySpec> for FrontierRequester {
         } else {
             WaitResult::ContinueWait
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::ThreadPoolImpl;
+
+    #[test]
+    fn happy_path() {
+        let workers = Arc::new(ThreadPoolImpl::new_null());
+        let stats = Arc::new(Stats::default());
+        let waiter = Arc::new(|| ChannelWaiter::default());
+        let mut requester = FrontierRequester::new(workers, stats, 1000, 1000, waiter);
+        let mut state = BootstrapState::default();
+        state
+            .scoring
+            .sync(vec![Arc::new(Channel::new_test_instance())]);
+
+        let result = requester.run(&mut state, Timestamp::new_test_instance());
+
+        let WaitResult::Finished(req) = result else {
+            panic!("requester didn't finish'");
+        };
+        assert!(matches!(req.req_type, AscPullReqType::Frontiers(_)));
     }
 }

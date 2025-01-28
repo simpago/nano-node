@@ -93,6 +93,12 @@ impl BootstrapAction<Arc<Channel>> for ChannelWaiter {
     }
 }
 
+impl Default for ChannelWaiter {
+    fn default() -> Self {
+        Self::new(Arc::new(RateLimiter::new(1024)), 1024)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
