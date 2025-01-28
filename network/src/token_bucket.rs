@@ -42,7 +42,7 @@ impl TokenBucket {
             smallest_size: 0,
         };
 
-        result.reset(max_token_count, refill_rate);
+        result.reset_with(max_token_count, refill_rate);
         result
     }
 
@@ -68,8 +68,12 @@ impl TokenBucket {
         possible || self.refill_rate == UNLIMITED
     }
 
+    pub fn reset(&mut self) {
+        self.reset_with(self.max_token_count, self.refill_rate);
+    }
+
     /** Update the max_token_count and/or refill_rate_a parameters */
-    pub fn reset(&mut self, mut max_token_count: usize, mut refill_rate: usize) {
+    pub fn reset_with(&mut self, mut max_token_count: usize, mut refill_rate: usize) {
         // A token count of 0 indicates unlimited capacity. We use 1e9 as
         // a sentinel, allowing largest burst to still be computed.
         if max_token_count == 0 || refill_rate == 0 {
@@ -161,7 +165,7 @@ mod tests {
         assert!(bucket.try_consume(1000000));
 
         // set bucket to be limited
-        bucket.reset(1000, 1000);
+        bucket.reset_with(1000, 1000);
         assert_eq!(bucket.try_consume(1001), false);
         assert_eq!(bucket.try_consume(1000), true);
         assert_eq!(bucket.try_consume(1000), false);
@@ -169,19 +173,19 @@ mod tests {
         assert_eq!(bucket.try_consume(2), true);
 
         // reduce the limit
-        bucket.reset(100, 100 * 1000);
+        bucket.reset_with(100, 100 * 1000);
         assert_eq!(bucket.try_consume(101), false);
         assert_eq!(bucket.try_consume(100), true);
         MockClock::advance(Duration::from_millis(1));
         assert_eq!(bucket.try_consume(100), true);
 
         // increase the limit
-        bucket.reset(2000, 1);
+        bucket.reset_with(2000, 1);
         assert_eq!(bucket.try_consume(2001), false);
         assert_eq!(bucket.try_consume(2000), true);
 
         // back to unlimited
-        bucket.reset(0, 0);
+        bucket.reset_with(0, 0);
         assert_eq!(bucket.try_consume(1000000), true);
         assert_eq!(bucket.try_consume(1000000), true);
     }

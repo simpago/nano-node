@@ -336,6 +336,11 @@ impl CandidateAccounts {
         return Priority::ZERO;
     }
 
+    pub fn clear(&mut self) {
+        self.priorities.clear();
+        self.blocking.clear();
+    }
+
     pub fn container_info(&self) -> ContainerInfo {
         // Count blocking entries with their dependency account unknown
         let blocking_unknown = self.blocking.count_by_dependency_account(&Account::zero());

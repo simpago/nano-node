@@ -1,3 +1,4 @@
+use super::channel_waiter::ChannelWaiter;
 use crate::{
     bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapAction, WaitResult},
     stats::{DetailType, StatType, Stats},
@@ -8,8 +9,6 @@ use rsnano_messages::{AscPullReqType, FrontiersReqPayload};
 use rsnano_network::{bandwidth_limiter::RateLimiter, Channel};
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
-
-use super::channel_waiter::ChannelWaiter;
 
 pub(crate) struct FrontierRequester {
     state: FrontierState,
@@ -165,18 +164,16 @@ impl BootstrapAction<AscPullQuerySpec> for FrontierRequester {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::ThreadPoolImpl;
+    use crate::{
+        bootstrap::{state::CandidateAccountsConfig, BootstrapConfig},
+        utils::ThreadPoolImpl,
+    };
 
     #[test]
     fn happy_path() {
-        let workers = Arc::new(ThreadPoolImpl::new_null());
-        let stats = Arc::new(Stats::default());
-        let waiter = Arc::new(|| ChannelWaiter::default());
-        let mut requester = FrontierRequester::new(workers, stats, 1000, 1000, waiter);
+        let mut requester = create_test_requester();
         let mut state = BootstrapState::default();
-        state
-            .scoring
-            .sync(vec![Arc::new(Channel::new_test_instance())]);
+        add_test_channel_to(&mut state);
 
         let result = requester.run(&mut state, Timestamp::new_test_instance());
 
@@ -184,5 +181,81 @@ mod tests {
             panic!("requester didn't finish'");
         };
         assert!(matches!(req.req_type, AscPullReqType::Frontiers(_)));
+    }
+
+    #[test]
+    fn wait_candidate_accounts() {
+        let mut requester = create_test_requester();
+        let mut state = state_with_max_priorities(1);
+        // Fill up candidate accounts
+        state.candidate_accounts.priority_up(&Account::from(1));
+
+        // Should wait because candidate accounts are full enough
+        let result = requester.run(&mut state, Timestamp::new_test_instance());
+        assert!(matches!(result, WaitResult::BeginWait));
+        assert!(matches!(
+            requester.state,
+            FrontierState::WaitCandidateAccounts
+        ));
+
+        // Running again continues waiting
+        let result = requester.run(&mut state, Timestamp::new_test_instance());
+        assert!(matches!(result, WaitResult::ContinueWait));
+
+        // If the accounts are cleared, continue
+        state.candidate_accounts.clear();
+        let result = requester.run(&mut state, Timestamp::new_test_instance());
+        assert!(matches!(result, WaitResult::BeginWait));
+        assert!(matches!(requester.state, FrontierState::WaitChannel(_)));
+    }
+
+    #[test]
+    fn wait_limiter() {
+        let mut requester = create_test_requester();
+        let mut state = BootstrapState::default();
+        requester.frontiers_limiter.should_pass(TEST_RATE_LIMIT);
+
+        // Should wait because rate limit reached
+        let result = requester.run(&mut state, Timestamp::new_test_instance());
+        assert!(matches!(result, WaitResult::BeginWait));
+        assert!(matches!(requester.state, FrontierState::WaitLimiter));
+
+        // Running again continues waiting
+        let result = requester.run(&mut state, Timestamp::new_test_instance());
+        assert!(matches!(result, WaitResult::ContinueWait));
+
+        // Continue when the limiter is emptied
+        requester.frontiers_limiter.reset();
+        let result = requester.run(&mut state, Timestamp::new_test_instance());
+        assert!(matches!(result, WaitResult::BeginWait));
+        assert!(matches!(requester.state, FrontierState::WaitChannel(_)));
+    }
+
+    // Test helpers:
+
+    const TEST_RATE_LIMIT: usize = 1000;
+
+    fn create_test_requester() -> FrontierRequester {
+        let workers = Arc::new(ThreadPoolImpl::new_null());
+        let stats = Arc::new(Stats::default());
+        let waiter = Arc::new(|| ChannelWaiter::default());
+        FrontierRequester::new(workers, stats.clone(), TEST_RATE_LIMIT, 1000, waiter)
+    }
+
+    fn state_with_max_priorities(max: usize) -> BootstrapState {
+        let config = BootstrapConfig {
+            candidate_accounts: CandidateAccountsConfig {
+                priorities_max: max,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        BootstrapState::new(config, Arc::new(Stats::default()))
+    }
+
+    fn add_test_channel_to(state: &mut BootstrapState) {
+        state
+            .scoring
+            .sync(vec![Arc::new(Channel::new_test_instance())]);
     }
 }

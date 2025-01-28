@@ -153,6 +153,13 @@ impl BlockingContainer {
             self.by_dependency_account.remove(&entry.dependency_account);
         }
     }
+
+    pub fn clear(&mut self) {
+        self.by_account.clear();
+        self.sequenced.clear();
+        self.by_dependency.clear();
+        self.by_dependency_account.clear();
+    }
 }
 
 #[cfg(test)]

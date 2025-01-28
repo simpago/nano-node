@@ -25,11 +25,8 @@ impl RateLimiter {
         self.bucket.lock().unwrap().try_consume(message_size)
     }
 
-    pub fn reset(&self, limit_burst_ratio: f64, limit: usize) {
-        self.bucket
-            .lock()
-            .unwrap()
-            .reset((limit as f64 * limit_burst_ratio) as usize, limit)
+    pub fn reset(&self) {
+        self.bucket.lock().unwrap().reset()
     }
 
     pub fn size(&self) -> usize {
@@ -82,10 +79,6 @@ impl BandwidthLimiter {
      */
     pub fn should_pass(&self, buffer_size: usize, limit_type: TrafficType) -> bool {
         self.select_limiter(limit_type).should_pass(buffer_size)
-    }
-
-    pub fn reset(&self, limit: usize, burst_ratio: f64, limit_type: TrafficType) {
-        self.select_limiter(limit_type).reset(burst_ratio, limit);
     }
 
     fn select_limiter(&self, limit_type: TrafficType) -> &RateLimiter {

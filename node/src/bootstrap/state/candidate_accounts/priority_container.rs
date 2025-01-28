@@ -175,6 +175,11 @@ impl PriorityContainer {
             self.by_priority.remove(&priority.into());
         }
     }
+
+    pub fn clear(&mut self) {
+        self.by_account.clear();
+        self.by_priority.clear();
+    }
 }
 
 #[cfg(test)]
