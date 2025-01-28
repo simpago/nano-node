@@ -20,7 +20,7 @@ use rand::{thread_rng, RngCore};
 use rsnano_core::{utils::ContainerInfo, Account, Block, BlockHash, BlockType, SavedBlock};
 use rsnano_ledger::{BlockStatus, Ledger};
 use rsnano_messages::{
-    AscPullAck, AscPullAckType, AscPullReq, AscPullReqType, BlocksAckPayload, HashType, Message,
+    AscPullAck, AscPullReq, AscPullReqType, BlocksAckPayload, HashType, Message,
 };
 use rsnano_network::{bandwidth_limiter::RateLimiter, Channel, ChannelId, Network, TrafficType};
 use rsnano_nullable_clock::{SteadyClock, Timestamp};
@@ -84,18 +84,14 @@ impl Default for BootstrapConfig {
 }
 
 pub struct Bootstrapper {
-    block_processor: Arc<BlockProcessor>,
     ledger: Arc<Ledger>,
     stats: Arc<Stats>,
     threads: Mutex<Option<Threads>>,
     mutex: Arc<Mutex<BootstrapLogic>>,
     condition: Arc<Condvar>,
     config: BootstrapConfig,
-    /// Requests for accounts from database have much lower hitrate and could introduce strain on the network
-    /// A separate (lower) limiter ensures that we always reserve resources for querying accounts from priority queue
-    database_limiter: RateLimiter,
     clock: Arc<SteadyClock>,
-    workers: Arc<ThreadPoolImpl>,
+    response_handler: ResponseHandler,
 }
 
 struct Threads {
@@ -117,37 +113,49 @@ impl Bootstrapper {
     ) -> Self {
         let workers = Arc::new(ThreadPoolImpl::create(1, "Bootstrap work"));
 
+        let logic = Arc::new(Mutex::new(BootstrapLogic {
+            stopped: false,
+            candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
+            scoring: PeerScoring::new(config.clone()),
+            account_ranges: AccountRanges::new(config.frontier_scan.clone(), stats.clone()),
+            running_queries: RunningQueryContainer::default(),
+            throttle: Throttle::new(compute_throttle_size(
+                ledger.account_count(),
+                config.throttle_coefficient,
+            )),
+            sync_dependencies_interval: Instant::now(),
+            config: config.clone(),
+            network,
+            limiter: RateLimiter::new(config.rate_limit),
+            frontiers_limiter: RateLimiter::new(config.frontier_rate_limit),
+            workers: workers.clone(),
+            stats: stats.clone(),
+            message_sender,
+            block_processor: block_processor.clone(),
+            ledger: ledger.clone(),
+        }));
+
+        let condition = Arc::new(Condvar::new());
+
+        let response_handler = ResponseHandler::new(
+            logic.clone(),
+            stats.clone(),
+            block_processor,
+            condition.clone(),
+            workers,
+            ledger.clone(),
+            config.clone(),
+        );
+
         Self {
             threads: Mutex::new(None),
-            mutex: Arc::new(Mutex::new(BootstrapLogic {
-                stopped: false,
-                candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
-                scoring: PeerScoring::new(config.clone()),
-                account_ranges: AccountRanges::new(config.frontier_scan.clone(), stats.clone()),
-                running_queries: RunningQueryContainer::default(),
-                throttle: Throttle::new(compute_throttle_size(
-                    ledger.account_count(),
-                    config.throttle_coefficient,
-                )),
-                sync_dependencies_interval: Instant::now(),
-                config: config.clone(),
-                network,
-                limiter: RateLimiter::new(config.rate_limit),
-                frontiers_limiter: RateLimiter::new(config.frontier_rate_limit),
-                workers: workers.clone(),
-                stats: stats.clone(),
-                message_sender,
-                block_processor: block_processor.clone(),
-                ledger: ledger.clone(),
-            })),
-            block_processor,
-            condition: Arc::new(Condvar::new()),
-            database_limiter: RateLimiter::new(config.database_rate_limit),
+            mutex: logic,
+            condition,
             config,
             stats,
             ledger,
             clock,
-            workers,
+            response_handler,
         }
     }
 
@@ -250,40 +258,8 @@ impl Bootstrapper {
 
     /// Process `asc_pull_ack` message coming from network
     pub fn process(&self, message: AscPullAck, channel_id: ChannelId) {
-        let response_handler = ResponseHandler::new(
-            self.mutex.clone(),
-            self.stats.clone(),
-            self.block_processor.clone(),
-            self.condition.clone(),
-            self.workers.clone(),
-            self.ledger.clone(),
-            self.config.clone(),
-        );
-        let Some(query) = response_handler.process(&message, channel_id, self.clock.now()) else {
-            return;
-        };
-
-        // Process the response payload
-        let ok = match message.pull_type {
-            AscPullAckType::Blocks(blocks) => response_handler.process_blocks(&blocks, &query),
-            AscPullAckType::AccountInfo(info) => response_handler.process_accounts(&info, &query),
-            AscPullAckType::Frontiers(frontiers) => {
-                response_handler.process_frontiers(frontiers, &query)
-            }
-        };
-
-        if ok {
-            self.mutex
-                .lock()
-                .unwrap()
-                .scoring
-                .received_message(channel_id);
-        } else {
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::InvalidResponse);
-        }
-
-        self.condition.notify_all();
+        self.response_handler
+            .process(message, channel_id, self.clock.now());
     }
 
     fn priority_inserted(&self) {
@@ -325,10 +301,7 @@ impl Bootstrapper {
     }
 
     pub fn container_info(&self) -> ContainerInfo {
-        self.mutex
-            .lock()
-            .unwrap()
-            .container_info(&self.database_limiter)
+        self.mutex.lock().unwrap().container_info()
     }
 }
 
@@ -686,10 +659,9 @@ impl BootstrapLogic {
         sent
     }
 
-    pub fn container_info(&self, database_limiter: &RateLimiter) -> ContainerInfo {
+    pub fn container_info(&self) -> ContainerInfo {
         let limiters: ContainerInfo = [
             ("total", self.limiter.size(), 0),
-            ("database", database_limiter.size(), 0),
             ("frontiers", self.frontiers_limiter.size(), 0),
         ]
         .into();

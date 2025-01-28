@@ -47,18 +47,13 @@ impl ResponseHandler {
         }
     }
 
-    pub fn process(
-        &self,
-        message: &AscPullAck,
-        channel_id: ChannelId,
-        now: Timestamp,
-    ) -> Option<RunningQuery> {
+    pub fn process(&self, message: AscPullAck, channel_id: ChannelId, now: Timestamp) {
         let mut guard = self.logic.lock().unwrap();
 
         // Only process messages that have a known running query
         let Some(query) = guard.running_queries.remove(message.id) else {
             guard.stats.inc(StatType::Bootstrap, DetailType::MissingTag);
-            return None;
+            return;
         };
 
         guard.stats.inc(StatType::Bootstrap, DetailType::Reply);
@@ -76,7 +71,7 @@ impl ResponseHandler {
             guard
                 .stats
                 .inc(StatType::Bootstrap, DetailType::InvalidResponseType);
-            return None;
+            return;
         }
 
         // Track bootstrap request response time
@@ -91,7 +86,25 @@ impl ResponseHandler {
         );
 
         drop(guard);
-        Some(query)
+        // Process the response payload
+        let ok = match message.pull_type {
+            AscPullAckType::Blocks(blocks) => self.process_blocks(&blocks, &query),
+            AscPullAckType::AccountInfo(info) => self.process_accounts(&info, &query),
+            AscPullAckType::Frontiers(frontiers) => self.process_frontiers(frontiers, &query),
+        };
+
+        if ok {
+            self.logic
+                .lock()
+                .unwrap()
+                .scoring
+                .received_message(channel_id);
+        } else {
+            self.stats
+                .inc(StatType::Bootstrap, DetailType::InvalidResponse);
+        }
+
+        self.condition.notify_all();
     }
 
     pub fn process_blocks(&self, response: &BlocksAckPayload, query: &RunningQuery) -> bool {
