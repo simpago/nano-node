@@ -18,6 +18,7 @@ pub(crate) struct FrontierQuery {
     frontiers_limiter: RateLimiter,
     workers: Arc<ThreadPoolImpl>,
     max_pending: usize,
+    channel_waiter: Arc<dyn Fn() -> ChannelWaiter + Send + Sync>,
 }
 
 enum FrontierQueryState {
@@ -36,6 +37,7 @@ impl FrontierQuery {
         stats: Arc<Stats>,
         rate_limit: usize,
         max_pending: usize,
+        channel_waiter: Arc<dyn Fn() -> ChannelWaiter + Send + Sync>,
     ) -> Self {
         Self {
             state: FrontierQueryState::Initial,
@@ -43,6 +45,7 @@ impl FrontierQuery {
             frontiers_limiter: RateLimiter::new(rate_limit),
             workers,
             max_pending,
+            channel_waiter,
         }
     }
 
@@ -88,7 +91,8 @@ impl FrontierQuery {
 
     fn wait_workers(&self) -> Option<FrontierQueryState> {
         if self.workers.num_queued_tasks() < self.max_pending {
-            Some(FrontierQueryState::WaitChannel(ChannelWaiter::new()))
+            let waiter = (self.channel_waiter)();
+            Some(FrontierQueryState::WaitChannel(waiter))
         } else {
             None
         }

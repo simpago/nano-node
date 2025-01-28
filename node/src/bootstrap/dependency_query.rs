@@ -1,7 +1,7 @@
 use super::{
     channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapLogic, WaitResult,
 };
-use crate::stats::{DetailType, StatType};
+use crate::stats::{DetailType, StatType, Stats};
 use rsnano_core::Account;
 use rsnano_messages::{AccountInfoReqPayload, AscPullReqType, HashType};
 use rsnano_network::Channel;
@@ -10,6 +10,8 @@ use std::sync::Arc;
 
 pub(super) struct DependencyQuery {
     state: DependencyQueryState,
+    stats: Arc<Stats>,
+    channel_waiter: Arc<dyn Fn() -> ChannelWaiter + Send + Sync>,
 }
 
 enum DependencyQueryState {
@@ -20,9 +22,14 @@ enum DependencyQueryState {
 }
 
 impl DependencyQuery {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(
+        stats: Arc<Stats>,
+        channel_waiter: Arc<dyn Fn() -> ChannelWaiter + Send + Sync>,
+    ) -> Self {
         Self {
             state: DependencyQueryState::Initial,
+            stats,
+            channel_waiter,
         }
     }
 }
@@ -33,10 +40,10 @@ impl BootstrapAction<AscPullQuerySpec> for DependencyQuery {
         loop {
             let new_state = match &mut self.state {
                 DependencyQueryState::Initial => {
-                    logic
-                        .stats
+                    self.stats
                         .inc(StatType::Bootstrap, DetailType::LoopDependencies);
-                    Some(DependencyQueryState::WaitChannel(ChannelWaiter::new()))
+                    let waiter = (self.channel_waiter)();
+                    Some(DependencyQueryState::WaitChannel(waiter))
                 }
                 DependencyQueryState::WaitChannel(waiter) => match waiter.run(logic, now) {
                     WaitResult::BeginWait => {
@@ -52,6 +59,9 @@ impl BootstrapAction<AscPullQuerySpec> for DependencyQuery {
                     if next.is_zero() {
                         None
                     } else {
+                        self.stats
+                            .inc(StatType::BootstrapNext, DetailType::NextBlocking);
+
                         // Query account info by block hash
                         let req_type = AscPullReqType::AccountInfo(AccountInfoReqPayload {
                             target: next.into(),

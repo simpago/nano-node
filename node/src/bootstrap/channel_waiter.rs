@@ -1,5 +1,5 @@
 use super::{BootstrapAction, BootstrapLogic, WaitResult};
-use rsnano_network::Channel;
+use rsnano_network::{bandwidth_limiter::RateLimiter, Channel};
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
@@ -7,6 +7,8 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub(super) struct ChannelWaiter {
     state: ChannelWaitState,
+    limiter: Arc<RateLimiter>,
+    max_requests: usize,
 }
 
 #[derive(Clone)]
@@ -19,9 +21,11 @@ enum ChannelWaitState {
 }
 
 impl ChannelWaiter {
-    pub fn new() -> Self {
+    pub fn new(limiter: Arc<RateLimiter>, max_requests: usize) -> Self {
         Self {
             state: ChannelWaitState::Initial,
+            limiter,
+            max_requests,
         }
     }
 
@@ -37,16 +41,16 @@ impl ChannelWaiter {
     fn get_next_state(&self, logic: &mut BootstrapLogic) -> Option<ChannelWaitState> {
         match &self.state {
             ChannelWaitState::Initial => Some(ChannelWaitState::WaitRunningQueries),
-            ChannelWaitState::WaitRunningQueries => Self::wait_running_queries(logic),
-            ChannelWaitState::WaitLimiter => Self::wait_limiter(logic),
+            ChannelWaitState::WaitRunningQueries => self.wait_running_queries(logic),
+            ChannelWaitState::WaitLimiter => self.wait_limiter(),
             ChannelWaitState::WaitScoring => Self::wait_scoring(logic),
             ChannelWaitState::Found(_) => None,
         }
     }
 
     /// Limit the number of in-flight requests
-    fn wait_running_queries(logic: &BootstrapLogic) -> Option<ChannelWaitState> {
-        if logic.running_queries.len() < logic.config.max_requests {
+    fn wait_running_queries(&self, logic: &BootstrapLogic) -> Option<ChannelWaitState> {
+        if logic.running_queries.len() < self.max_requests {
             Some(ChannelWaitState::WaitLimiter)
         } else {
             None
@@ -54,8 +58,8 @@ impl ChannelWaiter {
     }
 
     /// Wait until more requests can be sent
-    fn wait_limiter(logic: &BootstrapLogic) -> Option<ChannelWaitState> {
-        if logic.limiter.should_pass(1) {
+    fn wait_limiter(&self) -> Option<ChannelWaitState> {
+        if self.limiter.should_pass(1) {
             Some(ChannelWaitState::WaitScoring)
         } else {
             None
@@ -83,11 +87,5 @@ impl BootstrapAction<Arc<Channel>> for ChannelWaiter {
         } else {
             WaitResult::ContinueWait
         }
-    }
-}
-
-impl Default for ChannelWaiter {
-    fn default() -> Self {
-        Self::new()
     }
 }

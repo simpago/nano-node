@@ -1,10 +1,10 @@
 use super::{
-    channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapLogic,
-    BootstrapResponder, WaitResult,
+    channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapConfig,
+    BootstrapLogic, BootstrapResponder, WaitResult,
 };
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
-    stats::{DetailType, StatType},
+    stats::{DetailType, StatType, Stats},
 };
 use num::clamp;
 use rand::{thread_rng, Rng};
@@ -19,14 +19,26 @@ pub(super) struct PriorityQuery {
     state: PriorityState,
     ledger: Arc<Ledger>,
     block_processor: Arc<BlockProcessor>,
+    stats: Arc<Stats>,
+    channel_waiter: Arc<dyn Fn() -> ChannelWaiter + Send + Sync>,
+    config: BootstrapConfig,
 }
 
 impl PriorityQuery {
-    pub(super) fn new(ledger: Arc<Ledger>, block_processor: Arc<BlockProcessor>) -> Self {
+    pub(super) fn new(
+        ledger: Arc<Ledger>,
+        block_processor: Arc<BlockProcessor>,
+        stats: Arc<Stats>,
+        channel_waiter: Arc<dyn Fn() -> ChannelWaiter + Send + Sync>,
+        config: BootstrapConfig,
+    ) -> Self {
         Self {
             state: PriorityState::Initial,
             ledger,
             block_processor,
+            stats,
+            channel_waiter,
+            config,
         }
     }
 }
@@ -45,14 +57,14 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
         loop {
             let new_state = match &mut self.state {
                 PriorityState::Initial => {
-                    logic.stats.inc(StatType::Bootstrap, DetailType::Loop);
+                    self.stats.inc(StatType::Bootstrap, DetailType::Loop);
                     Some(PriorityState::WaitBlockProcessor)
                 }
                 PriorityState::WaitBlockProcessor => {
                     if self.block_processor.queue_len(BlockSource::Bootstrap)
-                        < logic.config.block_processor_theshold
+                        < self.config.block_processor_theshold
                     {
-                        let channel_waiter = ChannelWaiter::new();
+                        let channel_waiter = (self.channel_waiter)();
                         Some(PriorityState::WaitChannel(channel_waiter))
                     } else {
                         None
@@ -66,6 +78,9 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
                 PriorityState::WaitPriority(channel) => {
                     let next = logic.next_priority(now);
                     if !next.account.is_zero() {
+                        self.stats
+                            .inc(StatType::BootstrapNext, DetailType::NextPriority);
+
                         // Decide how many blocks to request
                         const MIN_PULL_COUNT: usize = 2;
                         let pull_count = clamp(
@@ -74,7 +89,7 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
                             BootstrapResponder::MAX_BLOCKS,
                         );
                         // Limit the max number of blocks to pull
-                        let pull_count = min(pull_count, logic.config.max_pull_count);
+                        let pull_count = min(pull_count, self.config.max_pull_count);
 
                         let account_info = {
                             let tx = self.ledger.read_txn();
@@ -89,18 +104,17 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
                                 // Optimistic requests start from the (possibly unconfirmed) account frontier and are vulnerable to bootstrap poisoning
                                 // Safe requests start from the confirmed frontier and given enough time will eventually resolve forks
                                 let optimistic_request = thread_rng().gen_range(0..100)
-                                    < logic.config.optimistic_request_percentage;
+                                    < self.config.optimistic_request_percentage;
 
                                 if optimistic_request {
-                                    logic.stats.inc(
+                                    self.stats.inc(
                                         StatType::BootstrapRequestBlocks,
                                         DetailType::Optimistic,
                                     );
                                     (HashType::Block, HashOrAccount::from(info.head), info.head)
                                 } else {
                                     // Pessimistic (safe) request case
-                                    logic
-                                        .stats
+                                    self.stats
                                         .inc(StatType::BootstrapRequestBlocks, DetailType::Safe);
 
                                     let conf_info =
@@ -117,8 +131,7 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
                                 }
                             }
                             None => {
-                                logic
-                                    .stats
+                                self.stats
                                     .inc(StatType::BootstrapRequestBlocks, DetailType::Base);
                                 (
                                     HashType::Account,

@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, BlockSource, LedgerNotifications},
-    bootstrap::WaitResult,
+    bootstrap::{channel_waiter::ChannelWaiter, WaitResult},
     stats::{DetailType, StatType, Stats},
     transport::MessageSender,
     utils::ThreadPoolImpl,
@@ -22,7 +22,7 @@ use rsnano_ledger::{BlockStatus, Ledger};
 use rsnano_messages::{
     AscPullAck, AscPullReq, AscPullReqType, BlocksAckPayload, HashType, Message,
 };
-use rsnano_network::{bandwidth_limiter::RateLimiter, Channel, ChannelId, Network, TrafficType};
+use rsnano_network::{bandwidth_limiter::RateLimiter, ChannelId, Network, TrafficType};
 use rsnano_nullable_clock::{SteadyClock, Timestamp};
 use std::{
     cmp::min,
@@ -95,6 +95,8 @@ pub struct Bootstrapper {
     clock: Arc<SteadyClock>,
     response_handler: ResponseHandler,
     workers: Arc<ThreadPoolImpl>,
+    message_sender: MessageSender,
+    limiter: Arc<RateLimiter>,
 }
 
 struct Threads {
@@ -116,16 +118,14 @@ impl Bootstrapper {
     ) -> Self {
         let workers = Arc::new(ThreadPoolImpl::create(1, "Bootstrap work"));
 
+        let limiter = Arc::new(RateLimiter::new(config.rate_limit));
+
         let logic = Arc::new(Mutex::new(BootstrapLogic {
             stopped: false,
             candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
             scoring: PeerScoring::new(config.clone()),
             account_ranges: AccountRanges::new(config.frontier_scan.clone(), stats.clone()),
             running_queries: RunningQueryContainer::default(),
-            config: config.clone(),
-            limiter: RateLimiter::new(config.rate_limit),
-            stats: stats.clone(),
-            message_sender,
         }));
 
         let condition = Arc::new(Condvar::new());
@@ -152,6 +152,8 @@ impl Bootstrapper {
             response_handler,
             workers,
             network,
+            message_sender,
+            limiter,
         }
     }
 
@@ -211,16 +213,20 @@ impl Bootstrapper {
         }
     }
 
-    fn run_queries<T: BootstrapAction<AscPullQuerySpec>>(&self, mut query_factory: T) {
+    fn run_queries<T: BootstrapAction<AscPullQuerySpec>>(
+        &self,
+        mut query_factory: T,
+        mut message_sender: MessageSender,
+    ) {
         loop {
             let Some(spec) = self.wait_for(&mut query_factory) else {
                 return;
             };
-            self.send_request(spec);
+            self.send_request(spec, &mut message_sender);
         }
     }
 
-    fn send_request(&self, spec: AscPullQuerySpec) {
+    fn send_request(&self, spec: AscPullQuerySpec, message_sender: &mut MessageSender) {
         let id = thread_rng().next_u64();
         let now = self.clock.now();
         let query = RunningQuery::from_request(id, &spec, now, self.config.request_timeout);
@@ -233,7 +239,29 @@ impl Bootstrapper {
         let mut guard = self.mutex.lock().unwrap();
         guard.running_queries.insert(query);
         let message = Message::AscPullReq(request);
-        let sent = guard.send(&spec.channel, &message, id, now);
+        let sent = message_sender.try_send_channel(
+            &spec.channel,
+            &message,
+            TrafficType::BootstrapRequests,
+        );
+
+        if sent {
+            self.stats.inc(StatType::Bootstrap, DetailType::Request);
+            let query_type = QueryType::from(&message);
+            self.stats
+                .inc(StatType::BootstrapRequest, query_type.into());
+        } else {
+            self.stats
+                .inc(StatType::Bootstrap, DetailType::RequestFailed);
+        }
+
+        if sent {
+            // After the request has been sent, the peer has a limited time to respond
+            let response_cutoff = now + self.config.request_timeout;
+            guard.set_response_cutoff(id, response_cutoff);
+        } else {
+            guard.remove_query(id);
+        }
         if sent && spec.cooldown_account {
             guard.candidate_accounts.timestamp_set(&spec.account, now);
         }
@@ -359,6 +387,10 @@ impl BootstrapExt for Arc<Bootstrapper> {
             return;
         }
 
+        let limiter = self.limiter.clone();
+        let max_requests = self.config.max_requests;
+        let channel_waiter = Arc::new(move || ChannelWaiter::new(limiter.clone(), max_requests));
+
         let frontiers = if self.config.enable_frontier_scan {
             Some(spawn_query(
                 "Bootstrap front",
@@ -367,6 +399,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
                     self.stats.clone(),
                     self.config.frontier_rate_limit,
                     self.config.frontier_scan.max_pending,
+                    channel_waiter.clone(),
                 ),
                 self.clone(),
             ))
@@ -377,7 +410,13 @@ impl BootstrapExt for Arc<Bootstrapper> {
         let priorities = if self.config.enable_scan {
             Some(spawn_query(
                 "Bootstrap",
-                PriorityQuery::new(self.ledger.clone(), self.block_processor.clone()),
+                PriorityQuery::new(
+                    self.ledger.clone(),
+                    self.block_processor.clone(),
+                    self.stats.clone(),
+                    channel_waiter.clone(),
+                    self.config.clone(),
+                ),
                 self.clone(),
             ))
         } else {
@@ -387,7 +426,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
         let dependencies = if self.config.enable_dependency_walker {
             Some(spawn_query(
                 "Bootstrap walkr",
-                DependencyQuery::new(),
+                DependencyQuery::new(self.stats.clone(), channel_waiter),
                 self.clone(),
             ))
         } else {
@@ -415,12 +454,6 @@ pub(super) struct BootstrapLogic {
     pub scoring: PeerScoring,
     pub running_queries: RunningQueryContainer,
     pub account_ranges: AccountRanges,
-    pub config: BootstrapConfig,
-    pub limiter: RateLimiter,
-
-    /// Rate limiter for all types of requests
-    pub stats: Arc<Stats>,
-    pub message_sender: MessageSender,
 }
 
 impl BootstrapLogic {
@@ -557,9 +590,6 @@ impl BootstrapLogic {
             return Default::default();
         }
 
-        self.stats
-            .inc(StatType::BootstrapNext, DetailType::NextPriority);
-
         next
     }
 
@@ -573,50 +603,21 @@ impl BootstrapLogic {
             return blocking;
         }
 
-        self.stats
-            .inc(StatType::BootstrapNext, DetailType::NextBlocking);
-
         blocking
     }
 
-    pub fn query_sent(&mut self, id: u64, now: Timestamp) {
+    pub fn set_response_cutoff(&mut self, id: u64, response_cutoff: Timestamp) {
         self.running_queries.modify(id, |query| {
             // After the request has been sent, the peer has a limited time to respond
-            query.response_cutoff = now + self.config.request_timeout;
+            query.response_cutoff = response_cutoff;
         });
     }
 
-    pub fn send_query_failed(&mut self, id: u64) {
+    pub fn remove_query(&mut self, id: u64) {
         self.running_queries.remove(id);
     }
 
-    pub fn send(&mut self, channel: &Channel, request: &Message, id: u64, now: Timestamp) -> bool {
-        let sent =
-            self.message_sender
-                .try_send_channel(channel, &request, TrafficType::BootstrapRequests);
-
-        if sent {
-            self.stats.inc(StatType::Bootstrap, DetailType::Request);
-            let query_type = QueryType::from(request);
-            self.stats
-                .inc(StatType::BootstrapRequest, query_type.into());
-        } else {
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::RequestFailed);
-        }
-
-        if sent {
-            self.query_sent(id, now);
-        } else {
-            self.send_query_failed(id);
-        }
-
-        sent
-    }
-
     pub fn container_info(&self) -> ContainerInfo {
-        let limiters: ContainerInfo = [("total", self.limiter.size(), 0)].into();
-
         ContainerInfo::builder()
             .leaf(
                 "tags",
@@ -626,7 +627,6 @@ impl BootstrapLogic {
             .node("accounts", self.candidate_accounts.container_info())
             .node("frontiers", self.account_ranges.container_info())
             .node("peers", self.scoring.container_info())
-            .node("limiters", limiters)
             .finish()
     }
 }
@@ -656,8 +656,11 @@ fn spawn_query<T>(
 where
     T: BootstrapAction<AscPullQuerySpec> + Send + 'static,
 {
+    let message_sender = bootstrapper.message_sender.clone();
     std::thread::Builder::new()
         .name(name.into())
-        .spawn(Box::new(move || bootstrapper.run_queries(query_factory)))
+        .spawn(Box::new(move || {
+            bootstrapper.run_queries(query_factory, message_sender)
+        }))
         .unwrap()
 }

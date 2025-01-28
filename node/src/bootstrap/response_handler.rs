@@ -52,11 +52,11 @@ impl ResponseHandler {
 
         // Only process messages that have a known running query
         let Some(query) = guard.running_queries.remove(message.id) else {
-            guard.stats.inc(StatType::Bootstrap, DetailType::MissingTag);
+            self.stats.inc(StatType::Bootstrap, DetailType::MissingTag);
             return;
         };
 
-        guard.stats.inc(StatType::Bootstrap, DetailType::Reply);
+        self.stats.inc(StatType::Bootstrap, DetailType::Reply);
 
         let valid = match message.pull_type {
             AscPullAckType::Blocks(_) => matches!(
@@ -68,21 +68,19 @@ impl ResponseHandler {
         };
 
         if !valid {
-            guard
-                .stats
+            self.stats
                 .inc(StatType::Bootstrap, DetailType::InvalidResponseType);
             return;
         }
 
         // Track bootstrap request response time
-        guard
-            .stats
+        self.stats
             .inc(StatType::BootstrapReply, query.query_type.into());
 
-        guard.stats.sample(
+        self.stats.sample(
             Sample::BootstrapTagDuration,
             query.sent.elapsed(now).as_millis() as i64,
-            (0, guard.config.request_timeout.as_millis() as i64),
+            (0, self.config.request_timeout.as_millis() as i64),
         );
 
         drop(guard);
