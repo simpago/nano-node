@@ -1,5 +1,6 @@
 use super::{
-    channel_waiter::ChannelWaiter, BootstrapAction, BootstrapLogic, BootstrapResponder, WaitResult,
+    channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapLogic,
+    BootstrapResponder, WaitResult,
 };
 use crate::{
     block_processing::BlockSource,
@@ -7,7 +8,7 @@ use crate::{
 };
 use num::clamp;
 use rand::{thread_rng, Rng};
-use rsnano_core::{Account, BlockHash, HashOrAccount};
+use rsnano_core::{BlockHash, HashOrAccount};
 use rsnano_messages::{AscPullReqType, BlocksReqPayload, HashType};
 use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
@@ -30,23 +31,11 @@ enum PriorityState {
     WaitBlockProcessor,
     WaitChannel(ChannelWaiter),
     WaitPriority(Arc<Channel>),
-    Done(PriorityQueryResult),
+    Done(AscPullQuerySpec),
 }
 
-pub(super) struct PriorityQueryResult {
-    pub channel: Arc<Channel>,
-    pub req_type: AscPullReqType,
-    pub account: Account,
-    pub hash: BlockHash,
-    pub cooldown_account: bool,
-}
-
-impl BootstrapAction<PriorityQueryResult> for PriorityQuery {
-    fn run(
-        &mut self,
-        logic: &mut BootstrapLogic,
-        now: Timestamp,
-    ) -> WaitResult<PriorityQueryResult> {
+impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
+    fn run(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
         let mut state_changed = false;
         loop {
             let new_state = match &mut self.state {
@@ -141,7 +130,7 @@ impl BootstrapAction<PriorityQueryResult> for PriorityQuery {
                         // Not throttling accounts that are probably up-to-date allows us to evict them from the priority set faster
                         let cooldown_account = next.fails == 0;
 
-                        let result = PriorityQueryResult {
+                        let result = AscPullQuerySpec {
                             channel: channel.clone(),
                             req_type,
                             hash,

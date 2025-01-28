@@ -1,5 +1,5 @@
 use rsnano_core::{Account, BlockHash, HashOrAccount};
-use rsnano_messages::{AscPullReq, AscPullReqType};
+use rsnano_messages::{AscPullReqType, HashType};
 use rsnano_nullable_clock::Timestamp;
 use std::{
     collections::{HashMap, VecDeque},
@@ -8,6 +8,8 @@ use std::{
 };
 
 use crate::stats::DetailType;
+
+use super::AscPullQuerySpec;
 
 #[derive(Default, PartialEq, Eq, Debug, Clone, Copy)]
 pub(crate) enum QueryType {
@@ -31,10 +33,8 @@ impl From<QueryType> for DetailType {
     }
 }
 
-#[derive(Default, PartialEq, Eq, Debug, Clone, Copy)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub(crate) enum QuerySource {
-    #[default]
-    Invalid,
     Priority,
     Dependencies,
     Frontiers,
@@ -44,8 +44,8 @@ pub(crate) enum QuerySource {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct RunningQuery {
     pub id: u64,
-    pub query_type: QueryType,
     pub source: QuerySource,
+    pub query_type: QueryType,
     pub start: HashOrAccount,
     pub account: Account,
     pub hash: BlockHash,
@@ -58,8 +58,8 @@ impl RunningQuery {
     #[allow(dead_code)]
     pub fn new_test_instance() -> Self {
         Self {
-            query_type: QueryType::BlocksByHash,
             source: QuerySource::Priority,
+            query_type: QueryType::BlocksByHash,
             start: HashOrAccount::from(1),
             account: Account::from(2),
             hash: BlockHash::from(3),
@@ -70,18 +70,44 @@ impl RunningQuery {
         }
     }
 
-    pub fn from_request(request: &AscPullReq, now: Timestamp, timeout: Duration) -> Self {
-        let AscPullReqType::Frontiers(f) = &request.req_type else {
-            panic!("incorrect message type");
+    pub fn from_request(
+        id: u64,
+        spec: &AscPullQuerySpec,
+        now: Timestamp,
+        timeout: Duration,
+    ) -> Self {
+        let (source, query_type, start, count) = match &spec.req_type {
+            AscPullReqType::Frontiers(f) => (
+                QuerySource::Frontiers,
+                QueryType::Frontiers,
+                HashOrAccount::from(f.start),
+                0,
+            ),
+            AscPullReqType::Blocks(b) => match b.start_type {
+                HashType::Account => (
+                    QuerySource::Priority,
+                    QueryType::BlocksByAccount,
+                    b.start,
+                    b.count,
+                ),
+                HashType::Block => (
+                    QuerySource::Priority,
+                    QueryType::BlocksByHash,
+                    b.start,
+                    b.count,
+                ),
+            },
+            _ => panic!("incorrect message type"),
         };
+
         Self {
-            query_type: QueryType::Frontiers,
-            source: QuerySource::Frontiers,
-            start: f.start.into(),
-            account: Account::zero(),
-            hash: BlockHash::zero(),
-            count: 0,
-            id: request.id,
+            source,
+            query_type,
+            start,
+            account: spec.account,
+            hash: spec.hash,
+            count: count.into(),
+            id,
             sent: now,
             response_cutoff: now + timeout * 4,
         }

@@ -6,8 +6,8 @@ use super::{
     priority_query::PriorityQuery,
     running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
     throttle::Throttle,
-    BootstrapAction, CandidateAccounts, CandidateAccountsConfig, PriorityDownResult,
-    PriorityResult, PriorityUpResult,
+    AscPullQuerySpec, BootstrapAction, CandidateAccounts, CandidateAccountsConfig,
+    PriorityDownResult, PriorityResult, PriorityUpResult,
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, BlockSource, LedgerNotifications},
@@ -297,36 +297,17 @@ impl Bootstrapper {
 
     fn run_one_priority(&self) {
         let prio_query = PriorityQuery::new();
-        let Some(result) = self.wait_for(prio_query) else {
+        let Some(spec) = self.wait_for(prio_query) else {
             return;
-        };
-
-        let (query_type, start, pull_count) = match &result.req_type {
-            AscPullReqType::Blocks(blocks) => match blocks.start_type {
-                HashType::Account => (QueryType::BlocksByAccount, blocks.start, blocks.count),
-                HashType::Block => (QueryType::BlocksByHash, blocks.start, blocks.count),
-            },
-            _ => unreachable!(),
         };
 
         let id = thread_rng().next_u64();
         let now = self.clock.now();
+        let query = RunningQuery::from_request(id, &spec, now, self.config.request_timeout);
         let request = Message::AscPullReq(AscPullReq {
             id,
-            req_type: result.req_type,
+            req_type: spec.req_type,
         });
-
-        let query = RunningQuery {
-            id,
-            account: result.account,
-            sent: now,
-            response_cutoff: now + self.config.request_timeout * 4,
-            query_type,
-            start,
-            source: QuerySource::Priority,
-            hash: result.hash,
-            count: pull_count as usize,
-        };
 
         {
             let mut logic = self.mutex.lock().unwrap();
@@ -334,14 +315,14 @@ impl Bootstrapper {
             logic.running_queries.insert(query.clone());
         }
 
-        let sent = self.send(&result.channel, &request, id);
+        let sent = self.send(&spec.channel, &request, id);
 
-        if sent && result.cooldown_account {
+        if sent && spec.cooldown_account {
             self.mutex
                 .lock()
                 .unwrap()
                 .candidate_accounts
-                .timestamp_set(&result.account, self.clock.now());
+                .timestamp_set(&spec.account, self.clock.now());
         }
     }
 
@@ -377,24 +358,28 @@ impl Bootstrapper {
         loop {
             let frontier_scan = FrontierScan::new();
             match self.wait_for(frontier_scan) {
-                Some((channel, req)) => {
-                    self.send_request(&channel, req);
+                Some(spec) => {
+                    self.send_request(spec);
                 }
                 None => break,
             }
         }
     }
 
-    fn send_request(&self, channel: &Channel, req_type: AscPullReqType) {
+    fn send_request(&self, spec: AscPullQuerySpec) {
         let id = thread_rng().next_u64();
         let now = self.clock.now();
-        let req = AscPullReq { id, req_type };
-        let query = RunningQuery::from_request(&req, now, self.config.request_timeout);
+        let query = RunningQuery::from_request(id, &spec, now, self.config.request_timeout);
+
+        let req = AscPullReq {
+            id,
+            req_type: spec.req_type,
+        };
 
         let mut guard = self.mutex.lock().unwrap();
         guard.running_queries.insert(query);
         let message = Message::AscPullReq(req);
-        let _sent = guard.send(&channel, &message, id, now);
+        let _sent = guard.send(&spec.channel, &message, id, now);
         // TODO what to do if message could not be sent?
     }
 
@@ -1087,7 +1072,6 @@ impl BootstrapLogic {
     }
 
     pub fn create_asc_pull_request(&mut self, query: &RunningQuery) -> Message {
-        debug_assert!(query.source != QuerySource::Invalid);
         debug_assert!(!self.running_queries.contains(query.id));
         self.running_queries.insert(query.clone());
 

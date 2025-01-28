@@ -1,11 +1,14 @@
-use rsnano_core::Account;
+use rsnano_core::{Account, BlockHash};
 use rsnano_messages::{AscPullReqType, FrontiersReqPayload};
 use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
 use crate::{
-    bootstrap::{channel_waiter::ChannelWaiter, BootstrapAction, BootstrapLogic, WaitResult},
+    bootstrap::{
+        channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapLogic,
+        WaitResult,
+    },
     stats::{DetailType, StatType},
     utils::ThreadPool,
 };
@@ -115,17 +118,20 @@ impl FrontierScan {
     }
 }
 
-impl BootstrapAction<(Arc<Channel>, AscPullReqType)> for FrontierScan {
-    fn run(
-        &mut self,
-        logic: &mut BootstrapLogic,
-        now: Timestamp,
-    ) -> WaitResult<(Arc<Channel>, AscPullReqType)> {
+impl BootstrapAction<AscPullQuerySpec> for FrontierScan {
+    fn run(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
         let mut state_changed = false;
         loop {
             match self.next_state(logic, now) {
                 Some(FrontierScanState::Done(channel, request)) => {
-                    return WaitResult::Finished((channel, request))
+                    let spec = AscPullQuerySpec {
+                        channel,
+                        req_type: request,
+                        account: Account::zero(),
+                        hash: BlockHash::zero(),
+                        cooldown_account: false,
+                    };
+                    return WaitResult::Finished(spec);
                 }
                 Some(new_state) => {
                     self.state = new_state;
