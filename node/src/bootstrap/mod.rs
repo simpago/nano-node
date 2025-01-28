@@ -10,6 +10,7 @@ mod dependency_requester;
 mod frontier_scan;
 mod peer_scoring;
 mod priority_requester;
+mod requesters;
 mod response_handler;
 mod running_query_container;
 

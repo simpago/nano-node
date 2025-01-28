@@ -1,31 +1,20 @@
 use super::{
-    block_inspector::BlockInspector,
-    bootstrap_state::BootstrapState,
-    cleanup::BootstrapCleanup,
-    dependency_requester::DependencyRequester,
-    frontier_scan::{AccountRangesConfig, FrontierRequester},
-    priority_requester::PriorityRequester,
-    response_handler::ResponseHandler,
-    running_query_container::{QueryType, RunningQuery},
-    AscPullQuerySpec, BootstrapAction, CandidateAccountsConfig,
+    block_inspector::BlockInspector, bootstrap_state::BootstrapState, cleanup::BootstrapCleanup,
+    frontier_scan::AccountRangesConfig, requesters::Requesters, response_handler::ResponseHandler,
+    running_query_container::QueryType, CandidateAccountsConfig,
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, LedgerNotifications},
-    bootstrap::{channel_waiter::ChannelWaiter, WaitResult},
     stats::{DetailType, StatType, Stats},
     transport::MessageSender,
     utils::ThreadPoolImpl,
 };
-use rand::{thread_rng, RngCore};
 use rsnano_core::{utils::ContainerInfo, Account};
 use rsnano_ledger::{BlockStatus, Ledger};
-use rsnano_messages::{
-    AscPullAck, AscPullReq, AscPullReqType, BlocksAckPayload, HashType, Message,
-};
-use rsnano_network::{bandwidth_limiter::RateLimiter, ChannelId, Network, TrafficType};
+use rsnano_messages::{AscPullAck, AscPullReqType, BlocksAckPayload, HashType, Message};
+use rsnano_network::{bandwidth_limiter::RateLimiter, ChannelId, Network};
 use rsnano_nullable_clock::SteadyClock;
 use std::{
-    cmp::min,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Condvar, Mutex, RwLock,
@@ -87,8 +76,6 @@ impl Default for BootstrapConfig {
 }
 
 pub struct Bootstrapper {
-    ledger: Arc<Ledger>,
-    block_processor: Arc<BlockProcessor>,
     stats: Arc<Stats>,
     network: Arc<RwLock<Network>>,
     threads: Mutex<Option<Threads>>,
@@ -97,18 +84,13 @@ pub struct Bootstrapper {
     config: BootstrapConfig,
     clock: Arc<SteadyClock>,
     response_handler: ResponseHandler,
-    workers: Arc<ThreadPoolImpl>,
-    message_sender: MessageSender,
-    limiter: Arc<RateLimiter>,
     stopped: AtomicBool,
     block_inspector: BlockInspector,
+    requesters: Requesters,
 }
 
 struct Threads {
     cleanup: JoinHandle<()>,
-    priorities: Option<JoinHandle<()>>,
-    dependencies: Option<JoinHandle<()>>,
-    frontiers: Option<JoinHandle<()>>,
 }
 
 impl Bootstrapper {
@@ -142,6 +124,18 @@ impl Bootstrapper {
         );
 
         let block_inspector = BlockInspector::new(state.clone(), ledger.clone(), stats.clone());
+        let requesters = Requesters::new(
+            limiter.clone(),
+            config.clone(),
+            workers.clone(),
+            stats.clone(),
+            message_sender.clone(),
+            state.clone(),
+            condition.clone(),
+            clock.clone(),
+            ledger.clone(),
+            block_processor.clone(),
+        );
 
         Self {
             threads: Mutex::new(None),
@@ -149,16 +143,12 @@ impl Bootstrapper {
             condition,
             config,
             stats,
-            block_processor,
-            ledger,
             clock,
             response_handler,
-            workers,
             network,
-            message_sender,
-            limiter,
             stopped: AtomicBool::new(false),
             block_inspector,
+            requesters,
         }
     }
 
@@ -168,18 +158,12 @@ impl Bootstrapper {
             self.stopped.store(true, Ordering::SeqCst);
         }
         self.condition.notify_all();
+
+        self.requesters.stop();
+
         let threads = self.threads.lock().unwrap().take();
         if let Some(threads) = threads {
-            if let Some(handle) = threads.priorities {
-                handle.join().unwrap();
-            }
             threads.cleanup.join().unwrap();
-            if let Some(dependencies) = threads.dependencies {
-                dependencies.join().unwrap();
-            }
-            if let Some(frontiers) = threads.frontiers {
-                frontiers.join().unwrap();
-            }
         }
     }
 
@@ -189,90 +173,6 @@ impl Bootstrapper {
             .unwrap()
             .candidate_accounts
             .prioritized(account)
-    }
-
-    fn wait_for<A, T>(&self, action: &mut A) -> Option<T>
-    where
-        A: BootstrapAction<T>,
-    {
-        const INITIAL_INTERVAL: Duration = Duration::from_millis(5);
-        let mut interval = INITIAL_INTERVAL;
-        let mut guard = self.state.lock().unwrap();
-        loop {
-            if self.stopped.load(Ordering::SeqCst) {
-                return None;
-            }
-
-            match action.run(&mut *guard, self.clock.now()) {
-                WaitResult::BeginWait => {
-                    interval = INITIAL_INTERVAL;
-                }
-                WaitResult::ContinueWait => {
-                    interval = min(interval * 2, self.config.throttle_wait);
-                }
-                WaitResult::Finished(result) => return Some(result),
-            }
-
-            guard = self
-                .condition
-                .wait_timeout_while(guard, interval, |_| !self.stopped.load(Ordering::SeqCst))
-                .unwrap()
-                .0;
-        }
-    }
-
-    fn run_queries<T: BootstrapAction<AscPullQuerySpec>>(
-        &self,
-        mut query_factory: T,
-        mut message_sender: MessageSender,
-    ) {
-        loop {
-            let Some(spec) = self.wait_for(&mut query_factory) else {
-                return;
-            };
-            self.send_request(spec, &mut message_sender);
-        }
-    }
-
-    fn send_request(&self, spec: AscPullQuerySpec, message_sender: &mut MessageSender) {
-        let id = thread_rng().next_u64();
-        let now = self.clock.now();
-        let query = RunningQuery::from_request(id, &spec, now, self.config.request_timeout);
-
-        let request = AscPullReq {
-            id,
-            req_type: spec.req_type,
-        };
-
-        let mut guard = self.state.lock().unwrap();
-        guard.running_queries.insert(query);
-        let message = Message::AscPullReq(request);
-        let sent = message_sender.try_send_channel(
-            &spec.channel,
-            &message,
-            TrafficType::BootstrapRequests,
-        );
-
-        if sent {
-            self.stats.inc(StatType::Bootstrap, DetailType::Request);
-            let query_type = QueryType::from(&message);
-            self.stats
-                .inc(StatType::BootstrapRequest, query_type.into());
-        } else {
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::RequestFailed);
-        }
-
-        if sent {
-            // After the request has been sent, the peer has a limited time to respond
-            let response_cutoff = now + self.config.request_timeout;
-            guard.set_response_cutoff(id, response_cutoff);
-        } else {
-            guard.remove_query(id);
-        }
-        if sent && spec.cooldown_account {
-            guard.candidate_accounts.timestamp_set(&spec.account, now);
-        }
     }
 
     fn run_timeouts(&self) {
@@ -374,51 +274,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
             return;
         }
 
-        let limiter = self.limiter.clone();
-        let max_requests = self.config.max_requests;
-        let channel_waiter = Arc::new(move || ChannelWaiter::new(limiter.clone(), max_requests));
-
-        let frontiers = if self.config.enable_frontier_scan {
-            Some(spawn_query(
-                "Bootstrap front",
-                FrontierRequester::new(
-                    self.workers.clone(),
-                    self.stats.clone(),
-                    self.config.frontier_rate_limit,
-                    self.config.frontier_scan.max_pending,
-                    channel_waiter.clone(),
-                ),
-                self.clone(),
-            ))
-        } else {
-            None
-        };
-
-        let priorities = if self.config.enable_scan {
-            Some(spawn_query(
-                "Bootstrap",
-                PriorityRequester::new(
-                    self.ledger.clone(),
-                    self.block_processor.clone(),
-                    self.stats.clone(),
-                    channel_waiter.clone(),
-                    self.config.clone(),
-                ),
-                self.clone(),
-            ))
-        } else {
-            None
-        };
-
-        let dependencies = if self.config.enable_dependency_walker {
-            Some(spawn_query(
-                "Bootstrap walkr",
-                DependencyRequester::new(self.stats.clone(), channel_waiter),
-                self.clone(),
-            ))
-        } else {
-            None
-        };
+        self.requesters.start();
 
         let self_l = Arc::clone(self);
         let timeout = std::thread::Builder::new()
@@ -426,12 +282,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
             .spawn(Box::new(move || self_l.run_timeouts()))
             .unwrap();
 
-        *self.threads.lock().unwrap() = Some(Threads {
-            cleanup: timeout,
-            priorities,
-            frontiers,
-            dependencies,
-        });
+        *self.threads.lock().unwrap() = Some(Threads { cleanup: timeout });
     }
 }
 
@@ -450,21 +301,4 @@ impl From<&Message> for QueryType {
             QueryType::Invalid
         }
     }
-}
-
-fn spawn_query<T>(
-    name: impl Into<String>,
-    query_factory: T,
-    bootstrapper: Arc<Bootstrapper>,
-) -> JoinHandle<()>
-where
-    T: BootstrapAction<AscPullQuerySpec> + Send + 'static,
-{
-    let message_sender = bootstrapper.message_sender.clone();
-    std::thread::Builder::new()
-        .name(name.into())
-        .spawn(Box::new(move || {
-            bootstrapper.run_queries(query_factory, message_sender)
-        }))
-        .unwrap()
 }
