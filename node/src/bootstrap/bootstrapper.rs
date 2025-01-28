@@ -1,4 +1,5 @@
 use super::{
+    cleanup::BootstrapCleanup,
     dependency_query::DependencyQuery,
     frontier_scan::{AccountRanges, AccountRangesConfig, FrontierQuery},
     peer_scoring::PeerScoring,
@@ -27,7 +28,7 @@ use std::{
     cmp::min,
     sync::{Arc, Condvar, Mutex, RwLock},
     thread::JoinHandle,
-    time::{Duration, Instant},
+    time::Duration,
 };
 use tracing::warn;
 
@@ -84,7 +85,9 @@ impl Default for BootstrapConfig {
 
 pub struct Bootstrapper {
     ledger: Arc<Ledger>,
+    block_processor: Arc<BlockProcessor>,
     stats: Arc<Stats>,
+    network: Arc<RwLock<Network>>,
     threads: Mutex<Option<Threads>>,
     mutex: Arc<Mutex<BootstrapLogic>>,
     condition: Arc<Condvar>,
@@ -119,14 +122,10 @@ impl Bootstrapper {
             scoring: PeerScoring::new(config.clone()),
             account_ranges: AccountRanges::new(config.frontier_scan.clone(), stats.clone()),
             running_queries: RunningQueryContainer::default(),
-            sync_dependencies_interval: Instant::now(),
             config: config.clone(),
-            network,
             limiter: RateLimiter::new(config.rate_limit),
             stats: stats.clone(),
             message_sender,
-            block_processor: block_processor.clone(),
-            ledger: ledger.clone(),
         }));
 
         let condition = Arc::new(Condvar::new());
@@ -134,7 +133,7 @@ impl Bootstrapper {
         let response_handler = ResponseHandler::new(
             logic.clone(),
             stats.clone(),
-            block_processor,
+            block_processor.clone(),
             condition.clone(),
             workers.clone(),
             ledger.clone(),
@@ -147,10 +146,12 @@ impl Bootstrapper {
             condition,
             config,
             stats,
+            block_processor,
             ledger,
             clock,
             response_handler,
             workers,
+            network,
         }
     }
 
@@ -239,9 +240,11 @@ impl Bootstrapper {
     }
 
     fn run_timeouts(&self) {
+        let mut cleanup =
+            BootstrapCleanup::new(self.clock.clone(), self.stats.clone(), self.network.clone());
         let mut guard = self.mutex.lock().unwrap();
         while !guard.stopped {
-            guard.cleanup_and_sync(self.clock.now());
+            cleanup.cleanup(&mut guard);
 
             guard = self
                 .condition
@@ -372,7 +375,11 @@ impl BootstrapExt for Arc<Bootstrapper> {
         };
 
         let priorities = if self.config.enable_scan {
-            Some(spawn_query("Bootstrap", PriorityQuery::new(), self.clone()))
+            Some(spawn_query(
+                "Bootstrap",
+                PriorityQuery::new(self.ledger.clone(), self.block_processor.clone()),
+                self.clone(),
+            ))
         } else {
             None
         };
@@ -408,15 +415,12 @@ pub(super) struct BootstrapLogic {
     pub scoring: PeerScoring,
     pub running_queries: RunningQueryContainer,
     pub account_ranges: AccountRanges,
-    sync_dependencies_interval: Instant,
     pub config: BootstrapConfig,
-    network: Arc<RwLock<Network>>,
-    /// Rate limiter for all types of requests
     pub limiter: RateLimiter,
+
+    /// Rate limiter for all types of requests
     pub stats: Arc<Stats>,
     pub message_sender: MessageSender,
-    pub block_processor: Arc<BlockProcessor>,
-    pub ledger: Arc<Ledger>,
 }
 
 impl BootstrapLogic {
@@ -573,45 +577,6 @@ impl BootstrapLogic {
             .inc(StatType::BootstrapNext, DetailType::NextBlocking);
 
         blocking
-    }
-
-    fn cleanup_and_sync(&mut self, now: Timestamp) {
-        self.stats.inc(StatType::Bootstrap, DetailType::LoopCleanup);
-        let channels = self.network.read().unwrap().list_realtime_channels(0);
-        self.scoring.sync(channels);
-        self.scoring.timeout();
-
-        let should_timeout = |query: &RunningQuery| query.response_cutoff < now;
-
-        while let Some(front) = self.running_queries.front() {
-            if !should_timeout(front) {
-                break;
-            }
-
-            self.stats.inc(StatType::Bootstrap, DetailType::Timeout);
-            self.stats
-                .inc(StatType::BootstrapTimeout, front.query_type.into());
-            self.running_queries.pop_front();
-        }
-
-        if self.sync_dependencies_interval.elapsed() >= Duration::from_secs(60) {
-            self.sync_dependencies_interval = Instant::now();
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::SyncDependencies);
-            let inserted = self.candidate_accounts.sync_dependencies();
-            if inserted > 0 {
-                self.stats.add(
-                    StatType::BootstrapAccountSets,
-                    DetailType::PriorityInsert,
-                    inserted as u64,
-                );
-                self.stats.add(
-                    StatType::BootstrapAccountSets,
-                    DetailType::DependencySynced,
-                    inserted as u64,
-                );
-            }
-        }
     }
 
     pub fn query_sent(&mut self, id: u64, now: Timestamp) {

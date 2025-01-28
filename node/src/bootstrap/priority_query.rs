@@ -3,12 +3,13 @@ use super::{
     BootstrapResponder, WaitResult,
 };
 use crate::{
-    block_processing::BlockSource,
+    block_processing::{BlockProcessor, BlockSource},
     stats::{DetailType, StatType},
 };
 use num::clamp;
 use rand::{thread_rng, Rng};
 use rsnano_core::{BlockHash, HashOrAccount};
+use rsnano_ledger::Ledger;
 use rsnano_messages::{AscPullReqType, BlocksReqPayload, HashType};
 use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
@@ -16,12 +17,16 @@ use std::{cmp::min, sync::Arc};
 
 pub(super) struct PriorityQuery {
     state: PriorityState,
+    ledger: Arc<Ledger>,
+    block_processor: Arc<BlockProcessor>,
 }
 
 impl PriorityQuery {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(ledger: Arc<Ledger>, block_processor: Arc<BlockProcessor>) -> Self {
         Self {
             state: PriorityState::Initial,
+            ledger,
+            block_processor,
         }
     }
 }
@@ -44,7 +49,7 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
                     Some(PriorityState::WaitBlockProcessor)
                 }
                 PriorityState::WaitBlockProcessor => {
-                    if logic.block_processor.queue_len(BlockSource::Bootstrap)
+                    if self.block_processor.queue_len(BlockSource::Bootstrap)
                         < logic.config.block_processor_theshold
                     {
                         let channel_waiter = ChannelWaiter::new();
@@ -72,11 +77,11 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
                         let pull_count = min(pull_count, logic.config.max_pull_count);
 
                         let account_info = {
-                            let tx = logic.ledger.read_txn();
-                            logic.ledger.store.account.get(&tx, &next.account)
+                            let tx = self.ledger.read_txn();
+                            self.ledger.store.account.get(&tx, &next.account)
                         };
                         let account = next.account;
-                        let tx = logic.ledger.read_txn();
+                        let tx = self.ledger.read_txn();
                         // Check if the account picked has blocks, if it does, start the pull from the highest block
                         let (start_type, start, hash) = match account_info {
                             Some(info) => {
@@ -99,7 +104,7 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
                                         .inc(StatType::BootstrapRequestBlocks, DetailType::Safe);
 
                                     let conf_info =
-                                        logic.ledger.store.confirmation_height.get(&tx, &account);
+                                        self.ledger.store.confirmation_height.get(&tx, &account);
                                     if let Some(conf_info) = conf_info {
                                         (
                                             HashType::Block,
