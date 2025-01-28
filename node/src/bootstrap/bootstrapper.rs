@@ -1,4 +1,5 @@
 use super::{
+    block_inspector::BlockInspector,
     bootstrap_state::BootstrapState,
     cleanup::BootstrapCleanup,
     dependency_query::DependencyQuery,
@@ -100,6 +101,7 @@ pub struct Bootstrapper {
     message_sender: MessageSender,
     limiter: Arc<RateLimiter>,
     stopped: AtomicBool,
+    block_inspector: BlockInspector,
 }
 
 struct Threads {
@@ -139,6 +141,8 @@ impl Bootstrapper {
             config.clone(),
         );
 
+        let block_inspector = BlockInspector::new(state.clone(), ledger.clone(), stats.clone());
+
         Self {
             threads: Mutex::new(None),
             state,
@@ -154,6 +158,7 @@ impl Bootstrapper {
             message_sender,
             limiter,
             stopped: AtomicBool::new(false),
+            block_inspector,
         }
     }
 
@@ -304,30 +309,7 @@ impl Bootstrapper {
     }
 
     fn blocks_processed(&self, batch: &[(BlockStatus, Arc<BlockContext>)]) {
-        {
-            let mut guard = self.state.lock().unwrap();
-            let tx = self.ledger.read_txn();
-            for (result, context) in batch {
-                let block = context.block.lock().unwrap().clone();
-                let saved_block = context.saved_block.lock().unwrap().clone();
-                let account = block.account_field().unwrap_or_else(|| {
-                    self.ledger
-                        .any()
-                        .block_account(&tx, &block.previous())
-                        .unwrap_or_default()
-                });
-
-                guard.inspect(
-                    &self.stats,
-                    *result,
-                    &block,
-                    saved_block,
-                    context.source,
-                    &account,
-                );
-            }
-        }
-
+        self.block_inspector.inspect(batch);
         self.condition.notify_all();
     }
 

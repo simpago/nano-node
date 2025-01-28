@@ -1,3 +1,4 @@
+mod block_inspector;
 mod bootstrap_responder;
 mod bootstrap_state;
 mod bootstrapper;
