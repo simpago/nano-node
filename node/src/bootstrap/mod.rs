@@ -22,7 +22,7 @@ use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
 
 pub(self) trait BootstrapAction<T> {
-    fn run(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<T>;
+    fn run(&mut self, state: &mut BootstrapState, now: Timestamp) -> WaitResult<T>;
 }
 
 pub(self) enum WaitResult<T> {

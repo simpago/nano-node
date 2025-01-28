@@ -1,5 +1,5 @@
 use super::{
-    channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapLogic, WaitResult,
+    channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapState, WaitResult,
 };
 use crate::stats::{DetailType, StatType, Stats};
 use rsnano_core::Account;
@@ -35,7 +35,7 @@ impl DependencyQuery {
 }
 
 impl BootstrapAction<AscPullQuerySpec> for DependencyQuery {
-    fn run(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
+    fn run(&mut self, state: &mut BootstrapState, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
         let mut state_changed = false;
         loop {
             let new_state = match &mut self.state {
@@ -45,7 +45,7 @@ impl BootstrapAction<AscPullQuerySpec> for DependencyQuery {
                     let waiter = (self.channel_waiter)();
                     Some(DependencyQueryState::WaitChannel(waiter))
                 }
-                DependencyQueryState::WaitChannel(waiter) => match waiter.run(logic, now) {
+                DependencyQueryState::WaitChannel(waiter) => match waiter.run(state, now) {
                     WaitResult::BeginWait => {
                         Some(DependencyQueryState::WaitChannel(waiter.clone()))
                     }
@@ -55,7 +55,7 @@ impl BootstrapAction<AscPullQuerySpec> for DependencyQuery {
                     }
                 },
                 DependencyQueryState::WaitBlocking(channel) => {
-                    let next = logic.next_blocking();
+                    let next = state.next_blocking();
                     if next.is_zero() {
                         None
                     } else {

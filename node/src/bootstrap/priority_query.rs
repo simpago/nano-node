@@ -1,6 +1,6 @@
 use super::{
     channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapConfig,
-    BootstrapLogic, BootstrapResponder, WaitResult,
+    BootstrapResponder, BootstrapState, WaitResult,
 };
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
@@ -52,7 +52,7 @@ enum PriorityState {
 }
 
 impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
-    fn run(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
+    fn run(&mut self, state: &mut BootstrapState, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
         let mut state_changed = false;
         loop {
             let new_state = match &mut self.state {
@@ -70,13 +70,13 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
                         None
                     }
                 }
-                PriorityState::WaitChannel(waiter) => match waiter.run(logic, now) {
+                PriorityState::WaitChannel(waiter) => match waiter.run(state, now) {
                     WaitResult::BeginWait => Some(PriorityState::WaitChannel(waiter.clone())),
                     WaitResult::ContinueWait => None,
                     WaitResult::Finished(channel) => Some(PriorityState::WaitPriority(channel)),
                 },
                 PriorityState::WaitPriority(channel) => {
-                    let next = logic.next_priority(now);
+                    let next = state.next_priority(now);
                     if !next.account.is_zero() {
                         self.stats
                             .inc(StatType::BootstrapNext, DetailType::NextPriority);

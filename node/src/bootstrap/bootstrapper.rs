@@ -89,7 +89,7 @@ pub struct Bootstrapper {
     stats: Arc<Stats>,
     network: Arc<RwLock<Network>>,
     threads: Mutex<Option<Threads>>,
-    mutex: Arc<Mutex<BootstrapLogic>>,
+    state: Arc<Mutex<BootstrapState>>,
     condition: Arc<Condvar>,
     config: BootstrapConfig,
     clock: Arc<SteadyClock>,
@@ -120,7 +120,7 @@ impl Bootstrapper {
 
         let limiter = Arc::new(RateLimiter::new(config.rate_limit));
 
-        let logic = Arc::new(Mutex::new(BootstrapLogic {
+        let state = Arc::new(Mutex::new(BootstrapState {
             stopped: false,
             candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
             scoring: PeerScoring::new(config.clone()),
@@ -131,7 +131,7 @@ impl Bootstrapper {
         let condition = Arc::new(Condvar::new());
 
         let response_handler = ResponseHandler::new(
-            logic.clone(),
+            state.clone(),
             stats.clone(),
             block_processor.clone(),
             condition.clone(),
@@ -142,7 +142,7 @@ impl Bootstrapper {
 
         Self {
             threads: Mutex::new(None),
-            mutex: logic,
+            state,
             condition,
             config,
             stats,
@@ -158,7 +158,7 @@ impl Bootstrapper {
     }
 
     pub fn stop(&self) {
-        self.mutex.lock().unwrap().stopped = true;
+        self.state.lock().unwrap().stopped = true;
         self.condition.notify_all();
         let threads = self.threads.lock().unwrap().take();
         if let Some(threads) = threads {
@@ -176,7 +176,7 @@ impl Bootstrapper {
     }
 
     pub fn prioritized(&self, account: &Account) -> bool {
-        self.mutex
+        self.state
             .lock()
             .unwrap()
             .candidate_accounts
@@ -189,7 +189,7 @@ impl Bootstrapper {
     {
         const INITIAL_INTERVAL: Duration = Duration::from_millis(5);
         let mut interval = INITIAL_INTERVAL;
-        let mut guard = self.mutex.lock().unwrap();
+        let mut guard = self.state.lock().unwrap();
         loop {
             if guard.stopped {
                 return None;
@@ -236,7 +236,7 @@ impl Bootstrapper {
             req_type: spec.req_type,
         };
 
-        let mut guard = self.mutex.lock().unwrap();
+        let mut guard = self.state.lock().unwrap();
         guard.running_queries.insert(query);
         let message = Message::AscPullReq(request);
         let sent = message_sender.try_send_channel(
@@ -270,7 +270,7 @@ impl Bootstrapper {
     fn run_timeouts(&self) {
         let mut cleanup =
             BootstrapCleanup::new(self.clock.clone(), self.stats.clone(), self.network.clone());
-        let mut guard = self.mutex.lock().unwrap();
+        let mut guard = self.state.lock().unwrap();
         while !guard.stopped {
             cleanup.cleanup(&mut guard);
 
@@ -300,7 +300,7 @@ impl Bootstrapper {
 
     fn blocks_processed(&self, batch: &[(BlockStatus, Arc<BlockContext>)]) {
         {
-            let mut guard = self.mutex.lock().unwrap();
+            let mut guard = self.state.lock().unwrap();
             let tx = self.ledger.read_txn();
             for (result, context) in batch {
                 let block = context.block.lock().unwrap().clone();
@@ -327,7 +327,7 @@ impl Bootstrapper {
     }
 
     pub fn container_info(&self) -> ContainerInfo {
-        self.mutex.lock().unwrap().container_info()
+        self.state.lock().unwrap().container_info()
     }
 }
 
@@ -359,14 +359,14 @@ impl BootstrapExt for Arc<Bootstrapper> {
             let Some(self_l) = self_w.upgrade() else {
                 return;
             };
-            let mut guard = self_l.mutex.lock().unwrap();
+            let mut guard = self_l.state.lock().unwrap();
             for block in blocks {
                 guard.candidate_accounts.unblock(block.account(), None);
             }
         });
 
         let inserted = self
-            .mutex
+            .state
             .lock()
             .unwrap()
             .candidate_accounts
@@ -448,7 +448,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
     }
 }
 
-pub(super) struct BootstrapLogic {
+pub(super) struct BootstrapState {
     stopped: bool,
     pub candidate_accounts: CandidateAccounts,
     pub scoring: PeerScoring,
@@ -456,7 +456,7 @@ pub(super) struct BootstrapLogic {
     pub account_ranges: AccountRanges,
 }
 
-impl BootstrapLogic {
+impl BootstrapState {
     /// Inspects a block that has been processed by the block processor
     /// - Marks an account as blocked if the result code is gap source as there is no reason request additional blocks for this account until the dependency is resolved
     /// - Marks an account as forwarded if it has been recently referenced by a block that has been inserted.

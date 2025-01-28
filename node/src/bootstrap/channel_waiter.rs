@@ -1,4 +1,4 @@
-use super::{BootstrapAction, BootstrapLogic, WaitResult};
+use super::{BootstrapAction, BootstrapState, WaitResult};
 use rsnano_network::{bandwidth_limiter::RateLimiter, Channel};
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
@@ -29,8 +29,8 @@ impl ChannelWaiter {
         }
     }
 
-    fn transition_state(&mut self, logic: &mut BootstrapLogic) -> bool {
-        if let Some(new_state) = self.get_next_state(logic) {
+    fn transition_state(&mut self, state: &mut BootstrapState) -> bool {
+        if let Some(new_state) = self.get_next_state(state) {
             self.state = new_state;
             true // State changed
         } else {
@@ -38,19 +38,19 @@ impl ChannelWaiter {
         }
     }
 
-    fn get_next_state(&self, logic: &mut BootstrapLogic) -> Option<ChannelWaitState> {
+    fn get_next_state(&self, state: &mut BootstrapState) -> Option<ChannelWaitState> {
         match &self.state {
             ChannelWaitState::Initial => Some(ChannelWaitState::WaitRunningQueries),
-            ChannelWaitState::WaitRunningQueries => self.wait_running_queries(logic),
+            ChannelWaitState::WaitRunningQueries => self.wait_running_queries(state),
             ChannelWaitState::WaitLimiter => self.wait_limiter(),
-            ChannelWaitState::WaitScoring => Self::wait_scoring(logic),
+            ChannelWaitState::WaitScoring => Self::wait_scoring(state),
             ChannelWaitState::Found(_) => None,
         }
     }
 
     /// Limit the number of in-flight requests
-    fn wait_running_queries(&self, logic: &BootstrapLogic) -> Option<ChannelWaitState> {
-        if logic.running_queries.len() < self.max_requests {
+    fn wait_running_queries(&self, state: &BootstrapState) -> Option<ChannelWaitState> {
+        if state.running_queries.len() < self.max_requests {
             Some(ChannelWaitState::WaitLimiter)
         } else {
             None
@@ -67,8 +67,8 @@ impl ChannelWaiter {
     }
 
     /// Wait until a channel is available
-    fn wait_scoring(logic: &mut BootstrapLogic) -> Option<ChannelWaitState> {
-        let channel = logic.scoring.channel();
+    fn wait_scoring(state: &mut BootstrapState) -> Option<ChannelWaitState> {
+        let channel = state.scoring.channel();
         if let Some(channel) = channel {
             Some(ChannelWaitState::Found(channel))
         } else {
@@ -78,8 +78,8 @@ impl ChannelWaiter {
 }
 
 impl BootstrapAction<Arc<Channel>> for ChannelWaiter {
-    fn run(&mut self, logic: &mut BootstrapLogic, _now: Timestamp) -> WaitResult<Arc<Channel>> {
-        let state_changed = self.transition_state(logic);
+    fn run(&mut self, state: &mut BootstrapState, _now: Timestamp) -> WaitResult<Arc<Channel>> {
+        let state_changed = self.transition_state(state);
         if let ChannelWaitState::Found(channel) = &self.state {
             WaitResult::Finished(channel.clone())
         } else if state_changed {

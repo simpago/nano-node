@@ -1,6 +1,6 @@
 use crate::{
     bootstrap::{
-        channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapLogic,
+        channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapState,
         WaitResult,
     },
     stats::{DetailType, StatType, Stats},
@@ -51,17 +51,17 @@ impl FrontierQuery {
 
     fn next_state(
         &mut self,
-        logic: &mut BootstrapLogic,
+        state: &mut BootstrapState,
         now: Timestamp,
     ) -> Option<FrontierQueryState> {
         match &mut self.state {
             FrontierQueryState::Initial => self.initialize(),
-            FrontierQueryState::WaitCandidateAccounts => Self::wait_candidate_accounts(logic),
+            FrontierQueryState::WaitCandidateAccounts => Self::wait_candidate_accounts(state),
             FrontierQueryState::WaitLimiter => self.wait_limiter(),
             FrontierQueryState::WaitWorkers => self.wait_workers(),
-            FrontierQueryState::WaitChannel(waiter) => Self::wait_channel(logic, waiter, now),
+            FrontierQueryState::WaitChannel(waiter) => Self::wait_channel(state, waiter, now),
             FrontierQueryState::WaitFrontier(channel) => {
-                Self::wait_frontier(logic, channel, &self.stats, now)
+                Self::wait_frontier(state, channel, &self.stats, now)
             }
             FrontierQueryState::Done(_, _) => None,
         }
@@ -73,8 +73,8 @@ impl FrontierQuery {
         Some(FrontierQueryState::WaitCandidateAccounts)
     }
 
-    fn wait_candidate_accounts(logic: &BootstrapLogic) -> Option<FrontierQueryState> {
-        if logic.candidate_accounts.priority_half_full() {
+    fn wait_candidate_accounts(state: &BootstrapState) -> Option<FrontierQueryState> {
+        if state.candidate_accounts.priority_half_full() {
             None
         } else {
             Some(FrontierQueryState::WaitLimiter)
@@ -99,11 +99,11 @@ impl FrontierQuery {
     }
 
     fn wait_channel(
-        logic: &mut BootstrapLogic,
+        state: &mut BootstrapState,
         channel_waiter: &mut ChannelWaiter,
         now: Timestamp,
     ) -> Option<FrontierQueryState> {
-        match channel_waiter.run(logic, now) {
+        match channel_waiter.run(state, now) {
             WaitResult::BeginWait => Some(FrontierQueryState::WaitChannel(channel_waiter.clone())),
             WaitResult::ContinueWait => None,
             WaitResult::Finished(channel) => Some(FrontierQueryState::WaitFrontier(channel)),
@@ -111,12 +111,12 @@ impl FrontierQuery {
     }
 
     fn wait_frontier(
-        logic: &mut BootstrapLogic,
+        state: &mut BootstrapState,
         channel: &Arc<Channel>,
         stats: &Stats,
         now: Timestamp,
     ) -> Option<FrontierQueryState> {
-        let start = logic.account_ranges.next(now);
+        let start = state.account_ranges.next(now);
         if !start.is_zero() {
             stats.inc(StatType::BootstrapNext, DetailType::NextFrontier);
             let request = Self::request_frontiers(start);
@@ -135,10 +135,10 @@ impl FrontierQuery {
 }
 
 impl BootstrapAction<AscPullQuerySpec> for FrontierQuery {
-    fn run(&mut self, logic: &mut BootstrapLogic, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
+    fn run(&mut self, state: &mut BootstrapState, now: Timestamp) -> WaitResult<AscPullQuerySpec> {
         let mut state_changed = false;
         loop {
-            match self.next_state(logic, now) {
+            match self.next_state(state, now) {
                 Some(FrontierQueryState::Done(channel, request)) => {
                     self.state = FrontierQueryState::Initial;
 

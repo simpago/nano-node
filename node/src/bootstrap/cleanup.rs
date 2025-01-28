@@ -1,4 +1,4 @@
-use super::{running_query_container::RunningQuery, BootstrapLogic};
+use super::{running_query_container::RunningQuery, BootstrapState};
 use crate::stats::{DetailType, StatType, Stats};
 use rsnano_network::Network;
 use rsnano_nullable_clock::SteadyClock;
@@ -28,16 +28,16 @@ impl BootstrapCleanup {
         }
     }
 
-    pub fn cleanup(&mut self, logic: &mut BootstrapLogic) {
+    pub fn cleanup(&mut self, state: &mut BootstrapState) {
         let now = self.clock.now();
         self.stats.inc(StatType::Bootstrap, DetailType::LoopCleanup);
         let channels = self.network.read().unwrap().list_realtime_channels(0);
-        logic.scoring.sync(channels);
-        logic.scoring.timeout();
+        state.scoring.sync(channels);
+        state.scoring.timeout();
 
         let should_timeout = |query: &RunningQuery| query.response_cutoff < now;
 
-        while let Some(front) = logic.running_queries.front() {
+        while let Some(front) = state.running_queries.front() {
             if !should_timeout(front) {
                 break;
             }
@@ -45,14 +45,14 @@ impl BootstrapCleanup {
             self.stats.inc(StatType::Bootstrap, DetailType::Timeout);
             self.stats
                 .inc(StatType::BootstrapTimeout, front.query_type.into());
-            logic.running_queries.pop_front();
+            state.running_queries.pop_front();
         }
 
         if self.sync_dependencies_interval.elapsed() >= Duration::from_secs(60) {
             self.sync_dependencies_interval = Instant::now();
             self.stats
                 .inc(StatType::Bootstrap, DetailType::SyncDependencies);
-            let inserted = logic.candidate_accounts.sync_dependencies();
+            let inserted = state.candidate_accounts.sync_dependencies();
             if inserted > 0 {
                 self.stats.add(
                     StatType::BootstrapAccountSets,

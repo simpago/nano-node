@@ -1,6 +1,6 @@
 use super::{
     running_query_container::{QueryType, RunningQuery},
-    BootstrapConfig, BootstrapLogic, CandidateAccounts, PriorityDownResult,
+    BootstrapConfig, BootstrapState, CandidateAccounts, PriorityDownResult,
 };
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
@@ -17,7 +17,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use tracing::debug;
 
 pub(super) struct ResponseHandler {
-    logic: Arc<Mutex<BootstrapLogic>>,
+    state: Arc<Mutex<BootstrapState>>,
     stats: Arc<Stats>,
     block_processor: Arc<BlockProcessor>,
     condition: Arc<Condvar>,
@@ -28,7 +28,7 @@ pub(super) struct ResponseHandler {
 
 impl ResponseHandler {
     pub fn new(
-        logic: Arc<Mutex<BootstrapLogic>>,
+        state: Arc<Mutex<BootstrapState>>,
         stats: Arc<Stats>,
         block_processor: Arc<BlockProcessor>,
         condition: Arc<Condvar>,
@@ -37,7 +37,7 @@ impl ResponseHandler {
         config: BootstrapConfig,
     ) -> Self {
         Self {
-            logic,
+            state,
             stats,
             block_processor,
             condition,
@@ -48,7 +48,7 @@ impl ResponseHandler {
     }
 
     pub fn process(&self, message: AscPullAck, channel_id: ChannelId, now: Timestamp) {
-        let mut guard = self.logic.lock().unwrap();
+        let mut guard = self.state.lock().unwrap();
 
         // Only process messages that have a known running query
         let Some(query) = guard.running_queries.remove(message.id) else {
@@ -92,7 +92,7 @@ impl ResponseHandler {
         };
 
         if ok {
-            self.logic
+            self.state
                 .lock()
                 .unwrap()
                 .scoring
@@ -133,7 +133,7 @@ impl ResponseHandler {
                     if blocks.is_empty() {
                         // It's the last block submitted for this account chain, reset timestamp to allow more requests
                         let stats = self.stats.clone();
-                        let data = self.logic.clone();
+                        let data = self.state.clone();
                         let condition = self.condition.clone();
                         let account = query.account;
                         self.block_processor.add_with_callback(
@@ -164,7 +164,7 @@ impl ResponseHandler {
                     .inc(StatType::BootstrapVerifyBlocks, DetailType::NothingNew);
 
                 {
-                    let mut guard = self.logic.lock().unwrap();
+                    let mut guard = self.state.lock().unwrap();
                     match guard.candidate_accounts.priority_down(&query.account) {
                         PriorityDownResult::Deprioritized => {
                             self.stats
@@ -213,7 +213,7 @@ impl ResponseHandler {
 
         // Prioritize account containing the dependency
         {
-            let mut guard = self.logic.lock().unwrap();
+            let mut guard = self.state.lock().unwrap();
             let updated = guard
                 .candidate_accounts
                 .dependency_update(&query.hash, response.account);
@@ -280,7 +280,7 @@ impl ResponseHandler {
                 );
 
                 {
-                    let mut guard = self.logic.lock().unwrap();
+                    let mut guard = self.state.lock().unwrap();
                     guard.account_ranges.process(query.start.into(), &frontiers);
                 }
 
@@ -288,7 +288,7 @@ impl ResponseHandler {
                 if self.workers.num_queued_tasks() < self.config.frontier_scan.max_pending * 4 {
                     let stats = self.stats.clone();
                     let ledger = self.ledger.clone();
-                    let mutex = self.logic.clone();
+                    let mutex = self.state.clone();
                     self.workers.post(Box::new(move || {
                         process_frontiers(ledger, stats, frontiers, mutex)
                     }));
@@ -397,7 +397,7 @@ fn process_frontiers(
     ledger: Arc<Ledger>,
     stats: Arc<Stats>,
     frontiers: Vec<Frontier>,
-    mutex: Arc<Mutex<BootstrapLogic>>,
+    state: Arc<Mutex<BootstrapState>>,
 ) {
     assert!(!frontiers.is_empty());
 
@@ -473,7 +473,7 @@ fn process_frontiers(
         pending
     );
 
-    let mut guard = mutex.lock().unwrap();
+    let mut guard = state.lock().unwrap();
     for account in result {
         // Use the lowest possible priority here
         guard
