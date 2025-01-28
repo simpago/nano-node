@@ -186,7 +186,7 @@ impl Bootstrapper {
             .prioritized(account)
     }
 
-    fn wait_for<A, T>(&self, mut action: A) -> Option<T>
+    fn wait_for<A, T>(&self, action: &mut A) -> Option<T>
     where
         A: BootstrapAction<T>,
     {
@@ -216,45 +216,13 @@ impl Bootstrapper {
         }
     }
 
-    fn run_frontiers(&self) {
+    fn run_queries<T: BootstrapAction<AscPullQuerySpec>>(&self, mut query_factory: T) {
         loop {
-            let frontier_scan = FrontierScan::new();
-            let Some(spec) = self.wait_for(frontier_scan) else {
+            let Some(spec) = self.wait_for(&mut query_factory) else {
                 return;
             };
-
             self.send_request(spec);
         }
-    }
-
-    fn run_priorities(&self) {
-        loop {
-            let prio_query = PriorityQuery::new();
-            let Some(spec) = self.wait_for(prio_query) else {
-                return;
-            };
-
-            self.send_request(spec);
-        }
-    }
-
-    fn run_dependencies(&self) {
-        let mut guard = self.mutex.lock().unwrap();
-        while !guard.stopped {
-            drop(guard);
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::LoopDependencies);
-            self.run_one_dependency();
-            guard = self.mutex.lock().unwrap();
-        }
-    }
-
-    fn run_one_dependency(&self) {
-        let dependency_query = DependencyQuery::new();
-        let Some(spec) = self.wait_for(dependency_query) else {
-            return;
-        };
-        self.send_request(spec);
     }
 
     fn send_request(&self, spec: AscPullQuerySpec) {
@@ -679,7 +647,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
             Some(
                 std::thread::Builder::new()
                     .name("Bootstrap".to_string())
-                    .spawn(Box::new(move || self_l.run_priorities()))
+                    .spawn(Box::new(move || self_l.run_queries(PriorityQuery::new())))
                     .unwrap(),
             )
         } else {
@@ -691,7 +659,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
             Some(
                 std::thread::Builder::new()
                     .name("Bootstrap walkr".to_string())
-                    .spawn(Box::new(move || self_l.run_dependencies()))
+                    .spawn(Box::new(move || self_l.run_queries(DependencyQuery::new())))
                     .unwrap(),
             )
         } else {
@@ -703,7 +671,7 @@ impl BootstrapExt for Arc<Bootstrapper> {
             Some(
                 std::thread::Builder::new()
                     .name("Bootstrap front".to_string())
-                    .spawn(Box::new(move || self_l.run_frontiers()))
+                    .spawn(Box::new(move || self_l.run_queries(FrontierScan::new())))
                     .unwrap(),
             )
         } else {

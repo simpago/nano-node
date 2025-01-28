@@ -151,6 +151,7 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityQuery {
 
             match new_state {
                 Some(PriorityState::Done(result)) => {
+                    self.state = PriorityState::Initial;
                     return WaitResult::Finished(result);
                 }
                 Some(s) => {

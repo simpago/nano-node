@@ -124,6 +124,8 @@ impl BootstrapAction<AscPullQuerySpec> for FrontierScan {
         loop {
             match self.next_state(logic, now) {
                 Some(FrontierScanState::Done(channel, request)) => {
+                    self.state = FrontierScanState::Initial;
+
                     let spec = AscPullQuerySpec {
                         channel,
                         req_type: request,

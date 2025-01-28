@@ -1,6 +1,7 @@
 use super::{
     channel_waiter::ChannelWaiter, AscPullQuerySpec, BootstrapAction, BootstrapLogic, WaitResult,
 };
+use crate::stats::{DetailType, StatType};
 use rsnano_core::Account;
 use rsnano_messages::{AccountInfoReqPayload, AscPullReqType, HashType};
 use rsnano_network::Channel;
@@ -32,6 +33,9 @@ impl BootstrapAction<AscPullQuerySpec> for DependencyQuery {
         loop {
             let new_state = match &mut self.state {
                 DependencyQueryState::Initial => {
+                    logic
+                        .stats
+                        .inc(StatType::Bootstrap, DetailType::LoopDependencies);
                     Some(DependencyQueryState::WaitChannel(ChannelWaiter::new()))
                 }
                 DependencyQueryState::WaitChannel(waiter) => match waiter.run(logic, now) {
@@ -70,6 +74,7 @@ impl BootstrapAction<AscPullQuerySpec> for DependencyQuery {
 
             match new_state {
                 Some(DependencyQueryState::Done(spec)) => {
+                    self.state = DependencyQueryState::Initial;
                     return WaitResult::Finished(spec);
                 }
                 Some(s) => {
