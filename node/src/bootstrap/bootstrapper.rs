@@ -4,15 +4,16 @@ use super::{
     frontier_scan::{AccountRanges, AccountRangesConfig, FrontierScan},
     peer_scoring::PeerScoring,
     priority_query::PriorityQuery,
+    response_handler::{ResponseHandler, VerifyResult},
     running_query_container::{QuerySource, QueryType, RunningQuery, RunningQueryContainer},
     throttle::Throttle,
-    AscPullQuerySpec, BootstrapAction, CandidateAccounts, CandidateAccountsConfig,
-    PriorityDownResult, PriorityResult, PriorityUpResult,
+    AscPullQuerySpec, BootstrapAction, CandidateAccounts, CandidateAccountsConfig, PriorityResult,
+    PriorityUpResult,
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, BlockSource, LedgerNotifications},
     bootstrap::WaitResult,
-    stats::{DetailType, Direction, Sample, StatType, Stats},
+    stats::{DetailType, Direction, StatType, Stats},
     transport::MessageSender,
     utils::{ThreadPool, ThreadPoolImpl},
 };
@@ -84,12 +85,6 @@ impl Default for BootstrapConfig {
             frontier_scan: Default::default(),
         }
     }
-}
-
-enum VerifyResult {
-    Ok,
-    NothingNew,
-    Invalid,
 }
 
 pub struct Bootstrapper {
@@ -247,9 +242,7 @@ impl Bootstrapper {
     fn run_timeouts(&self) {
         let mut guard = self.mutex.lock().unwrap();
         while !guard.stopped {
-            self.stats.inc(StatType::Bootstrap, DetailType::LoopCleanup);
-
-            guard.cleanup_and_sync(self.ledger.account_count(), &self.stats, self.clock.now());
+            guard.cleanup_and_sync(self.clock.now());
 
             guard = self
                 .condition
@@ -261,48 +254,21 @@ impl Bootstrapper {
 
     /// Process `asc_pull_ack` message coming from network
     pub fn process(&self, message: AscPullAck, channel_id: ChannelId) {
-        let mut guard = self.mutex.lock().unwrap();
-
-        // Only process messages that have a known tag
-        let Some(tag) = guard.running_queries.remove(message.id) else {
-            self.stats.inc(StatType::Bootstrap, DetailType::MissingTag);
-            return;
-        };
-
-        self.stats.inc(StatType::Bootstrap, DetailType::Reply);
-
-        let valid = match message.pull_type {
-            AscPullAckType::Blocks(_) => matches!(
-                tag.query_type,
-                QueryType::BlocksByHash | QueryType::BlocksByAccount
-            ),
-            AscPullAckType::AccountInfo(_) => tag.query_type == QueryType::AccountInfoByHash,
-            AscPullAckType::Frontiers(_) => tag.query_type == QueryType::Frontiers,
-        };
-
-        if !valid {
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::InvalidResponseType);
-            return;
-        }
-
-        // Track bootstrap request response time
-        self.stats
-            .inc(StatType::BootstrapReply, tag.query_type.into());
-
-        self.stats.sample(
-            Sample::BootstrapTagDuration,
-            tag.sent.elapsed(self.clock.now()).as_millis() as i64,
-            (0, self.config.request_timeout.as_millis() as i64),
+        let response_handler = ResponseHandler::new(
+            self.mutex.clone(),
+            self.stats.clone(),
+            self.block_processor.clone(),
+            self.condition.clone(),
         );
-
-        drop(guard);
+        let Some(query) = response_handler.process(&message, channel_id, self.clock.now()) else {
+            return;
+        };
 
         // Process the response payload
         let ok = match message.pull_type {
-            AscPullAckType::Blocks(blocks) => self.process_blocks(&blocks, &tag),
-            AscPullAckType::AccountInfo(info) => self.process_accounts(&info, &tag),
-            AscPullAckType::Frontiers(frontiers) => self.process_frontiers(frontiers, &tag),
+            AscPullAckType::Blocks(blocks) => response_handler.process_blocks(&blocks, &query),
+            AscPullAckType::AccountInfo(info) => self.process_accounts(&info, &query),
+            AscPullAckType::Frontiers(frontiers) => self.process_frontiers(frontiers, &query),
         };
 
         if ok {
@@ -400,101 +366,6 @@ impl Bootstrapper {
         }
 
         VerifyResult::Ok
-    }
-
-    fn process_blocks(&self, response: &BlocksAckPayload, query: &RunningQuery) -> bool {
-        self.stats
-            .inc(StatType::BootstrapProcess, DetailType::Blocks);
-
-        let result = verify_response(response, query);
-        match result {
-            VerifyResult::Ok => {
-                self.stats
-                    .inc(StatType::BootstrapVerifyBlocks, DetailType::Ok);
-                self.stats.add_dir(
-                    StatType::Bootstrap,
-                    DetailType::Blocks,
-                    Direction::In,
-                    response.blocks().len() as u64,
-                );
-
-                let mut blocks = response.blocks().clone();
-
-                // Avoid re-processing the block we already have
-                assert!(blocks.len() >= 1);
-                if blocks.front().unwrap().hash() == query.start.into() {
-                    blocks.pop_front();
-                }
-
-                while let Some(block) = blocks.pop_front() {
-                    if blocks.is_empty() {
-                        // It's the last block submitted for this account chain, reset timestamp to allow more requests
-                        let stats = self.stats.clone();
-                        let data = self.mutex.clone();
-                        let condition = self.condition.clone();
-                        let account = query.account;
-                        self.block_processor.add_with_callback(
-                            block,
-                            BlockSource::Bootstrap,
-                            ChannelId::LOOPBACK,
-                            Box::new(move |_| {
-                                stats.inc(StatType::Bootstrap, DetailType::TimestampReset);
-                                {
-                                    let mut guard = data.lock().unwrap();
-                                    guard.candidate_accounts.timestamp_reset(&account);
-                                }
-                                condition.notify_all();
-                            }),
-                        );
-                    } else {
-                        self.block_processor.add(
-                            block,
-                            BlockSource::Bootstrap,
-                            ChannelId::LOOPBACK,
-                        );
-                    }
-                }
-                true
-            }
-            VerifyResult::NothingNew => {
-                self.stats
-                    .inc(StatType::BootstrapVerifyBlocks, DetailType::NothingNew);
-
-                {
-                    let mut guard = self.mutex.lock().unwrap();
-                    match guard.candidate_accounts.priority_down(&query.account) {
-                        PriorityDownResult::Deprioritized => {
-                            self.stats
-                                .inc(StatType::BootstrapAccountSets, DetailType::Deprioritize);
-                        }
-                        PriorityDownResult::Erased => {
-                            self.stats
-                                .inc(StatType::BootstrapAccountSets, DetailType::Deprioritize);
-                            self.stats.inc(
-                                StatType::BootstrapAccountSets,
-                                DetailType::PriorityEraseThreshold,
-                            );
-                        }
-                        PriorityDownResult::AccountNotFound => {
-                            self.stats.inc(
-                                StatType::BootstrapAccountSets,
-                                DetailType::DeprioritizeFailed,
-                            );
-                        }
-                        PriorityDownResult::InvalidAccount => {}
-                    }
-
-                    guard.candidate_accounts.timestamp_reset(&query.account);
-                }
-                self.condition.notify_all();
-                true
-            }
-            VerifyResult::Invalid => {
-                self.stats
-                    .inc(StatType::BootstrapVerifyBlocks, DetailType::Invalid);
-                false
-            }
-        }
     }
 
     fn process_accounts(&self, response: &AccountInfoAckPayload, query: &RunningQuery) -> bool {
@@ -860,7 +731,9 @@ impl BootstrapLogic {
         blocking
     }
 
-    fn cleanup_and_sync(&mut self, account_count: u64, stats: &Stats, now: Timestamp) {
+    fn cleanup_and_sync(&mut self, now: Timestamp) {
+        self.stats.inc(StatType::Bootstrap, DetailType::LoopCleanup);
+        let account_count = self.ledger.account_count();
         let channels = self.network.read().unwrap().list_realtime_channels(0);
         self.scoring.sync(channels);
         self.scoring.timeout();
@@ -877,22 +750,24 @@ impl BootstrapLogic {
                 break;
             }
 
-            stats.inc(StatType::Bootstrap, DetailType::Timeout);
-            stats.inc(StatType::BootstrapTimeout, front.query_type.into());
+            self.stats.inc(StatType::Bootstrap, DetailType::Timeout);
+            self.stats
+                .inc(StatType::BootstrapTimeout, front.query_type.into());
             self.running_queries.pop_front();
         }
 
         if self.sync_dependencies_interval.elapsed() >= Duration::from_secs(60) {
             self.sync_dependencies_interval = Instant::now();
-            stats.inc(StatType::Bootstrap, DetailType::SyncDependencies);
+            self.stats
+                .inc(StatType::Bootstrap, DetailType::SyncDependencies);
             let inserted = self.candidate_accounts.sync_dependencies();
             if inserted > 0 {
-                stats.add(
+                self.stats.add(
                     StatType::BootstrapAccountSets,
                     DetailType::PriorityInsert,
                     inserted as u64,
                 );
-                stats.add(
+                self.stats.add(
                     StatType::BootstrapAccountSets,
                     DetailType::DependencySynced,
                     inserted as u64,
@@ -969,55 +844,6 @@ fn compute_throttle_size(account_count: u64, throttle_coefficient: usize) -> usi
     };
     const MIN_SIZE: usize = 16;
     max(target, MIN_SIZE)
-}
-
-/// Verifies whether the received response is valid. Returns:
-/// - invalid: when received blocks do not correspond to requested hash/account or they do not make a valid chain
-/// - nothing_new: when received response indicates that the account chain does not have more blocks
-/// - ok: otherwise, if all checks pass
-fn verify_response(response: &BlocksAckPayload, query: &RunningQuery) -> VerifyResult {
-    let blocks = response.blocks();
-    if blocks.is_empty() {
-        return VerifyResult::NothingNew;
-    }
-    if blocks.len() == 1 && blocks.front().unwrap().hash() == query.start.into() {
-        return VerifyResult::NothingNew;
-    }
-    if blocks.len() > query.count {
-        return VerifyResult::Invalid;
-    }
-
-    let first = blocks.front().unwrap();
-    match query.query_type {
-        QueryType::BlocksByHash => {
-            if first.hash() != query.start.into() {
-                // TODO: Stat & log
-                return VerifyResult::Invalid;
-            }
-        }
-        QueryType::BlocksByAccount => {
-            // Open & state blocks always contain account field
-            if first.account_field().unwrap() != query.start.into() {
-                // TODO: Stat & log
-                return VerifyResult::Invalid;
-            }
-        }
-        QueryType::AccountInfoByHash | QueryType::Frontiers | QueryType::Invalid => {
-            return VerifyResult::Invalid;
-        }
-    }
-
-    // Verify blocks make a valid chain
-    let mut previous_hash = first.hash();
-    for block in blocks.iter().skip(1) {
-        if block.previous() != previous_hash {
-            // TODO: Stat & log
-            return VerifyResult::Invalid; // Blocks do not make a chain
-        }
-        previous_hash = block.hash();
-    }
-
-    VerifyResult::Ok
 }
 
 impl From<&Message> for QueryType {

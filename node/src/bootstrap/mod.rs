@@ -7,6 +7,7 @@ mod dependency_query;
 mod frontier_scan;
 mod peer_scoring;
 mod priority_query;
+mod response_handler;
 mod running_query_container;
 mod throttle;
 
