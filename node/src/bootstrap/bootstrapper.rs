@@ -26,7 +26,10 @@ use rsnano_network::{bandwidth_limiter::RateLimiter, ChannelId, Network, Traffic
 use rsnano_nullable_clock::{SteadyClock, Timestamp};
 use std::{
     cmp::min,
-    sync::{Arc, Condvar, Mutex, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Condvar, Mutex, RwLock,
+    },
     thread::JoinHandle,
     time::Duration,
 };
@@ -97,6 +100,7 @@ pub struct Bootstrapper {
     workers: Arc<ThreadPoolImpl>,
     message_sender: MessageSender,
     limiter: Arc<RateLimiter>,
+    stopped: AtomicBool,
 }
 
 struct Threads {
@@ -117,16 +121,12 @@ impl Bootstrapper {
         clock: Arc<SteadyClock>,
     ) -> Self {
         let workers = Arc::new(ThreadPoolImpl::create(1, "Bootstrap work"));
-
         let limiter = Arc::new(RateLimiter::new(config.rate_limit));
 
-        let state = Arc::new(Mutex::new(BootstrapState {
-            stopped: false,
-            candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
-            scoring: PeerScoring::new(config.clone()),
-            account_ranges: AccountRanges::new(config.frontier_scan.clone(), stats.clone()),
-            running_queries: RunningQueryContainer::default(),
-        }));
+        let state = Arc::new(Mutex::new(BootstrapState::new(
+            config.clone(),
+            stats.clone(),
+        )));
 
         let condition = Arc::new(Condvar::new());
 
@@ -154,11 +154,15 @@ impl Bootstrapper {
             network,
             message_sender,
             limiter,
+            stopped: AtomicBool::new(false),
         }
     }
 
     pub fn stop(&self) {
-        self.state.lock().unwrap().stopped = true;
+        {
+            let _guard = self.state.lock().unwrap();
+            self.stopped.store(true, Ordering::SeqCst);
+        }
         self.condition.notify_all();
         let threads = self.threads.lock().unwrap().take();
         if let Some(threads) = threads {
@@ -191,7 +195,7 @@ impl Bootstrapper {
         let mut interval = INITIAL_INTERVAL;
         let mut guard = self.state.lock().unwrap();
         loop {
-            if guard.stopped {
+            if self.stopped.load(Ordering::SeqCst) {
                 return None;
             }
 
@@ -207,7 +211,7 @@ impl Bootstrapper {
 
             guard = self
                 .condition
-                .wait_timeout_while(guard, interval, |g| !g.stopped)
+                .wait_timeout_while(guard, interval, |_| !self.stopped.load(Ordering::SeqCst))
                 .unwrap()
                 .0;
         }
@@ -271,12 +275,14 @@ impl Bootstrapper {
         let mut cleanup =
             BootstrapCleanup::new(self.clock.clone(), self.stats.clone(), self.network.clone());
         let mut guard = self.state.lock().unwrap();
-        while !guard.stopped {
+        while !self.stopped.load(Ordering::SeqCst) {
             cleanup.cleanup(&mut guard);
 
             guard = self
                 .condition
-                .wait_timeout_while(guard, Duration::from_secs(1), |g| !g.stopped)
+                .wait_timeout_while(guard, Duration::from_secs(1), |_| {
+                    !self.stopped.load(Ordering::SeqCst)
+                })
                 .unwrap()
                 .0;
         }
@@ -449,7 +455,6 @@ impl BootstrapExt for Arc<Bootstrapper> {
 }
 
 pub(super) struct BootstrapState {
-    stopped: bool,
     pub candidate_accounts: CandidateAccounts,
     pub scoring: PeerScoring,
     pub running_queries: RunningQueryContainer,
@@ -457,6 +462,15 @@ pub(super) struct BootstrapState {
 }
 
 impl BootstrapState {
+    pub fn new(config: BootstrapConfig, stats: Arc<Stats>) -> Self {
+        Self {
+            candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
+            scoring: PeerScoring::new(config.clone()),
+            account_ranges: AccountRanges::new(config.frontier_scan.clone(), stats),
+            running_queries: RunningQueryContainer::default(),
+        }
+    }
+
     /// Inspects a block that has been processed by the block processor
     /// - Marks an account as blocked if the result code is gap source as there is no reason request additional blocks for this account until the dependency is resolved
     /// - Marks an account as forwarded if it has been recently referenced by a block that has been inserted.
