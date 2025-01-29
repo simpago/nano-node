@@ -254,7 +254,8 @@ TEST (rep_crawler, rep_connection_close)
 // The behaviour of this test previously was the opposite, that the repcrawler eventually send out such a block and deleted the block
 // from the recently confirmed list to try to make ammends for sending it, which is bad behaviour.
 // In the long term, we should have a better way to check for reps and this test should become redundant
-TEST (rep_crawler, recently_confirmed)
+// DISABLED as behaviour changed, and we now only query confirmed blocks
+TEST (rep_crawler, DISABLED_recently_confirmed)
 {
 	nano::test::system system (1);
 	auto & node1 (*system.nodes[0]);

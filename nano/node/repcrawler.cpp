@@ -3,6 +3,7 @@
 #include <nano/node/online_reps.hpp>
 #include <nano/node/repcrawler.hpp>
 #include <nano/secure/ledger.hpp>
+#include <nano/secure/ledger_set_confirmed.hpp>
 #include <nano/secure/vote.hpp>
 
 #include <ranges>
@@ -286,22 +287,32 @@ std::deque<std::shared_ptr<nano::transport::channel>> nano::rep_crawler::prepare
 	return { random_peers.begin (), random_peers.end () };
 }
 
-auto nano::rep_crawler::prepare_query_target () const -> std::optional<hash_root_t>
+auto nano::rep_crawler::prepare_query_target () const -> hash_root_t
 {
-	constexpr int max_attempts = 10;
+	constexpr int max_attempts = 32;
 
 	auto transaction = node.ledger.tx_begin_read ();
 
 	auto random_blocks = node.ledger.random_blocks (transaction, max_attempts);
 	for (auto const & block : random_blocks)
 	{
-		if (!active.recently_confirmed.exists (block->hash ()))
+		// Avoid blocks that could still have live votes coming in
+		if (active.recently_confirmed.exists (block->hash ()))
 		{
-			return std::make_pair (block->hash (), block->root ());
+			continue;
 		}
+
+		// Nodes will not respond to queries for blocks that are not confirmed
+		if (!node.ledger.confirmed.block_exists (transaction, block->hash ()))
+		{
+			continue;
+		}
+
+		return std::make_pair (block->hash (), block->root ());
 	}
 
-	return std::nullopt;
+	// If no suitable block was found, query genesis
+	return std::make_pair (node.network_params.ledger.genesis->hash (), node.network_params.ledger.genesis->root ());
 }
 
 bool nano::rep_crawler::track_rep_request (hash_root_t hash_root, std::shared_ptr<nano::transport::channel> const & channel)
@@ -329,14 +340,7 @@ bool nano::rep_crawler::track_rep_request (hash_root_t hash_root, std::shared_pt
 
 void nano::rep_crawler::query (std::deque<std::shared_ptr<nano::transport::channel>> const & target_channels)
 {
-	auto maybe_hash_root = prepare_query_target ();
-	if (!maybe_hash_root)
-	{
-		logger.debug (nano::log::type::rep_crawler, "No block to query");
-		stats.inc (nano::stat::type::rep_crawler, nano::stat::detail::query_target_failed);
-		return;
-	}
-	auto hash_root = *maybe_hash_root;
+	auto hash_root = prepare_query_target ();
 
 	nano::lock_guard<nano::mutex> lock{ mutex };
 

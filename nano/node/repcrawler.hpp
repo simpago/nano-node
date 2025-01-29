@@ -106,7 +106,7 @@ private:
 	/** Returns a list of endpoints to crawl. The total weight is passed in to avoid computing it twice. */
 
 	std::deque<std::shared_ptr<nano::transport::channel>> prepare_crawl_targets (bool sufficient_weight) const;
-	std::optional<hash_root_t> prepare_query_target () const;
+	hash_root_t prepare_query_target () const;
 	bool track_rep_request (hash_root_t hash_root, std::shared_ptr<nano::transport::channel> const & channel);
 
 private:
