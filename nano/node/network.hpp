@@ -134,7 +134,7 @@ public:
 	nano::tcp_endpoint bootstrap_peer ();
 	void cleanup (std::chrono::steady_clock::time_point const & cutoff);
 	std::size_t size () const;
-	float size_sqrt () const;
+	float size_log () const;
 	bool empty () const;
 	void erase (nano::transport::channel const &);
 	/** Disconnects and adds peer to exclusion list */

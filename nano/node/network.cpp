@@ -430,7 +430,8 @@ std::deque<std::shared_ptr<nano::transport::channel>> nano::network::list_non_pr
 // Simulating with sqrt_broadcast_simulate shows we only need to broadcast to sqrt(total_peers) random peers in order to successfully publish to everyone with high probability
 std::size_t nano::network::fanout (float scale) const
 {
-	return static_cast<std::size_t> (std::ceil (scale * size_sqrt ()));
+	auto fanout_l = std::max (2.0f, size_log ());
+	return static_cast<std::size_t> (std::ceil (scale * fanout_l));
 }
 
 std::unordered_set<std::shared_ptr<nano::transport::channel>> nano::network::random_set (std::size_t max_count, uint8_t minimum_version) const
@@ -519,9 +520,10 @@ std::size_t nano::network::size () const
 	return tcp_channels.size ();
 }
 
-float nano::network::size_sqrt () const
+float nano::network::size_log () const
 {
-	return static_cast<float> (std::sqrt (size ()));
+	auto size_l = std::max (static_cast<size_t> (1u), size ()); // Clamp size to domain of std::log
+	return static_cast<float> (std::log (size_l));
 }
 
 bool nano::network::empty () const
