@@ -123,7 +123,7 @@ impl BootstrapPromise<AscPullQuerySpec> for FrontierRequester {
 mod tests {
     use super::*;
     use crate::{
-        bootstrap::{state::CandidateAccountsConfig, BootstrapConfig},
+        bootstrap::{progress, state::CandidateAccountsConfig, BootstrapConfig},
         utils::ThreadPoolImpl,
     };
 
@@ -131,16 +131,10 @@ mod tests {
     fn happy_path() {
         let mut requester = create_test_requester();
         let mut state = BootstrapState::default();
-        add_test_channel_to(&mut state);
+        state.add_test_channel();
 
-        let result = loop {
-            match requester.poll(&mut state) {
-                PromiseResult::Progress => {}
-                PromiseResult::Wait => {
-                    panic!("should never wait")
-                }
-                PromiseResult::Finished(i) => break i,
-            }
+        let PromiseResult::Finished(result) = progress(&mut requester, &mut state) else {
+            panic!("promise did not finish!")
         };
 
         assert!(matches!(result.req_type, AscPullReqType::Frontiers(_)));
@@ -151,16 +145,11 @@ mod tests {
         let mut requester = create_test_requester();
         let mut state = state_with_max_priorities(1);
 
-        assert!(matches!(
-            requester.poll(&mut state),
-            PromiseResult::Progress
-        )); // initial
-
         // Fill up candidate accounts
         state.candidate_accounts.priority_up(&Account::from(1));
 
         // Should wait because candidate accounts are full enough
-        let result = requester.poll(&mut state);
+        let result = progress(&mut requester, &mut state);
         assert!(matches!(result, PromiseResult::Wait));
         assert!(matches!(
             requester.state,
@@ -183,18 +172,10 @@ mod tests {
         let mut requester = create_test_requester();
         let mut state = BootstrapState::default();
 
-        assert!(matches!(
-            requester.poll(&mut state),
-            PromiseResult::Progress
-        )); // initial
-        assert!(matches!(
-            requester.poll(&mut state),
-            PromiseResult::Progress
-        )); // candidate accounts
-
         // Should wait because rate limit reached
         requester.frontiers_limiter.should_pass(TEST_RATE_LIMIT);
-        let result = requester.poll(&mut state);
+
+        let result = progress(&mut requester, &mut state);
         assert!(matches!(result, PromiseResult::Wait));
         assert!(matches!(requester.state, FrontierState::WaitLimiter));
 
@@ -207,6 +188,24 @@ mod tests {
         let result = requester.poll(&mut state);
         assert!(matches!(result, PromiseResult::Progress));
         assert!(matches!(requester.state, FrontierState::WaitWorkers));
+    }
+
+    #[test]
+    fn wait_channel() {
+        let mut requester = create_test_requester();
+        let mut state = BootstrapState::default();
+
+        let result = progress(&mut requester, &mut state);
+        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(requester.state, FrontierState::WaitChannel));
+
+        // Running again continues waiting
+        let result = requester.poll(&mut state);
+        assert!(matches!(result, PromiseResult::Wait));
+
+        state.add_test_channel();
+        let result = requester.poll(&mut state);
+        assert!(matches!(result, PromiseResult::Progress));
     }
 
     // Test helpers:
@@ -230,11 +229,5 @@ mod tests {
             ..Default::default()
         };
         BootstrapState::new(config, Arc::new(Stats::default()))
-    }
-
-    fn add_test_channel_to(state: &mut BootstrapState) {
-        state
-            .scoring
-            .sync(vec![Arc::new(Channel::new_test_instance())]);
     }
 }

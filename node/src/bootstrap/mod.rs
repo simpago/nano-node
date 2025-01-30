@@ -32,3 +32,16 @@ pub(crate) struct AscPullQuerySpec {
     pub hash: BlockHash,
     pub cooldown_account: bool,
 }
+
+#[cfg(test)]
+pub(self) fn progress<T>(
+    requester: &mut impl BootstrapPromise<T>,
+    state: &mut state::BootstrapState,
+) -> PromiseResult<T> {
+    loop {
+        match requester.poll(state) {
+            PromiseResult::Progress => {}
+            result => return result,
+        }
+    }
+}

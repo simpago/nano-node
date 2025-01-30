@@ -25,6 +25,14 @@ impl BootstrapState {
         }
     }
 
+    #[cfg(test)]
+    pub fn add_test_channel(&mut self) {
+        use rsnano_network::Channel;
+
+        self.scoring
+            .sync(vec![Arc::new(Channel::new_test_instance())]);
+    }
+
     fn count_tags_by_hash(&self, hash: &BlockHash, source: QuerySource) -> usize {
         self.running_queries
             .iter_hash(hash)
