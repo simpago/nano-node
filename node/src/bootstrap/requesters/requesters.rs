@@ -15,6 +15,7 @@ use std::{
     thread::JoinHandle,
 };
 
+use super::priority_query_factory::PriorityQueryFactory;
 use super::requester_runner::RequesterRunner;
 use super::{
     channel_waiter::ChannelWaiter, dependency_requester::DependencyRequester,
@@ -99,18 +100,20 @@ impl Requesters {
         };
 
         let priorities = if self.config.enable_scan {
-            Some(spawn_query(
-                "Bootstrap",
-                PriorityRequester::new(
-                    self.ledger.clone(),
-                    self.block_processor.clone(),
-                    self.stats.clone(),
-                    self.clock.clone(),
-                    channel_waiter.clone(),
-                    self.config.clone(),
-                ),
-                runner.clone(),
-            ))
+            let mut query_factory =
+                PriorityQueryFactory::new(self.clock.clone(), self.ledger.clone());
+            query_factory.max_pull_count = self.config.max_pull_count;
+            query_factory.optimistic_request_percentage = self.config.optimistic_request_percentage;
+
+            let mut requester = PriorityRequester::new(
+                self.block_processor.clone(),
+                self.stats.clone(),
+                channel_waiter.clone(),
+                query_factory,
+            );
+            requester.block_processor_threshold = self.config.block_processor_theshold;
+
+            Some(spawn_query("Bootstrap", requester, runner.clone()))
         } else {
             None
         };
