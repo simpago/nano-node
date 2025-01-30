@@ -14,15 +14,14 @@ pub use bootstrapper::*;
 use rsnano_core::{Account, BlockHash};
 use rsnano_messages::AscPullReqType;
 use rsnano_network::Channel;
-use rsnano_nullable_clock::Timestamp;
 
 pub(self) trait BootstrapAction<T> {
-    fn run(&mut self, state: &mut state::BootstrapState, now: Timestamp) -> WaitResult<T>;
+    fn run(&mut self, state: &mut state::BootstrapState) -> WaitResult<T>;
 }
 
 pub(self) enum WaitResult<T> {
-    BeginWait,
-    ContinueWait,
+    Progress,
+    Wait,
     Finished(T),
 }
 

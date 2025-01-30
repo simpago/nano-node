@@ -1,6 +1,5 @@
 use crate::bootstrap::{state::BootstrapState, BootstrapAction, WaitResult};
 use rsnano_network::{bandwidth_limiter::RateLimiter, Channel};
-use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
 /// Waits until a channel becomes available
@@ -17,7 +16,6 @@ enum ChannelWaitState {
     WaitRunningQueries,
     WaitLimiter,
     WaitScoring,
-    Found(Arc<Channel>),
 }
 
 impl ChannelWaiter {
@@ -28,68 +26,40 @@ impl ChannelWaiter {
             max_requests,
         }
     }
-
-    fn transition_state(&mut self, state: &mut BootstrapState) -> bool {
-        let mut state_changed = false;
-        loop {
-            if let Some(new_state) = self.get_next_state(state) {
-                self.state = new_state;
-                state_changed = true;
-            } else {
-                return state_changed;
-            }
-        }
-    }
-
-    fn get_next_state(&self, state: &mut BootstrapState) -> Option<ChannelWaitState> {
-        match &self.state {
-            ChannelWaitState::Initial => Some(ChannelWaitState::WaitRunningQueries),
-            ChannelWaitState::WaitRunningQueries => self.wait_running_queries(state),
-            ChannelWaitState::WaitLimiter => self.wait_limiter(),
-            ChannelWaitState::WaitScoring => Self::wait_scoring(state),
-            ChannelWaitState::Found(_) => None,
-        }
-    }
-
-    /// Limit the number of in-flight requests
-    fn wait_running_queries(&self, state: &BootstrapState) -> Option<ChannelWaitState> {
-        if state.running_queries.len() < self.max_requests {
-            Some(ChannelWaitState::WaitLimiter)
-        } else {
-            None
-        }
-    }
-
-    /// Wait until more requests can be sent
-    fn wait_limiter(&self) -> Option<ChannelWaitState> {
-        if self.limiter.should_pass(1) {
-            Some(ChannelWaitState::WaitScoring)
-        } else {
-            None
-        }
-    }
-
-    /// Wait until a channel is available
-    fn wait_scoring(state: &mut BootstrapState) -> Option<ChannelWaitState> {
-        let channel = state.scoring.channel();
-        if let Some(channel) = channel {
-            Some(ChannelWaitState::Found(channel))
-        } else {
-            None
-        }
-    }
 }
 
 impl BootstrapAction<Arc<Channel>> for ChannelWaiter {
-    fn run(&mut self, state: &mut BootstrapState, _now: Timestamp) -> WaitResult<Arc<Channel>> {
-        let state_changed = self.transition_state(state);
-        if let ChannelWaitState::Found(channel) = &self.state {
-            WaitResult::Finished(channel.clone())
-        } else if state_changed {
-            WaitResult::BeginWait
-        } else {
-            WaitResult::ContinueWait
+    fn run(&mut self, boot_state: &mut BootstrapState) -> WaitResult<Arc<Channel>> {
+        match self.state {
+            ChannelWaitState::Initial => {
+                self.state = ChannelWaitState::WaitRunningQueries;
+                return WaitResult::Progress;
+            }
+            ChannelWaitState::WaitRunningQueries => {
+                // Limit the number of in-flight requests
+                if boot_state.running_queries.len() < self.max_requests {
+                    self.state = ChannelWaitState::WaitLimiter;
+                    return WaitResult::Progress;
+                }
+            }
+            ChannelWaitState::WaitLimiter => {
+                // Wait until more requests can be sent
+                if self.limiter.should_pass(1) {
+                    self.state = ChannelWaitState::WaitScoring;
+                    return WaitResult::Progress;
+                }
+            }
+            ChannelWaitState::WaitScoring => {
+                // Wait until a channel is available
+                let channel = boot_state.scoring.channel();
+                if let Some(channel) = channel {
+                    self.state = ChannelWaitState::Initial;
+                    return WaitResult::Finished(channel);
+                }
+            }
         }
+
+        WaitResult::Wait
     }
 }
 
@@ -121,10 +91,17 @@ mod tests {
         let mut state = BootstrapState::new(BootstrapConfig::default(), Arc::new(Stats::default()));
         let channel = Arc::new(Channel::new_test_instance());
         state.scoring.sync(vec![channel.clone()]);
-        let WaitResult::Finished(found) = waiter.run(&mut state, Timestamp::new_test_instance())
-        else {
-            panic!("no channel found");
+
+        let found = loop {
+            match waiter.run(&mut state) {
+                WaitResult::Progress => {}
+                WaitResult::Wait => {
+                    panic!("Should never wait")
+                }
+                WaitResult::Finished(c) => break c,
+            }
         };
+
         assert_eq!(channel.channel_id(), found.channel_id());
     }
 
@@ -133,27 +110,43 @@ mod tests {
         let limiter = Arc::new(RateLimiter::new(TEST_RATE_LIMIT));
         let mut waiter = ChannelWaiter::new(limiter, 1);
         let mut state = BootstrapState::new(BootstrapConfig::default(), Arc::new(Stats::default()));
+
+        assert!(matches!(waiter.run(&mut state), WaitResult::Progress)); // initial
+
         state
             .running_queries
             .insert(RunningQuery::new_test_instance());
-        let result = waiter.run(&mut state, Timestamp::new_test_instance());
-        assert!(matches!(result, WaitResult::BeginWait));
+
+        assert!(matches!(waiter.run(&mut state), WaitResult::Wait));
         assert!(matches!(waiter.state, ChannelWaitState::WaitRunningQueries));
-        let result = waiter.run(&mut state, Timestamp::new_test_instance());
-        assert!(matches!(result, WaitResult::ContinueWait));
+
+        assert!(matches!(waiter.run(&mut state), WaitResult::Wait));
+
+        state.running_queries.clear();
+        assert!(matches!(waiter.run(&mut state), WaitResult::Progress));
     }
 
     #[test]
     fn wait_for_limiter() {
         let limiter = Arc::new(RateLimiter::new(TEST_RATE_LIMIT));
         limiter.should_pass(TEST_RATE_LIMIT);
-        let mut waiter = ChannelWaiter::new(limiter, MAX_TEST_REQUESTS);
+        let mut waiter = ChannelWaiter::new(limiter.clone(), MAX_TEST_REQUESTS);
         let mut state = BootstrapState::new(BootstrapConfig::default(), Arc::new(Stats::default()));
-        let result = waiter.run(&mut state, Timestamp::new_test_instance());
-        assert!(matches!(result, WaitResult::BeginWait));
+
+        assert!(matches!(waiter.run(&mut state), WaitResult::Progress)); // initial
+        assert!(matches!(waiter.run(&mut state), WaitResult::Progress)); // running queries
+
+        let result = waiter.run(&mut state);
+        assert!(matches!(result, WaitResult::Wait));
         assert!(matches!(waiter.state, ChannelWaitState::WaitLimiter));
-        let result = waiter.run(&mut state, Timestamp::new_test_instance());
-        assert!(matches!(result, WaitResult::ContinueWait));
+
+        let result = waiter.run(&mut state);
+        assert!(matches!(result, WaitResult::Wait));
+
+        limiter.reset();
+        let result = waiter.run(&mut state);
+        assert!(matches!(result, WaitResult::Progress));
+        assert!(matches!(waiter.state, ChannelWaitState::WaitScoring));
     }
 
     #[test]
@@ -161,11 +154,17 @@ mod tests {
         let limiter = Arc::new(RateLimiter::new(TEST_RATE_LIMIT));
         let mut waiter = ChannelWaiter::new(limiter, MAX_TEST_REQUESTS);
         let mut state = BootstrapState::new(BootstrapConfig::default(), Arc::new(Stats::default()));
-        let result = waiter.run(&mut state, Timestamp::new_test_instance());
-        assert!(matches!(result, WaitResult::BeginWait));
+
+        assert!(matches!(waiter.run(&mut state), WaitResult::Progress)); // initial
+        assert!(matches!(waiter.run(&mut state), WaitResult::Progress)); // running queries
+        assert!(matches!(waiter.run(&mut state), WaitResult::Progress)); // limiter
+
+        let result = waiter.run(&mut state);
+        assert!(matches!(result, WaitResult::Wait));
         assert!(matches!(waiter.state, ChannelWaitState::WaitScoring));
-        let result = waiter.run(&mut state, Timestamp::new_test_instance());
-        assert!(matches!(result, WaitResult::ContinueWait));
+
+        let result = waiter.run(&mut state);
+        assert!(matches!(result, WaitResult::Wait));
     }
 
     const TEST_RATE_LIMIT: usize = 4;

@@ -56,14 +56,22 @@ impl RequesterRunner {
                 return None;
             }
 
-            match action.run(&mut *guard, self.clock.now()) {
-                WaitResult::BeginWait => {
-                    interval = INITIAL_INTERVAL;
+            let mut reset_wait_interval = false;
+            loop {
+                match action.run(&mut *guard) {
+                    WaitResult::Progress => {
+                        reset_wait_interval = true;
+                    }
+                    WaitResult::Wait => {
+                        interval = if reset_wait_interval {
+                            INITIAL_INTERVAL
+                        } else {
+                            min(interval * 2, self.config.throttle_wait)
+                        };
+                        break;
+                    }
+                    WaitResult::Finished(result) => return Some(result),
                 }
-                WaitResult::ContinueWait => {
-                    interval = min(interval * 2, self.config.throttle_wait);
-                }
-                WaitResult::Finished(result) => return Some(result),
             }
 
             guard = self

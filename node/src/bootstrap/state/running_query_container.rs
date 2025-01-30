@@ -247,6 +247,13 @@ impl RunningQueryContainer {
             None => unreachable!(), // The hash entry must exist
         }
     }
+
+    pub fn clear(&mut self) {
+        self.by_id.clear();
+        self.by_account.clear();
+        self.by_hash.clear();
+        self.sequenced.clear();
+    }
 }
 
 #[cfg(test)]

@@ -67,7 +67,7 @@ impl Requesters {
     pub fn start(&self) {
         let limiter = self.limiter.clone();
         let max_requests = self.config.max_requests;
-        let channel_waiter = Arc::new(move || ChannelWaiter::new(limiter.clone(), max_requests));
+        let channel_waiter = ChannelWaiter::new(limiter.clone(), max_requests);
 
         let runner = Arc::new(RequesterRunner {
             message_sender: self.message_sender.clone(),
@@ -85,6 +85,7 @@ impl Requesters {
                 FrontierRequester::new(
                     self.workers.clone(),
                     self.stats.clone(),
+                    self.clock.clone(),
                     self.config.frontier_rate_limit,
                     self.config.frontier_scan.max_pending,
                     channel_waiter.clone(),
@@ -102,6 +103,7 @@ impl Requesters {
                     self.ledger.clone(),
                     self.block_processor.clone(),
                     self.stats.clone(),
+                    self.clock.clone(),
                     channel_waiter.clone(),
                     self.config.clone(),
                 ),
