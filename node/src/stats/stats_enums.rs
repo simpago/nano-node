@@ -493,7 +493,6 @@ pub enum DetailType {
     AdvanceFailed,
 
     NextNone,
-    NextPriority,
     NextDatabase,
     NextBlocking,
     NextDependency,

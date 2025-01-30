@@ -2,9 +2,12 @@ use super::{
     AccountRanges, CandidateAccounts, PeerScoring, PriorityResult, QuerySource,
     RunningQueryContainer,
 };
-use crate::bootstrap::BootstrapConfig;
+use crate::bootstrap::{AscPullQuerySpec, BootstrapConfig};
 use crate::stats::Stats;
+use rsnano_core::Account;
 use rsnano_core::{utils::ContainerInfo, BlockHash};
+use rsnano_messages::AscPullReqType;
+use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
@@ -31,6 +34,25 @@ impl BootstrapState {
 
         self.scoring
             .sync(vec![Arc::new(Channel::new_test_instance())]);
+    }
+
+    pub fn next_blocking_query(&self, channel: &Arc<Channel>) -> Option<AscPullQuerySpec> {
+        let next = self.next_blocking();
+        if !next.is_zero() {
+            Some(Self::query_spec_for(next, channel.clone()))
+        } else {
+            None
+        }
+    }
+
+    fn query_spec_for(next: BlockHash, channel: Arc<Channel>) -> AscPullQuerySpec {
+        AscPullQuerySpec {
+            channel,
+            req_type: AscPullReqType::account_info_by_hash(next),
+            account: Account::zero(),
+            hash: next,
+            cooldown_account: false,
+        }
     }
 
     fn count_tags_by_hash(&self, hash: &BlockHash, source: QuerySource) -> usize {

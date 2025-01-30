@@ -3,7 +3,7 @@ use bitvec::prelude::BitArray;
 use num_traits::FromPrimitive;
 use rsnano_core::{
     utils::{BufferWriter, Deserialize, Serialize, Stream, StreamExt},
-    Account, HashOrAccount,
+    Account, BlockHash, HashOrAccount,
 };
 use serde_derive::Serialize;
 use std::{fmt::Display, mem::size_of};
@@ -27,6 +27,16 @@ pub enum AscPullReqType {
     Blocks(BlocksReqPayload),
     AccountInfo(AccountInfoReqPayload),
     Frontiers(FrontiersReqPayload),
+}
+
+impl AscPullReqType {
+    /// Query account info by block hash
+    pub fn account_info_by_hash(next: BlockHash) -> AscPullReqType {
+        AscPullReqType::AccountInfo(AccountInfoReqPayload {
+            target: next.into(),
+            target_type: HashType::Block,
+        })
+    }
 }
 
 impl Serialize for AscPullReqType {

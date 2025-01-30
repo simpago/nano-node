@@ -1,12 +1,9 @@
+use super::channel_waiter::ChannelWaiter;
 use crate::bootstrap::state::BootstrapState;
 use crate::bootstrap::{AscPullQuerySpec, BootstrapPromise, PromiseResult};
 use crate::stats::{DetailType, StatType, Stats};
-use rsnano_core::{Account, BlockHash};
-use rsnano_messages::{AccountInfoReqPayload, AscPullReqType, HashType};
 use rsnano_network::Channel;
 use std::sync::Arc;
-
-use super::channel_waiter::ChannelWaiter;
 
 pub(super) struct DependencyRequester {
     state: DependencyState,
@@ -28,39 +25,6 @@ impl DependencyRequester {
             channel_waiter,
         }
     }
-
-    fn try_create_query_spec(
-        &self,
-        boot_state: &mut BootstrapState,
-        channel: &Arc<Channel>,
-    ) -> Option<AscPullQuerySpec> {
-        let next = boot_state.next_blocking();
-        if !next.is_zero() {
-            self.stats
-                .inc(StatType::BootstrapNext, DetailType::NextBlocking);
-            Some(Self::query_spec_for(next, channel.clone()))
-        } else {
-            None
-        }
-    }
-
-    fn query_spec_for(next: BlockHash, channel: Arc<Channel>) -> AscPullQuerySpec {
-        AscPullQuerySpec {
-            channel,
-            req_type: Self::req_type_for(next),
-            account: Account::zero(),
-            hash: next,
-            cooldown_account: false,
-        }
-    }
-
-    /// Query account info by block hash
-    fn req_type_for(next: BlockHash) -> AscPullReqType {
-        AscPullReqType::AccountInfo(AccountInfoReqPayload {
-            target: next.into(),
-            target_type: HashType::Block,
-        })
-    }
 }
 
 impl BootstrapPromise<AscPullQuerySpec> for DependencyRequester {
@@ -81,7 +45,9 @@ impl BootstrapPromise<AscPullQuerySpec> for DependencyRequester {
                 }
             },
             DependencyState::WaitBlocking(ref channel) => {
-                if let Some(spec) = self.try_create_query_spec(state, channel) {
+                if let Some(spec) = state.next_blocking_query(channel) {
+                    self.stats
+                        .inc(StatType::BootstrapNext, DetailType::NextBlocking);
                     self.state = DependencyState::Initial;
                     PromiseResult::Finished(spec)
                 } else {
@@ -96,6 +62,7 @@ impl BootstrapPromise<AscPullQuerySpec> for DependencyRequester {
 mod tests {
     use super::*;
     use crate::bootstrap::progress;
+    use rsnano_core::{Account, BlockHash};
     use rsnano_network::bandwidth_limiter::RateLimiter;
 
     #[test]
