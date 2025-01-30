@@ -146,10 +146,10 @@ impl PullStart {
     ) -> Self {
         // Check if the account picked has blocks, if it does, start the pull from the highest block
         if head.is_zero() {
-            PullStart::safe_account(account)
+            PullStart::account(account)
         } else {
             match pull_type {
-                PriorityPullType::Optimistic => PullStart::optimistic(head),
+                PriorityPullType::Optimistic => PullStart::block(head, head),
                 PriorityPullType::Safe => PullStart::safe(account, confirmed_frontier, conf_height),
             }
         }
@@ -157,13 +157,13 @@ impl PullStart {
 
     fn safe(account: Account, confirmed_frontier: BlockHash, conf_height: u64) -> Self {
         if confirmed_frontier.is_zero() {
-            PullStart::safe_account(account)
+            PullStart::account(account)
         } else {
-            PullStart::safe_block(confirmed_frontier, conf_height)
+            PullStart::block(confirmed_frontier, conf_height.into())
         }
     }
 
-    fn safe_account(account: Account) -> Self {
+    fn account(account: Account) -> Self {
         Self {
             start: account.into(),
             start_type: HashType::Account,
@@ -171,19 +171,11 @@ impl PullStart {
         }
     }
 
-    fn safe_block(confirmed_frontier: BlockHash, conf_height: u64) -> Self {
+    fn block(start: BlockHash, hash: BlockHash) -> Self {
         Self {
-            start: confirmed_frontier.into(),
+            start: start.into(),
             start_type: HashType::Block,
-            hash: conf_height.into(),
-        }
-    }
-
-    fn optimistic(head: BlockHash) -> Self {
-        Self {
-            start: head.into(),
-            start_type: HashType::Block,
-            hash: head,
+            hash,
         }
     }
 }
