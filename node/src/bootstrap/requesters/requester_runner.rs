@@ -1,7 +1,9 @@
 use crate::bootstrap::state::{QueryType, RunningQuery};
-use crate::bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapAction, BootstrapConfig};
+use crate::bootstrap::{
+    state::BootstrapState, AscPullQuerySpec, BootstrapConfig, BootstrapPromise,
+};
 use crate::{
-    bootstrap::WaitResult,
+    bootstrap::PromiseResult,
     stats::{DetailType, StatType, Stats},
     transport::MessageSender,
 };
@@ -31,7 +33,7 @@ pub(crate) struct RequesterRunner {
 }
 
 impl RequesterRunner {
-    pub fn run_queries<T: BootstrapAction<AscPullQuerySpec>>(
+    pub fn run_queries<T: BootstrapPromise<AscPullQuerySpec>>(
         &self,
         mut query_factory: T,
         mut message_sender: MessageSender,
@@ -46,7 +48,7 @@ impl RequesterRunner {
 
     fn wait_for<A, T>(&self, action: &mut A) -> Option<T>
     where
-        A: BootstrapAction<T>,
+        A: BootstrapPromise<T>,
     {
         const INITIAL_INTERVAL: Duration = Duration::from_millis(5);
         let mut interval = INITIAL_INTERVAL;
@@ -58,11 +60,11 @@ impl RequesterRunner {
 
             let mut reset_wait_interval = false;
             loop {
-                match action.run(&mut *guard) {
-                    WaitResult::Progress => {
+                match action.poll(&mut *guard) {
+                    PromiseResult::Progress => {
                         reset_wait_interval = true;
                     }
-                    WaitResult::Wait => {
+                    PromiseResult::Wait => {
                         interval = if reset_wait_interval {
                             INITIAL_INTERVAL
                         } else {
@@ -70,7 +72,7 @@ impl RequesterRunner {
                         };
                         break;
                     }
-                    WaitResult::Finished(result) => return Some(result),
+                    PromiseResult::Finished(result) => return Some(result),
                 }
             }
 

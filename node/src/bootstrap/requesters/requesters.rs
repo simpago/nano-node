@@ -1,4 +1,6 @@
-use crate::bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapAction, BootstrapConfig};
+use crate::bootstrap::{
+    state::BootstrapState, AscPullQuerySpec, BootstrapConfig, BootstrapPromise,
+};
 use crate::{
     block_processing::BlockProcessor, stats::Stats, transport::MessageSender, utils::ThreadPoolImpl,
 };
@@ -172,7 +174,7 @@ fn spawn_query<T>(
     runner: Arc<RequesterRunner>,
 ) -> JoinHandle<()>
 where
-    T: BootstrapAction<AscPullQuerySpec> + Send + 'static,
+    T: BootstrapPromise<AscPullQuerySpec> + Send + 'static,
 {
     let message_sender = runner.message_sender.clone();
     std::thread::Builder::new()

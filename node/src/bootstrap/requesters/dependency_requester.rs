@@ -1,5 +1,5 @@
 use crate::bootstrap::state::BootstrapState;
-use crate::bootstrap::{AscPullQuerySpec, BootstrapAction, WaitResult};
+use crate::bootstrap::{AscPullQuerySpec, BootstrapPromise, PromiseResult};
 use crate::stats::{DetailType, StatType, Stats};
 use rsnano_core::Account;
 use rsnano_messages::{AccountInfoReqPayload, AscPullReqType, HashType};
@@ -30,21 +30,21 @@ impl DependencyRequester {
     }
 }
 
-impl BootstrapAction<AscPullQuerySpec> for DependencyRequester {
-    fn run(&mut self, state: &mut BootstrapState) -> WaitResult<AscPullQuerySpec> {
+impl BootstrapPromise<AscPullQuerySpec> for DependencyRequester {
+    fn poll(&mut self, state: &mut BootstrapState) -> PromiseResult<AscPullQuerySpec> {
         match self.state {
             DependencyState::Initial => {
                 self.stats
                     .inc(StatType::Bootstrap, DetailType::LoopDependencies);
                 self.state = DependencyState::WaitChannel;
-                return WaitResult::Progress;
+                return PromiseResult::Progress;
             }
-            DependencyState::WaitChannel => match self.channel_waiter.run(state) {
-                WaitResult::Wait => return WaitResult::Wait,
-                WaitResult::Progress => return WaitResult::Progress,
-                WaitResult::Finished(channel) => {
+            DependencyState::WaitChannel => match self.channel_waiter.poll(state) {
+                PromiseResult::Wait => return PromiseResult::Wait,
+                PromiseResult::Progress => return PromiseResult::Progress,
+                PromiseResult::Finished(channel) => {
                     self.state = DependencyState::WaitBlocking(channel);
-                    return WaitResult::Progress;
+                    return PromiseResult::Progress;
                 }
             },
             DependencyState::WaitBlocking(ref channel) => {
@@ -68,11 +68,11 @@ impl BootstrapAction<AscPullQuerySpec> for DependencyRequester {
                     };
 
                     self.state = DependencyState::Initial;
-                    return WaitResult::Finished(spec);
+                    return PromiseResult::Finished(spec);
                 }
             }
         };
 
-        WaitResult::Wait
+        PromiseResult::Wait
     }
 }

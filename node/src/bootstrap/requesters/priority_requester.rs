@@ -1,6 +1,6 @@
 use crate::bootstrap::{
-    state::BootstrapState, AscPullQuerySpec, BootstrapAction, BootstrapConfig, BootstrapResponder,
-    WaitResult,
+    state::BootstrapState, AscPullQuerySpec, BootstrapConfig, BootstrapPromise, BootstrapResponder,
+    PromiseResult,
 };
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
@@ -55,29 +55,29 @@ enum PriorityState {
     WaitPriority(Arc<Channel>),
 }
 
-impl BootstrapAction<AscPullQuerySpec> for PriorityRequester {
-    fn run(&mut self, state: &mut BootstrapState) -> WaitResult<AscPullQuerySpec> {
+impl BootstrapPromise<AscPullQuerySpec> for PriorityRequester {
+    fn poll(&mut self, state: &mut BootstrapState) -> PromiseResult<AscPullQuerySpec> {
         let now = self.clock.now();
         match self.state {
             PriorityState::Initial => {
                 self.stats.inc(StatType::Bootstrap, DetailType::Loop);
                 self.state = PriorityState::WaitBlockProcessor;
-                return WaitResult::Progress;
+                return PromiseResult::Progress;
             }
             PriorityState::WaitBlockProcessor => {
                 if self.block_processor.queue_len(BlockSource::Bootstrap)
                     < self.config.block_processor_theshold
                 {
                     self.state = PriorityState::WaitChannel;
-                    return WaitResult::Progress;
+                    return PromiseResult::Progress;
                 }
             }
-            PriorityState::WaitChannel => match self.channel_waiter.run(state) {
-                WaitResult::Progress => return WaitResult::Progress,
-                WaitResult::Wait => return WaitResult::Wait,
-                WaitResult::Finished(channel) => {
+            PriorityState::WaitChannel => match self.channel_waiter.poll(state) {
+                PromiseResult::Progress => return PromiseResult::Progress,
+                PromiseResult::Wait => return PromiseResult::Wait,
+                PromiseResult::Finished(channel) => {
                     self.state = PriorityState::WaitPriority(channel);
-                    return WaitResult::Progress;
+                    return PromiseResult::Progress;
                 }
             },
             PriorityState::WaitPriority(ref channel) => {
@@ -163,11 +163,11 @@ impl BootstrapAction<AscPullQuerySpec> for PriorityRequester {
                     };
 
                     self.state = PriorityState::Initial;
-                    return WaitResult::Finished(result);
+                    return PromiseResult::Finished(result);
                 }
             }
         };
 
-        WaitResult::Wait
+        PromiseResult::Wait
     }
 }

@@ -15,17 +15,17 @@ use rsnano_core::{Account, BlockHash};
 use rsnano_messages::AscPullReqType;
 use rsnano_network::Channel;
 
-pub(self) trait BootstrapAction<T> {
-    fn run(&mut self, state: &mut state::BootstrapState) -> WaitResult<T>;
+pub(self) trait BootstrapPromise<T> {
+    fn poll(&mut self, state: &mut state::BootstrapState) -> PromiseResult<T>;
 }
 
-pub(self) enum WaitResult<T> {
+pub(self) enum PromiseResult<T> {
     Progress,
     Wait,
     Finished(T),
 }
 
-pub(self) struct AscPullQuerySpec {
+pub(crate) struct AscPullQuerySpec {
     pub channel: Arc<Channel>,
     pub req_type: AscPullReqType,
     pub account: Account,
