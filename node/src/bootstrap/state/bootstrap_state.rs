@@ -39,13 +39,13 @@ impl BootstrapState {
     pub fn next_blocking_query(&self, channel: &Arc<Channel>) -> Option<AscPullQuerySpec> {
         let next = self.next_blocking();
         if !next.is_zero() {
-            Some(Self::query_spec_for(next, channel.clone()))
+            Some(Self::create_blocking_query(next, channel.clone()))
         } else {
             None
         }
     }
 
-    fn query_spec_for(next: BlockHash, channel: Arc<Channel>) -> AscPullQuerySpec {
+    fn create_blocking_query(next: BlockHash, channel: Arc<Channel>) -> AscPullQuerySpec {
         AscPullQuerySpec {
             channel,
             req_type: AscPullReqType::account_info_by_hash(next),

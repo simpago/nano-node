@@ -58,14 +58,38 @@ impl PriorityRequester {
         if next.account.is_zero() {
             return None;
         }
+        let (account_info, conf_info) = self.get_account_infos(&next.account);
+        let pull_type = self.decide_pull_type();
 
-        let pull_start = self.get_pull_start(next.account);
+        Some(self.create_priority_query(&next, channel, pull_type, account_info, conf_info))
+    }
 
-        self.stats.inc(
-            StatType::BootstrapRequestBlocks,
-            pull_start.pull_type.into(),
-        );
+    fn get_account_infos(
+        &self,
+        account: &Account,
+    ) -> (Option<AccountInfo>, Option<ConfirmationHeightInfo>) {
+        let tx = self.ledger.read_txn();
+        let account_info = self.ledger.store.account.get(&tx, account);
+        let conf_info = self.ledger.store.confirmation_height.get(&tx, account);
+        (account_info, conf_info)
+    }
 
+    fn create_priority_query(
+        &self,
+        next: &PriorityResult,
+        channel: Arc<Channel>,
+        pull_type: PriorityPullType,
+        account_info: Option<AccountInfo>,
+        conf_info: Option<ConfirmationHeightInfo>,
+    ) -> AscPullQuerySpec {
+        let pull_start = {
+            PullStart::new(
+                pull_type,
+                next.account,
+                account_info.as_ref(),
+                conf_info.as_ref(),
+            )
+        };
         let req_type = AscPullReqType::Blocks(BlocksReqPayload {
             start_type: pull_start.start_type,
             start: pull_start.start,
@@ -77,15 +101,13 @@ impl PriorityRequester {
         // Not throttling accounts that are probably up-to-date allows us to evict them from the priority set faster
         let cooldown_account = next.fails == 0;
 
-        let result = AscPullQuerySpec {
+        AscPullQuerySpec {
             channel,
             req_type,
             hash: pull_start.hash,
             account: next.account,
             cooldown_account,
-        };
-
-        Some(result)
+        }
     }
 
     fn pull_count(&self, next: &PriorityResult) -> u8 {
@@ -99,20 +121,6 @@ impl PriorityRequester {
 
         // Limit the max number of blocks to pull
         min(pull_count, self.config.max_pull_count) as u8
-    }
-
-    fn get_pull_start(&self, account: Account) -> PullStart {
-        let tx = self.ledger.read_txn();
-        let account_info = self.ledger.store.account.get(&tx, &account);
-        let conf_info = self.ledger.store.confirmation_height.get(&tx, &account);
-        let pull_type = self.decide_pull_type();
-
-        PullStart::new(
-            pull_type,
-            account,
-            account_info.as_ref(),
-            conf_info.as_ref(),
-        )
     }
 
     /// Probabilistically choose between requesting blocks from account frontier
@@ -238,6 +246,7 @@ impl PullStart {
     }
 }
 
+#[derive(Clone, Copy)]
 enum PriorityPullType {
     /// Optimistic requests start from the (possibly unconfirmed) account frontier
     /// and are vulnerable to bootstrap poisoning.
