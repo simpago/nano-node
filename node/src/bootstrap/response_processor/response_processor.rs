@@ -1,19 +1,15 @@
 use super::{
     super::{
-        state::{BootstrapState, PriorityDownResult, QueryType, RunningQuery},
+        state::{BootstrapState, QueryType, RunningQuery},
         BootstrapConfig,
     },
     account_ack_processor::AccountAckProcessor,
+    block_ack_processor::BlockAckProcessor,
     frontier_ack_processor::FrontierAckProcessor,
 };
-use crate::{
-    block_processing::{BlockProcessor, BlockSource},
-    bootstrap::state::VerifyResult,
-    stats::{DetailType, Direction, StatType, Stats},
-    utils::ThreadPoolImpl,
-};
+use crate::{block_processing::BlockProcessor, stats::Stats, utils::ThreadPoolImpl};
 use rsnano_ledger::Ledger;
-use rsnano_messages::{AscPullAck, AscPullAckType, BlocksAckPayload};
+use rsnano_messages::{AscPullAck, AscPullAckType};
 use rsnano_network::ChannelId;
 use rsnano_nullable_clock::Timestamp;
 use std::{
@@ -23,11 +19,10 @@ use std::{
 
 pub(crate) struct ResponseProcessor {
     state: Arc<Mutex<BootstrapState>>,
-    stats: Arc<Stats>,
-    block_processor: Arc<BlockProcessor>,
     condition: Arc<Condvar>,
     frontiers: FrontierAckProcessor,
     accounts: AccountAckProcessor,
+    blocks: BlockAckProcessor,
 }
 
 pub(crate) enum ProcessError {
@@ -60,18 +55,20 @@ impl ResponseProcessor {
         ledger: Arc<Ledger>,
         config: BootstrapConfig,
     ) -> Self {
-        let frontier_processor =
+        let frontiers =
             FrontierAckProcessor::new(stats.clone(), ledger, state.clone(), config, workers);
 
-        let account_processor = AccountAckProcessor::new(stats.clone(), state.clone());
+        let accounts = AccountAckProcessor::new(stats.clone(), state.clone());
+
+        let blocks =
+            BlockAckProcessor::new(state.clone(), stats, condition.clone(), block_processor);
 
         Self {
             state,
-            stats,
-            block_processor,
             condition,
-            frontiers: frontier_processor,
-            accounts: account_processor,
+            frontiers,
+            accounts,
+            blocks,
         }
     }
 
@@ -117,7 +114,7 @@ impl ResponseProcessor {
         response: AscPullAck,
     ) -> Result<(), ProcessError> {
         let ok = match response.pull_type {
-            AscPullAckType::Blocks(blocks) => self.process_blocks(&blocks, query),
+            AscPullAckType::Blocks(blocks) => self.blocks.process(query, &blocks),
             AscPullAckType::AccountInfo(info) => self.accounts.process(query, &info),
             AscPullAckType::Frontiers(frontiers) => self.frontiers.process(query, frontiers),
         };
@@ -128,149 +125,4 @@ impl ResponseProcessor {
             Err(ProcessError::InvalidResponse)
         }
     }
-
-    pub fn process_blocks(&self, response: &BlocksAckPayload, query: &RunningQuery) -> bool {
-        self.stats
-            .inc(StatType::BootstrapProcess, DetailType::Blocks);
-
-        let result = verify_response(response, query);
-        match result {
-            VerifyResult::Ok => {
-                self.stats
-                    .inc(StatType::BootstrapVerifyBlocks, DetailType::Ok);
-                self.stats.add_dir(
-                    StatType::Bootstrap,
-                    DetailType::Blocks,
-                    Direction::In,
-                    response.blocks().len() as u64,
-                );
-
-                let mut blocks = response.blocks().clone();
-
-                // Avoid re-processing the block we already have
-                assert!(blocks.len() >= 1);
-                if blocks.front().unwrap().hash() == query.start.into() {
-                    blocks.pop_front();
-                }
-
-                while let Some(block) = blocks.pop_front() {
-                    if blocks.is_empty() {
-                        // It's the last block submitted for this account chain, reset timestamp to allow more requests
-                        let stats = self.stats.clone();
-                        let data = self.state.clone();
-                        let condition = self.condition.clone();
-                        let account = query.account;
-                        self.block_processor.add_with_callback(
-                            block,
-                            BlockSource::Bootstrap,
-                            ChannelId::LOOPBACK,
-                            Box::new(move |_| {
-                                stats.inc(StatType::Bootstrap, DetailType::TimestampReset);
-                                {
-                                    let mut guard = data.lock().unwrap();
-                                    guard.candidate_accounts.timestamp_reset(&account);
-                                }
-                                condition.notify_all();
-                            }),
-                        );
-                    } else {
-                        self.block_processor.add(
-                            block,
-                            BlockSource::Bootstrap,
-                            ChannelId::LOOPBACK,
-                        );
-                    }
-                }
-                true
-            }
-            VerifyResult::NothingNew => {
-                self.stats
-                    .inc(StatType::BootstrapVerifyBlocks, DetailType::NothingNew);
-
-                {
-                    let mut guard = self.state.lock().unwrap();
-                    match guard.candidate_accounts.priority_down(&query.account) {
-                        PriorityDownResult::Deprioritized => {
-                            self.stats
-                                .inc(StatType::BootstrapAccountSets, DetailType::Deprioritize);
-                        }
-                        PriorityDownResult::Erased => {
-                            self.stats
-                                .inc(StatType::BootstrapAccountSets, DetailType::Deprioritize);
-                            self.stats.inc(
-                                StatType::BootstrapAccountSets,
-                                DetailType::PriorityEraseThreshold,
-                            );
-                        }
-                        PriorityDownResult::AccountNotFound => {
-                            self.stats.inc(
-                                StatType::BootstrapAccountSets,
-                                DetailType::DeprioritizeFailed,
-                            );
-                        }
-                        PriorityDownResult::InvalidAccount => {}
-                    }
-
-                    guard.candidate_accounts.timestamp_reset(&query.account);
-                }
-                self.condition.notify_all();
-                true
-            }
-            VerifyResult::Invalid => {
-                self.stats
-                    .inc(StatType::BootstrapVerifyBlocks, DetailType::Invalid);
-                false
-            }
-        }
-    }
-}
-
-///
-/// Verifies whether the received response is valid. Returns:
-/// - invalid: when received blocks do not correspond to requested hash/account or they do not make a valid chain
-/// - nothing_new: when received response indicates that the account chain does not have more blocks
-/// - ok: otherwise, if all checks pass
-pub(super) fn verify_response(response: &BlocksAckPayload, query: &RunningQuery) -> VerifyResult {
-    let blocks = response.blocks();
-    if blocks.is_empty() {
-        return VerifyResult::NothingNew;
-    }
-    if blocks.len() == 1 && blocks.front().unwrap().hash() == query.start.into() {
-        return VerifyResult::NothingNew;
-    }
-    if blocks.len() > query.count {
-        return VerifyResult::Invalid;
-    }
-
-    let first = blocks.front().unwrap();
-    match query.query_type {
-        QueryType::BlocksByHash => {
-            if first.hash() != query.start.into() {
-                // TODO: Stat & log
-                return VerifyResult::Invalid;
-            }
-        }
-        QueryType::BlocksByAccount => {
-            // Open & state blocks always contain account field
-            if first.account_field().unwrap() != query.start.into() {
-                // TODO: Stat & log
-                return VerifyResult::Invalid;
-            }
-        }
-        QueryType::AccountInfoByHash | QueryType::Frontiers | QueryType::Invalid => {
-            return VerifyResult::Invalid;
-        }
-    }
-
-    // Verify blocks make a valid chain
-    let mut previous_hash = first.hash();
-    for block in blocks.iter().skip(1) {
-        if block.previous() != previous_hash {
-            // TODO: Stat & log
-            return VerifyResult::Invalid; // Blocks do not make a chain
-        }
-        previous_hash = block.hash();
-    }
-
-    VerifyResult::Ok
 }
