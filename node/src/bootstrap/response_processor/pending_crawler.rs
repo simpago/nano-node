@@ -190,6 +190,7 @@ mod tests {
         let mut crawler = PendingDatabaseCrawler::new(&ledger, &tx);
         crawler.seek(key.receiving_account);
         crawler.advance_to(&key.receiving_account.inc_or_max());
+        assert_eq!(crawler.current, None);
         crawler.advance_to(&key.receiving_account.inc_or_max());
         assert_eq!(crawler.current, None);
     }
