@@ -28,7 +28,7 @@ impl<'a> AccountDatabaseCrawler<'a> {
         self.advance();
     }
 
-    pub fn advance(&mut self) {
+    fn advance(&mut self) {
         if let Some(it) = &mut self.it {
             self.current = it.next();
             if self.current.is_none() {

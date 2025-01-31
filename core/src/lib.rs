@@ -348,6 +348,10 @@ impl Frontier {
     pub fn new(account: Account, hash: BlockHash) -> Self {
         Self { account, hash }
     }
+
+    pub fn new_test_instance() -> Self {
+        Self::new(Account::from(1), BlockHash::from(2))
+    }
 }
 
 impl Frontier {
