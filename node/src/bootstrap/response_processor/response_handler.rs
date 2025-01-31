@@ -1,4 +1,4 @@
-use super::{
+use super::super::{
     state::{BootstrapState, CandidateAccounts, PriorityDownResult, QueryType, RunningQuery},
     BootstrapConfig,
 };
@@ -19,7 +19,7 @@ use std::{
 };
 use tracing::debug;
 
-pub(super) struct ResponseHandler {
+pub(crate) struct ResponseHandler {
     state: Arc<Mutex<BootstrapState>>,
     stats: Arc<Stats>,
     block_processor: Arc<BlockProcessor>,
@@ -29,13 +29,13 @@ pub(super) struct ResponseHandler {
     config: BootstrapConfig,
 }
 
-pub enum BootstrapProcessError {
+pub(crate) enum BootstrapProcessError {
     NoRunningQueryFound,
     InvalidResponseType,
     InvalidResponse,
 }
 
-pub struct ProcessInfo {
+pub(crate) struct ProcessInfo {
     pub query_type: QueryType,
     pub response_time: Duration,
 }

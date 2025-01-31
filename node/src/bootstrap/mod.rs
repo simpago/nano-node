@@ -4,7 +4,7 @@ mod bootstrapper;
 mod cleanup;
 mod crawlers;
 mod requesters;
-mod response_handler;
+mod response_processor;
 pub(crate) mod state;
 
 use std::sync::Arc;

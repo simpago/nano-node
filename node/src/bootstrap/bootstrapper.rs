@@ -2,7 +2,7 @@ use super::{
     block_inspector::BlockInspector,
     cleanup::BootstrapCleanup,
     requesters::Requesters,
-    response_handler::{BootstrapProcessError, ResponseHandler},
+    response_processor::{BootstrapProcessError, ResponseHandler},
     state::{AccountRangesConfig, BootstrapState, CandidateAccountsConfig, QueryType},
 };
 use crate::{
