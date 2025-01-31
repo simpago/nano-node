@@ -2,7 +2,6 @@ mod block_inspector;
 mod bootstrap_responder;
 mod bootstrapper;
 mod cleanup;
-mod crawlers;
 mod requesters;
 mod response_processor;
 pub(crate) mod state;

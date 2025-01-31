@@ -107,9 +107,7 @@ impl Bootstrapper {
     ) -> Self {
         let workers = Arc::new(ThreadPoolImpl::create(1, "Bootstrap work"));
         let limiter = Arc::new(RateLimiter::new(config.rate_limit));
-
         let state = Arc::new(Mutex::new(BootstrapState::new(config.clone())));
-
         let condition = Arc::new(Condvar::new());
 
         let response_handler = ResponseProcessor::new(

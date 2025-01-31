@@ -1,5 +1,5 @@
 use crate::{bootstrap::AscPullQuerySpec, stats::DetailType};
-use rsnano_core::{Account, BlockHash, HashOrAccount};
+use rsnano_core::{Account, BlockHash, Frontier, HashOrAccount};
 use rsnano_messages::{AscPullAck, AscPullAckType, AscPullReqType, HashType};
 use rsnano_nullable_clock::Timestamp;
 use std::{
@@ -7,6 +7,8 @@ use std::{
     mem::size_of,
     time::Duration,
 };
+
+use super::VerifyResult;
 
 #[derive(Default, PartialEq, Eq, Debug, Clone, Copy)]
 pub(crate) enum QueryType {
@@ -124,6 +126,32 @@ impl RunningQuery {
             AscPullAckType::AccountInfo(_) => self.query_type == QueryType::AccountInfoByHash,
             AscPullAckType::Frontiers(_) => self.query_type == QueryType::Frontiers,
         }
+    }
+
+    pub fn verify_frontiers(&self, frontiers: &[Frontier]) -> VerifyResult {
+        if self.query_type != QueryType::Frontiers {
+            return VerifyResult::Invalid;
+        }
+
+        if frontiers.is_empty() {
+            return VerifyResult::NothingNew;
+        }
+
+        // Ensure frontiers accounts are in ascending order
+        let mut previous = Account::zero();
+        for f in frontiers {
+            if f.account.number() <= previous.number() {
+                return VerifyResult::Invalid;
+            }
+            previous = f.account;
+        }
+
+        // Ensure the frontiers are larger or equal to the requested frontier
+        if frontiers[0].account.number() < self.start.number() {
+            return VerifyResult::Invalid;
+        }
+
+        VerifyResult::Ok
     }
 }
 

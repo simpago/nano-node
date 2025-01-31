@@ -1,14 +1,16 @@
-use super::super::{
-    state::{BootstrapState, CandidateAccounts, PriorityDownResult, QueryType, RunningQuery},
-    BootstrapConfig,
+use super::{
+    super::{
+        state::{BootstrapState, CandidateAccounts, PriorityDownResult, QueryType, RunningQuery},
+        BootstrapConfig,
+    },
+    frontier_processor::FrontierProcessor,
 };
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
-    bootstrap::crawlers::{AccountDatabaseCrawler, PendingDatabaseCrawler},
+    bootstrap::state::VerifyResult,
     stats::{DetailType, Direction, StatType, Stats},
-    utils::{ThreadPool, ThreadPoolImpl},
+    utils::ThreadPoolImpl,
 };
-use rsnano_core::{Account, Frontier};
 use rsnano_ledger::Ledger;
 use rsnano_messages::{AccountInfoAckPayload, AscPullAck, AscPullAckType, BlocksAckPayload};
 use rsnano_network::ChannelId;
@@ -17,16 +19,13 @@ use std::{
     sync::{Arc, Condvar, Mutex},
     time::Duration,
 };
-use tracing::debug;
 
 pub(crate) struct ResponseProcessor {
     state: Arc<Mutex<BootstrapState>>,
     stats: Arc<Stats>,
     block_processor: Arc<BlockProcessor>,
     condition: Arc<Condvar>,
-    workers: Arc<ThreadPoolImpl>,
-    ledger: Arc<Ledger>,
-    config: BootstrapConfig,
+    frontier_processor: FrontierProcessor,
 }
 
 pub(crate) enum ProcessError {
@@ -59,14 +58,15 @@ impl ResponseProcessor {
         ledger: Arc<Ledger>,
         config: BootstrapConfig,
     ) -> Self {
+        let frontier_processor =
+            FrontierProcessor::new(stats.clone(), ledger, state.clone(), config, workers);
+
         Self {
             state,
             stats,
             block_processor,
             condition,
-            workers,
-            ledger,
-            config,
+            frontier_processor,
         }
     }
 
@@ -114,7 +114,9 @@ impl ResponseProcessor {
         let ok = match response.pull_type {
             AscPullAckType::Blocks(blocks) => self.process_blocks(&blocks, query),
             AscPullAckType::AccountInfo(info) => self.process_accounts(&info, query),
-            AscPullAckType::Frontiers(frontiers) => self.process_frontiers(frontiers, query),
+            AscPullAckType::Frontiers(frontiers) => {
+                self.frontier_processor.process(frontiers, query)
+            }
         };
 
         if ok {
@@ -271,101 +273,6 @@ impl ResponseProcessor {
         self.stats
             .inc(StatType::BootstrapAccountSets, DetailType::PrioritizeFailed);
     }
-
-    pub fn process_frontiers(&self, frontiers: Vec<Frontier>, query: &RunningQuery) -> bool {
-        debug_assert_eq!(query.query_type, QueryType::Frontiers);
-        debug_assert!(!query.start.is_zero());
-
-        if frontiers.is_empty() {
-            self.stats
-                .inc(StatType::BootstrapProcess, DetailType::FrontiersEmpty);
-            // OK, but nothing to do
-            return true;
-        }
-
-        self.stats
-            .inc(StatType::BootstrapProcess, DetailType::Frontiers);
-
-        let result = self.verify_frontiers(&frontiers, query);
-        match result {
-            VerifyResult::Ok => {
-                self.stats
-                    .inc(StatType::BootstrapVerifyFrontiers, DetailType::Ok);
-                self.stats.add_dir(
-                    StatType::Bootstrap,
-                    DetailType::Frontiers,
-                    Direction::In,
-                    frontiers.len() as u64,
-                );
-
-                {
-                    let mut guard = self.state.lock().unwrap();
-                    self.stats
-                        .inc(StatType::BootstrapFrontierScan, DetailType::Process);
-                    let done = guard.account_ranges.process(query.start.into(), &frontiers);
-                    if done {
-                        self.stats
-                            .inc(StatType::BootstrapFrontierScan, DetailType::Done);
-                    }
-                }
-
-                // Allow some overfill to avoid unnecessarily dropping responses
-                if self.workers.num_queued_tasks() < self.config.frontier_scan.max_pending * 4 {
-                    let stats = self.stats.clone();
-                    let ledger = self.ledger.clone();
-                    let mutex = self.state.clone();
-                    self.workers.post(Box::new(move || {
-                        process_frontiers(ledger, stats, frontiers, mutex)
-                    }));
-                } else {
-                    self.stats.add(
-                        StatType::Bootstrap,
-                        DetailType::FrontiersDropped,
-                        frontiers.len() as u64,
-                    );
-                }
-                true
-            }
-            VerifyResult::NothingNew => {
-                self.stats
-                    .inc(StatType::BootstrapVerifyFrontiers, DetailType::NothingNew);
-                true
-            }
-            VerifyResult::Invalid => {
-                self.stats
-                    .inc(StatType::BootstrapVerifyFrontiers, DetailType::Invalid);
-                false
-            }
-        }
-    }
-
-    fn verify_frontiers(&self, frontiers: &[Frontier], query: &RunningQuery) -> VerifyResult {
-        if frontiers.is_empty() {
-            return VerifyResult::NothingNew;
-        }
-
-        // Ensure frontiers accounts are in ascending order
-        let mut previous = Account::zero();
-        for f in frontiers {
-            if f.account.number() <= previous.number() {
-                return VerifyResult::Invalid;
-            }
-            previous = f.account;
-        }
-
-        // Ensure the frontiers are larger or equal to the requested frontier
-        if frontiers[0].account.number() < query.start.number() {
-            return VerifyResult::Invalid;
-        }
-
-        VerifyResult::Ok
-    }
-}
-
-pub(super) enum VerifyResult {
-    Ok,
-    NothingNew,
-    Invalid,
 }
 
 ///
@@ -416,93 +323,4 @@ pub(super) fn verify_response(response: &BlocksAckPayload, query: &RunningQuery)
     }
 
     VerifyResult::Ok
-}
-
-fn process_frontiers(
-    ledger: Arc<Ledger>,
-    stats: Arc<Stats>,
-    frontiers: Vec<Frontier>,
-    state: Arc<Mutex<BootstrapState>>,
-) {
-    assert!(!frontiers.is_empty());
-
-    stats.inc(StatType::Bootstrap, DetailType::ProcessingFrontiers);
-    let mut outdated = 0;
-    let mut pending = 0;
-
-    // Accounts with outdated frontiers to sync
-    let mut result = Vec::new();
-    {
-        let tx = ledger.read_txn();
-
-        let start = frontiers[0].account;
-        let mut account_crawler = AccountDatabaseCrawler::new(&ledger, &tx);
-        let mut pending_crawler = PendingDatabaseCrawler::new(&ledger, &tx);
-        account_crawler.initialize(start);
-        pending_crawler.initialize(start);
-
-        let mut should_prioritize = |frontier: &Frontier| {
-            account_crawler.advance_to(&frontier.account);
-            pending_crawler.advance_to(&frontier.account);
-
-            // Check if account exists in our ledger
-            if let Some((cur_acc, info)) = &account_crawler.current {
-                if *cur_acc == frontier.account {
-                    // Check for frontier mismatch
-                    if info.head != frontier.hash {
-                        // Check if frontier block exists in our ledger
-                        if !ledger.any().block_exists_or_pruned(&tx, &frontier.hash) {
-                            outdated += 1;
-                            return true; // Frontier is outdated
-                        }
-                    }
-                    return false; // Account exists and frontier is up-to-date
-                }
-            }
-
-            // Check if account has pending blocks in our ledger
-            if let Some((key, _)) = &pending_crawler.current {
-                if key.receiving_account == frontier.account {
-                    pending += 1;
-                    return true; // Account doesn't exist but has pending blocks in the ledger
-                }
-            }
-
-            false // Account doesn't exist in the ledger and has no pending blocks, can't be prioritized right now
-        };
-
-        for frontier in &frontiers {
-            if should_prioritize(frontier) {
-                result.push(frontier.account);
-            }
-        }
-    }
-
-    stats.add(
-        StatType::BootstrapFrontiers,
-        DetailType::Processed,
-        frontiers.len() as u64,
-    );
-    stats.add(
-        StatType::BootstrapFrontiers,
-        DetailType::Prioritized,
-        result.len() as u64,
-    );
-    stats.add(StatType::BootstrapFrontiers, DetailType::Outdated, outdated);
-    stats.add(StatType::BootstrapFrontiers, DetailType::Pending, pending);
-
-    debug!(
-        "Processed {} frontiers of which outdated: {}, pending: {}",
-        frontiers.len(),
-        outdated,
-        pending
-    );
-
-    let mut guard = state.lock().unwrap();
-    for account in result {
-        // Use the lowest possible priority here
-        guard
-            .candidate_accounts
-            .priority_set(&account, CandidateAccounts::PRIORITY_CUTOFF);
-    }
 }
