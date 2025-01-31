@@ -19,7 +19,7 @@ use std::{
 };
 use tracing::debug;
 
-pub(crate) struct ResponseHandler {
+pub(crate) struct ResponseProcessor {
     state: Arc<Mutex<BootstrapState>>,
     stats: Arc<Stats>,
     block_processor: Arc<BlockProcessor>,
@@ -29,7 +29,7 @@ pub(crate) struct ResponseHandler {
     config: BootstrapConfig,
 }
 
-pub(crate) enum BootstrapProcessError {
+pub(crate) enum ProcessError {
     NoRunningQueryFound,
     InvalidResponseType,
     InvalidResponse,
@@ -49,7 +49,7 @@ impl ProcessInfo {
     }
 }
 
-impl ResponseHandler {
+impl ResponseProcessor {
     pub fn new(
         state: Arc<Mutex<BootstrapState>>,
         stats: Arc<Stats>,
@@ -75,7 +75,7 @@ impl ResponseHandler {
         response: AscPullAck,
         channel_id: ChannelId,
         now: Timestamp,
-    ) -> Result<ProcessInfo, BootstrapProcessError> {
+    ) -> Result<ProcessInfo, ProcessError> {
         let query = self.take_running_query_for(&response)?;
         self.process_response(&query, response)?;
         self.update_peer_scoring(channel_id);
@@ -83,19 +83,16 @@ impl ResponseHandler {
         Ok(ProcessInfo::new(&query, now))
     }
 
-    fn take_running_query_for(
-        &self,
-        response: &AscPullAck,
-    ) -> Result<RunningQuery, BootstrapProcessError> {
+    fn take_running_query_for(&self, response: &AscPullAck) -> Result<RunningQuery, ProcessError> {
         let mut guard = self.state.lock().unwrap();
 
         // Only process messages that have a known running query
         let Some(query) = guard.running_queries.remove(response.id) else {
-            return Err(BootstrapProcessError::NoRunningQueryFound);
+            return Err(ProcessError::NoRunningQueryFound);
         };
 
         if !query.is_valid_response(response) {
-            return Err(BootstrapProcessError::InvalidResponseType);
+            return Err(ProcessError::InvalidResponseType);
         }
 
         Ok(query)
@@ -113,7 +110,7 @@ impl ResponseHandler {
         &self,
         query: &RunningQuery,
         response: AscPullAck,
-    ) -> Result<(), BootstrapProcessError> {
+    ) -> Result<(), ProcessError> {
         let ok = match response.pull_type {
             AscPullAckType::Blocks(blocks) => self.process_blocks(&blocks, query),
             AscPullAckType::AccountInfo(info) => self.process_accounts(&info, query),
@@ -123,7 +120,7 @@ impl ResponseHandler {
         if ok {
             Ok(())
         } else {
-            Err(BootstrapProcessError::InvalidResponse)
+            Err(ProcessError::InvalidResponse)
         }
     }
 

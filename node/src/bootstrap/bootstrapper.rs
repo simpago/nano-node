@@ -2,7 +2,7 @@ use super::{
     block_inspector::BlockInspector,
     cleanup::BootstrapCleanup,
     requesters::Requesters,
-    response_processor::{BootstrapProcessError, ResponseHandler},
+    response_processor::{ProcessError, ResponseProcessor},
     state::{AccountRangesConfig, BootstrapState, CandidateAccountsConfig, QueryType},
 };
 use crate::{
@@ -85,7 +85,7 @@ pub struct Bootstrapper {
     condition: Arc<Condvar>,
     config: BootstrapConfig,
     clock: Arc<SteadyClock>,
-    response_handler: ResponseHandler,
+    response_handler: ResponseProcessor,
     stopped: AtomicBool,
     block_inspector: BlockInspector,
     requesters: Requesters,
@@ -112,7 +112,7 @@ impl Bootstrapper {
 
         let condition = Arc::new(Condvar::new());
 
-        let response_handler = ResponseHandler::new(
+        let response_handler = ResponseProcessor::new(
             state.clone(),
             stats.clone(),
             block_processor.clone(),
@@ -206,14 +206,14 @@ impl Bootstrapper {
                     (0, self.config.request_timeout.as_millis() as i64),
                 );
             }
-            Err(BootstrapProcessError::NoRunningQueryFound) => {
+            Err(ProcessError::NoRunningQueryFound) => {
                 self.stats.inc(StatType::Bootstrap, DetailType::MissingTag);
             }
-            Err(BootstrapProcessError::InvalidResponseType) => {
+            Err(ProcessError::InvalidResponseType) => {
                 self.stats
                     .inc(StatType::Bootstrap, DetailType::InvalidResponseType);
             }
-            Err(BootstrapProcessError::InvalidResponse) => {
+            Err(ProcessError::InvalidResponse) => {
                 self.stats
                     .inc(StatType::Bootstrap, DetailType::InvalidResponse);
             }
