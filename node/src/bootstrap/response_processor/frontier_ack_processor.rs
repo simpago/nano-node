@@ -12,7 +12,7 @@ use rsnano_ledger::Ledger;
 use std::sync::{Arc, Mutex};
 
 /// Processes responses to AscPullReqs by the frontier scan
-pub(crate) struct FrontierProcessor {
+pub(crate) struct FrontierAckProcessor {
     stats: Arc<Stats>,
     ledger: Arc<Ledger>,
     state: Arc<Mutex<BootstrapState>>,
@@ -20,7 +20,7 @@ pub(crate) struct FrontierProcessor {
     workers: Arc<ThreadPoolImpl>,
 }
 
-impl FrontierProcessor {
+impl FrontierAckProcessor {
     pub(crate) fn new(
         stats: Arc<Stats>,
         ledger: Arc<Ledger>,
@@ -125,7 +125,7 @@ mod tests {
         let state = Arc::new(Mutex::new(BootstrapState::default()));
         let config = BootstrapConfig::default();
         let workers = Arc::new(ThreadPoolImpl::create(1, "test"));
-        let processor = FrontierProcessor::new(stats, ledger, state.clone(), config, workers);
+        let processor = FrontierAckProcessor::new(stats, ledger, state.clone(), config, workers);
 
         let query = RunningQuery {
             source: QuerySource::Frontiers,

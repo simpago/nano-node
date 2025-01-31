@@ -5,12 +5,12 @@ use crate::{
 use rsnano_messages::AccountInfoAckPayload;
 use std::sync::{Arc, Mutex};
 
-pub(crate) struct AccountProcessor {
+pub(crate) struct AccountAckProcessor {
     stats: Arc<Stats>,
     state: Arc<Mutex<BootstrapState>>,
 }
 
-impl AccountProcessor {
+impl AccountAckProcessor {
     pub(crate) fn new(stats: Arc<Stats>, state: Arc<Mutex<BootstrapState>>) -> Self {
         Self { stats, state }
     }
