@@ -1,15 +1,11 @@
-use super::heads_container::HeadsContainer;
-use crate::bootstrap::state::account_ranges::heads_container::FrontierHead;
-use primitive_types::U256;
+use super::{heads_container::HeadsContainer, FrontierHeadsConfig};
 use rsnano_core::{utils::ContainerInfo, Account, Frontier};
 use rsnano_nullable_clock::Timestamp;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AccountRangesConfig {
-    pub head_parallelism: usize,
-    pub consideration_count: usize,
-    pub candidates: usize,
+    pub heads: FrontierHeadsConfig,
     pub cooldown: Duration,
     pub max_pending: usize,
 }
@@ -17,9 +13,7 @@ pub struct AccountRangesConfig {
 impl Default for AccountRangesConfig {
     fn default() -> Self {
         Self {
-            head_parallelism: 128,
-            consideration_count: 4,
-            candidates: 1000,
+            heads: Default::default(),
             cooldown: Duration::from_secs(5),
             max_pending: 16,
         }
@@ -36,52 +30,38 @@ pub struct AccountRanges {
 
 impl AccountRanges {
     pub fn new(config: AccountRangesConfig) -> Self {
-        // Divide nano::account numeric range into consecutive and equal ranges
-        let max_account = Account::MAX.number();
-        let range_size = max_account / config.head_parallelism;
-        let mut heads = HeadsContainer::default();
-
-        for i in 0..config.head_parallelism {
-            // Start at 1 to avoid the burn account
-            let start = if i == 0 {
-                U256::from(1)
-            } else {
-                range_size * i
-            };
-            let end = if i == config.head_parallelism - 1 {
-                max_account
-            } else {
-                start + range_size
-            };
-            heads.push_back(FrontierHead::new(start, end));
+        assert!(!config.heads.parallelism > 0);
+        Self {
+            heads: HeadsContainer::with_heads(config.heads.clone()),
+            config,
         }
-
-        assert!(!heads.len() > 0);
-
-        Self { config, heads }
     }
 
     pub fn next(&mut self, now: Timestamp) -> Account {
-        let cutoff = now - self.config.cooldown;
-        let mut next_account = Account::zero();
-        let mut it = Account::zero();
-        for head in self.heads.ordered_by_timestamp() {
-            if head.requests < self.config.consideration_count || head.timestamp < cutoff {
-                next_account = head.next;
-                it = head.start;
-                break;
-            }
-        }
+        let (next_account, head_start) = self.next_account(now);
 
-        if next_account.is_zero() {
-        } else {
-            self.heads.modify(&it, |head| {
-                head.requests += 1;
-                head.timestamp = now
-            });
+        if !next_account.is_zero() {
+            self.inc_requests(head_start, now);
         }
 
         next_account
+    }
+
+    fn next_account(&self, now: Timestamp) -> (Account, Account) {
+        let cutoff = now - self.config.cooldown;
+        for head in self.heads.ordered_by_timestamp() {
+            if head.requests < self.config.heads.consideration_count || head.timestamp < cutoff {
+                return (head.next, head.start);
+            }
+        }
+        (Account::zero(), Account::zero())
+    }
+
+    fn inc_requests(&mut self, head_start: Account, now: Timestamp) {
+        self.heads.modify(head_start, |head| {
+            head.requests += 1;
+            head.timestamp = now
+        });
     }
 
     pub fn process(&mut self, start: Account, response: &[Frontier]) -> bool {
@@ -93,47 +73,8 @@ impl AccountRanges {
         let range_start = self.heads.find_first_less_than_or_equal_to(start).unwrap();
 
         let mut done = false;
-        self.heads.modify(&range_start, |entry| {
-            entry.completed += 1;
-
-            for frontier in response {
-                // Only consider candidates that actually advance the current frontier
-                if frontier.account.number() > entry.next.number() {
-                    entry.candidates.insert(frontier.account);
-                }
-            }
-
-            // Trim the candidates
-            while entry.candidates.len() > self.config.candidates {
-                entry.candidates.pop_last();
-            }
-
-            // Special case for the last frontier head that won't receive larger than max frontier
-            if entry.completed >= self.config.consideration_count * 2 && entry.candidates.is_empty()
-            {
-                entry.candidates.insert(entry.end);
-            }
-
-            // Check if done
-            if entry.completed >= self.config.consideration_count && !entry.candidates.is_empty() {
-                // Take the last candidate as the next frontier
-                assert!(!entry.candidates.is_empty());
-                let last = entry.candidates.last().unwrap();
-                debug_assert!(entry.next.number() < last.number());
-                entry.next = *last;
-                entry.processed += entry.candidates.len();
-                entry.candidates.clear();
-                entry.requests = 0;
-                entry.completed = 0;
-                entry.timestamp = Timestamp::default();
-
-                // Bound the search range
-                if entry.next.number() >= entry.end.number() {
-                    entry.next = entry.start;
-                }
-
-                done = true;
-            }
+        self.heads.modify(range_start, |head| {
+            done = head.process(response);
         });
 
         done
@@ -154,8 +95,11 @@ mod tests {
     #[test]
     fn next_basic() {
         let config = AccountRangesConfig {
-            head_parallelism: 2,
-            consideration_count: 3,
+            heads: FrontierHeadsConfig {
+                parallelism: 2,
+                consideration_count: 3,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let mut ranges = AccountRanges::new(config);
@@ -181,9 +125,11 @@ mod tests {
     #[test]
     fn process_basic() {
         let config = AccountRangesConfig {
-            head_parallelism: 1,
-            consideration_count: 3,
-            candidates: 5,
+            heads: FrontierHeadsConfig {
+                parallelism: 1,
+                consideration_count: 3,
+                candidates: 5,
+            },
             ..Default::default()
         };
         let mut ranges = AccountRanges::new(config);
@@ -216,9 +162,11 @@ mod tests {
     #[test]
     fn range_wrap_around() {
         let config = AccountRangesConfig {
-            head_parallelism: 1,
-            consideration_count: 1,
-            candidates: 1,
+            heads: FrontierHeadsConfig {
+                parallelism: 1,
+                consideration_count: 1,
+                candidates: 1,
+            },
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
@@ -240,8 +188,11 @@ mod tests {
     #[test]
     fn cooldown() {
         let config = AccountRangesConfig {
-            head_parallelism: 1,
-            consideration_count: 1,
+            heads: FrontierHeadsConfig {
+                parallelism: 1,
+                consideration_count: 1,
+                ..Default::default()
+            },
             cooldown: Duration::from_millis(250),
             ..Default::default()
         };
@@ -264,9 +215,11 @@ mod tests {
     #[test]
     fn candidate_trimming() {
         let config = AccountRangesConfig {
-            head_parallelism: 1,
-            consideration_count: 2,
-            candidates: 3, // Only keep the lowest candidates
+            heads: FrontierHeadsConfig {
+                parallelism: 1,
+                consideration_count: 2,
+                candidates: 3, // Only keep the lowest candidates
+            },
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
@@ -300,7 +253,10 @@ mod tests {
     #[test]
     fn heads_distribution() {
         let config = AccountRangesConfig {
-            head_parallelism: 4,
+            heads: FrontierHeadsConfig {
+                parallelism: 4,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
@@ -321,8 +277,11 @@ mod tests {
     #[test]
     fn invalid_response_ordering() {
         let config = AccountRangesConfig {
-            head_parallelism: 1,
-            consideration_count: 1,
+            heads: FrontierHeadsConfig {
+                parallelism: 1,
+                consideration_count: 1,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
@@ -344,8 +303,11 @@ mod tests {
     #[test]
     fn empty_responses() {
         let config = AccountRangesConfig {
-            head_parallelism: 1,
-            consideration_count: 2,
+            heads: FrontierHeadsConfig {
+                parallelism: 1,
+                consideration_count: 2,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();

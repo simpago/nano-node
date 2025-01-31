@@ -1,51 +1,55 @@
+use super::frontier_head::{FrontierHead, FrontierHeadsConfig};
+use primitive_types::U256;
 use rsnano_core::Account;
 use rsnano_nullable_clock::Timestamp;
-use std::collections::{BTreeMap, BTreeSet};
-
-/// Represents a range of accounts to scan, once the full range is scanned (goes past `end`)
-/// the head wraps around (to the `start`)
-pub(super) struct FrontierHead {
-    /// The range of accounts to scan is [start, end)
-    pub start: Account,
-    pub end: Account,
-
-    /// We scan the range by querying frontiers starting at 'next' and gathering candidates
-    pub next: Account,
-    pub candidates: BTreeSet<Account>,
-
-    pub requests: usize,
-    pub completed: usize,
-    pub timestamp: Timestamp,
-
-    /// Total number of accounts processed
-    pub processed: usize,
-}
-
-impl FrontierHead {
-    pub fn new(start: impl Into<Account>, end: impl Into<Account>) -> Self {
-        let start = start.into();
-        Self {
-            start,
-            end: end.into(),
-            next: start,
-            candidates: Default::default(),
-            requests: 0,
-            completed: 0,
-            timestamp: Timestamp::default(),
-            processed: 0,
-        }
-    }
-}
+use std::collections::BTreeMap;
 
 #[derive(Default)]
 pub(super) struct HeadsContainer {
+    config: FrontierHeadsConfig,
     sequenced: Vec<Account>,
     by_start: BTreeMap<Account, FrontierHead>,
     by_timestamp: BTreeMap<Timestamp, Vec<Account>>,
 }
 
 impl HeadsContainer {
-    pub fn push_back(&mut self, head: FrontierHead) {
+    /// Divide account numeric range into consecutive and equal ranges
+    pub fn with_heads(config: FrontierHeadsConfig) -> Self {
+        let mut heads = Self {
+            config,
+            ..Default::default()
+        };
+
+        for i in 0..heads.config.parallelism {
+            heads.push_back(Self::create_head(heads.config.clone(), i));
+        }
+
+        heads
+    }
+
+    #[cfg(test)]
+    pub fn add_head(&mut self, start: impl Into<Account>, end: impl Into<Account>) {
+        self.push_back(FrontierHead::new(start, end, self.config.clone()));
+    }
+
+    fn create_head(config: FrontierHeadsConfig, index: usize) -> FrontierHead {
+        let range_size = Account::MAX.number() / config.parallelism;
+
+        // Start at 1 to avoid the burn account
+        let start = if index == 0 {
+            U256::from(1)
+        } else {
+            range_size * index
+        };
+        let end = if index == config.parallelism - 1 {
+            Account::MAX.number()
+        } else {
+            start + range_size
+        };
+        FrontierHead::new(start, end, config)
+    }
+
+    fn push_back(&mut self, head: FrontierHead) {
         let start = head.start;
         let timestamp = head.timestamp;
         let mut inserted = true;
@@ -68,11 +72,12 @@ impl HeadsContainer {
             .map(|start| self.by_start.get(start).unwrap())
     }
 
-    pub fn modify<F>(&mut self, start: &Account, mut f: F)
+    pub fn modify<F>(&mut self, start: impl Into<Account>, mut f: F)
     where
         F: FnMut(&mut FrontierHead),
     {
-        if let Some(head) = self.by_start.get_mut(start) {
+        let start = start.into();
+        if let Some(head) = self.by_start.get_mut(&start) {
             let old_timestamp = head.timestamp;
             f(head);
             if head.timestamp != old_timestamp {
@@ -80,12 +85,12 @@ impl HeadsContainer {
                 if accounts.len() == 1 {
                     self.by_timestamp.remove(&old_timestamp);
                 } else {
-                    accounts.retain(|a| a != start);
+                    accounts.retain(|a| *a != start);
                 }
                 self.by_timestamp
                     .entry(head.timestamp)
                     .or_default()
-                    .push(*start);
+                    .push(start);
             }
         } else {
             panic!("head not found: {}", start.encode_account());
@@ -103,6 +108,7 @@ impl HeadsContainer {
         self.by_start.values()
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.sequenced.len()
     }
@@ -124,9 +130,7 @@ mod tests {
 
     #[test]
     fn push_back_one_head() {
-        let mut heads = HeadsContainer::default();
-
-        heads.push_back(FrontierHead::new(1, 10));
+        let heads = container_with_heads([(1, 10)]);
 
         assert_eq!(heads.len(), 1);
         assert_eq!(heads.iter().count(), 1);
@@ -135,11 +139,7 @@ mod tests {
 
     #[test]
     fn push_back_multiple() {
-        let mut heads = HeadsContainer::default();
-
-        heads.push_back(FrontierHead::new(1, 10));
-        heads.push_back(FrontierHead::new(10, 20));
-        heads.push_back(FrontierHead::new(20, 30));
+        let heads = container_with_heads([(1, 10), (10, 20), (20, 30)]);
 
         assert_eq!(heads.len(), 3);
         assert_eq!(heads.iter().count(), 3);
@@ -148,22 +148,11 @@ mod tests {
 
     #[test]
     fn order_by_timestamp() {
-        let mut heads = HeadsContainer::default();
-
+        let mut heads = container_with_heads([(1, 10), (10, 20), (20, 30)]);
         let now = Timestamp::new_test_instance();
-
-        heads.push_back(FrontierHead {
-            timestamp: now + Duration::from_secs(100),
-            ..FrontierHead::new(1, 10)
-        });
-        heads.push_back(FrontierHead {
-            timestamp: now + Duration::from_secs(99),
-            ..FrontierHead::new(10, 20)
-        });
-        heads.push_back(FrontierHead {
-            timestamp: now + Duration::from_secs(101),
-            ..FrontierHead::new(20, 30)
-        });
+        heads.modify(1, |h| h.timestamp = now + Duration::from_secs(100));
+        heads.modify(10, |h| h.timestamp = now + Duration::from_secs(99));
+        heads.modify(20, |h| h.timestamp = now + Duration::from_secs(101));
 
         let ordered: Vec<_> = heads.ordered_by_timestamp().collect();
         assert_eq!(ordered[0].start, 10.into());
@@ -175,15 +164,14 @@ mod tests {
     #[should_panic = "head not found"]
     fn modify_unknown_start_panics() {
         let mut heads = HeadsContainer::default();
-        heads.modify(&Account::from(123), |_| {});
+        heads.modify(123, |_| {});
     }
 
     #[test]
     fn modify_nothing() {
-        let mut heads = HeadsContainer::default();
-        heads.push_back(FrontierHead::new(1, 10));
+        let mut heads = container_with_heads([(1, 10)]);
 
-        heads.modify(&Account::from(1), |_| {});
+        heads.modify(1, |_| {});
 
         assert_eq!(heads.iter().next().unwrap().timestamp, Default::default());
         assert_eq!(heads.sequenced.len(), 1);
@@ -193,11 +181,10 @@ mod tests {
 
     #[test]
     fn modify_timestamp() {
-        let mut heads = HeadsContainer::default();
-        heads.push_back(FrontierHead::new(1, 10));
+        let mut heads = container_with_heads([(1, 10)]);
 
         let now = Timestamp::new_test_instance();
-        heads.modify(&Account::from(1), |head| head.timestamp = now);
+        heads.modify(1, |head| head.timestamp = now);
 
         assert_eq!(heads.iter().next().unwrap().timestamp, now);
         assert_eq!(heads.sequenced.len(), 1);
@@ -208,12 +195,10 @@ mod tests {
 
     #[test]
     fn modify_duplicate_timestamp() {
-        let mut heads = HeadsContainer::default();
-        heads.push_back(FrontierHead::new(1, 10));
-        heads.push_back(FrontierHead::new(10, 20));
+        let mut heads = container_with_heads([(1, 10), (10, 20)]);
 
         let now = Timestamp::new_test_instance();
-        heads.modify(&Account::from(1), |head| head.timestamp = now);
+        heads.modify(1, |head| head.timestamp = now);
 
         assert_eq!(heads.by_timestamp.len(), 2);
         assert_eq!(
@@ -228,9 +213,7 @@ mod tests {
 
     #[test]
     fn find_first_less_than_or_equal_to() {
-        let mut heads = HeadsContainer::default();
-        heads.push_back(FrontierHead::new(1, 10));
-        heads.push_back(FrontierHead::new(10, 20));
+        let heads = container_with_heads([(1, 10), (10, 20)]);
 
         assert_eq!(heads.find_first_less_than_or_equal_to(0), None);
         assert_eq!(
@@ -265,11 +248,19 @@ mod tests {
 
     #[test]
     fn ignore_duplicate_insert() {
-        let mut heads = HeadsContainer::default();
-        heads.push_back(FrontierHead::new(1, 10));
-        heads.push_back(FrontierHead::new(1, 10));
+        let heads = container_with_heads([(1, 10), (1, 10)]);
         assert_eq!(heads.len(), 1);
         assert_eq!(heads.sequenced.len(), 1);
         assert_eq!(heads.by_start.len(), 1);
+    }
+
+    fn container_with_heads(ranges: impl IntoIterator<Item = (u64, u64)>) -> HeadsContainer {
+        let mut heads = HeadsContainer::default();
+
+        for (start, end) in ranges.into_iter() {
+            heads.add_head(start, end);
+        }
+
+        heads
     }
 }

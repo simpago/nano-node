@@ -583,7 +583,7 @@ fn bootstrap_fork_open() {
     // Reduce cooldown to speed up fork resolution
     node_config.bootstrap.candidate_accounts.cooldown = Duration::from_millis(100);
     // Make sure we can process the full account number range
-    node_config.bootstrap.frontier_scan.head_parallelism = 3;
+    node_config.bootstrap.frontier_scan.heads.parallelism = 3;
     // Disable rate limiting to speed up the scan
     node_config.bootstrap.frontier_rate_limit = 0;
     // Disable automatic election activation
