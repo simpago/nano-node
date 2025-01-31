@@ -1,6 +1,6 @@
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
-    bootstrap::state::{BootstrapState, PriorityDownResult, QueryType, RunningQuery, VerifyResult},
+    bootstrap::state::{BootstrapState, PriorityDownResult, RunningQuery, VerifyResult},
     stats::{DetailType, Direction, StatType, Stats},
 };
 use rsnano_messages::BlocksAckPayload;
@@ -33,7 +33,7 @@ impl BlockAckProcessor {
         self.stats
             .inc(StatType::BootstrapProcess, DetailType::Blocks);
 
-        let result = verify_response(response, query);
+        let result = query.verify_blocks(response);
         match result {
             VerifyResult::Ok => {
                 self.stats
@@ -57,7 +57,7 @@ impl BlockAckProcessor {
                     if blocks.is_empty() {
                         // It's the last block submitted for this account chain, reset timestamp to allow more requests
                         let stats = self.stats.clone();
-                        let data = self.state.clone();
+                        let state = self.state.clone();
                         let condition = self.condition.clone();
                         let account = query.account;
                         self.block_processor.add_with_callback(
@@ -67,7 +67,7 @@ impl BlockAckProcessor {
                             Box::new(move |_| {
                                 stats.inc(StatType::Bootstrap, DetailType::TimestampReset);
                                 {
-                                    let mut guard = data.lock().unwrap();
+                                    let mut guard = state.lock().unwrap();
                                     guard.candidate_accounts.timestamp_reset(&account);
                                 }
                                 condition.notify_all();
@@ -123,54 +123,4 @@ impl BlockAckProcessor {
             }
         }
     }
-}
-
-///
-/// Verifies whether the received response is valid. Returns:
-/// - invalid: when received blocks do not correspond to requested hash/account or they do not make a valid chain
-/// - nothing_new: when received response indicates that the account chain does not have more blocks
-/// - ok: otherwise, if all checks pass
-pub(super) fn verify_response(response: &BlocksAckPayload, query: &RunningQuery) -> VerifyResult {
-    let blocks = response.blocks();
-    if blocks.is_empty() {
-        return VerifyResult::NothingNew;
-    }
-    if blocks.len() == 1 && blocks.front().unwrap().hash() == query.start.into() {
-        return VerifyResult::NothingNew;
-    }
-    if blocks.len() > query.count {
-        return VerifyResult::Invalid;
-    }
-
-    let first = blocks.front().unwrap();
-    match query.query_type {
-        QueryType::BlocksByHash => {
-            if first.hash() != query.start.into() {
-                // TODO: Stat & log
-                return VerifyResult::Invalid;
-            }
-        }
-        QueryType::BlocksByAccount => {
-            // Open & state blocks always contain account field
-            if first.account_field().unwrap() != query.start.into() {
-                // TODO: Stat & log
-                return VerifyResult::Invalid;
-            }
-        }
-        QueryType::AccountInfoByHash | QueryType::Frontiers | QueryType::Invalid => {
-            return VerifyResult::Invalid;
-        }
-    }
-
-    // Verify blocks make a valid chain
-    let mut previous_hash = first.hash();
-    for block in blocks.iter().skip(1) {
-        if block.previous() != previous_hash {
-            // TODO: Stat & log
-            return VerifyResult::Invalid; // Blocks do not make a chain
-        }
-        previous_hash = block.hash();
-    }
-
-    VerifyResult::Ok
 }

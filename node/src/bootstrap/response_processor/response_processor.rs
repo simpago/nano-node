@@ -93,7 +93,7 @@ impl ResponseProcessor {
             return Err(ProcessError::NoRunningQueryFound);
         };
 
-        if !query.is_valid_response(response) {
+        if !query.is_valid_response_type(response) {
             return Err(ProcessError::InvalidResponseType);
         }
 

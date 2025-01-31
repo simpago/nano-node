@@ -1,6 +1,6 @@
 use crate::{bootstrap::AscPullQuerySpec, stats::DetailType};
 use rsnano_core::{Account, BlockHash, Frontier, HashOrAccount};
-use rsnano_messages::{AscPullAck, AscPullAckType, AscPullReqType, HashType};
+use rsnano_messages::{AscPullAck, AscPullAckType, AscPullReqType, BlocksAckPayload, HashType};
 use rsnano_nullable_clock::Timestamp;
 use std::{
     collections::{HashMap, VecDeque},
@@ -117,7 +117,7 @@ impl RunningQuery {
         }
     }
 
-    pub fn is_valid_response(&self, response: &AscPullAck) -> bool {
+    pub fn is_valid_response_type(&self, response: &AscPullAck) -> bool {
         match response.pull_type {
             AscPullAckType::Blocks(_) => matches!(
                 self.query_type,
@@ -149,6 +149,62 @@ impl RunningQuery {
         // Ensure the frontiers are larger or equal to the requested frontier
         if frontiers[0].account.number() < self.start.number() {
             return VerifyResult::Invalid;
+        }
+
+        VerifyResult::Ok
+    }
+
+    /// Verifies whether the received response is valid. Returns:
+    /// - invalid: when received blocks do not correspond to requested hash/account or they do not make a valid chain
+    /// - nothing_new: when received response indicates that the account chain does not have more blocks
+    /// - ok: otherwise, if all checks pass
+    pub fn verify_blocks(&self, response: &BlocksAckPayload) -> VerifyResult {
+        if !matches!(
+            self.query_type,
+            QueryType::BlocksByHash | QueryType::BlocksByAccount
+        ) {
+            return VerifyResult::Invalid;
+        }
+
+        let blocks = response.blocks();
+        if blocks.is_empty() {
+            return VerifyResult::NothingNew;
+        }
+        if blocks.len() == 1 && blocks.front().unwrap().hash() == self.start.into() {
+            return VerifyResult::NothingNew;
+        }
+        if blocks.len() > self.count {
+            return VerifyResult::Invalid;
+        }
+
+        let first = blocks.front().unwrap();
+        match self.query_type {
+            QueryType::BlocksByHash => {
+                if first.hash() != self.start.into() {
+                    // TODO: Stat & log
+                    return VerifyResult::Invalid;
+                }
+            }
+            QueryType::BlocksByAccount => {
+                // Open & state blocks always contain account field
+                if first.account_field().unwrap() != self.start.into() {
+                    // TODO: Stat & log
+                    return VerifyResult::Invalid;
+                }
+            }
+            QueryType::AccountInfoByHash | QueryType::Frontiers | QueryType::Invalid => {
+                return VerifyResult::Invalid;
+            }
+        }
+
+        // Verify blocks make a valid chain
+        let mut previous_hash = first.hash();
+        for block in blocks.iter().skip(1) {
+            if block.previous() != previous_hash {
+                // TODO: Stat & log
+                return VerifyResult::Invalid; // Blocks do not make a chain
+            }
+            previous_hash = block.hash();
         }
 
         VerifyResult::Ok
