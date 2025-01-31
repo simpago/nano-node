@@ -63,12 +63,12 @@ impl FrontierProcessor {
 
                 // Allow some overfill to avoid unnecessarily dropping responses
                 if self.workers.num_queued_tasks() < self.config.frontier_scan.max_pending * 4 {
-                    let worker = FrontierWorker::new(
-                        self.ledger.clone(),
-                        self.stats.clone(),
-                        self.state.clone(),
-                    );
+                    let ledger = self.ledger.clone();
+                    let stats = self.stats.clone();
+                    let state = self.state.clone();
                     self.workers.post(Box::new(move || {
+                        let tx = ledger.read_txn();
+                        let mut worker = FrontierWorker::new(&ledger, &tx, &stats, &state);
                         worker.process(frontiers);
                     }));
                 } else {
