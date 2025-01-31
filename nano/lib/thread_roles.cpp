@@ -61,6 +61,9 @@ std::string nano::thread_role::get_string (nano::thread_role::name role)
 		case nano::thread_role::name::voting:
 			thread_role_name_string = "Voting";
 			break;
+		case nano::thread_role::name::voting_final:
+			thread_role_name_string = "Voting final";
+			break;
 		case nano::thread_role::name::signature_checking:
 			thread_role_name_string = "Signature check";
 			break;
@@ -108,9 +111,6 @@ std::string nano::thread_role::get_string (nano::thread_role::name role)
 			break;
 		case nano::thread_role::name::bounded_backlog_scan:
 			thread_role_name_string = "Bounded b scan";
-			break;
-		case nano::thread_role::name::vote_generator_queue:
-			thread_role_name_string = "Voting que";
 			break;
 		case nano::thread_role::name::bootstrap:
 			thread_role_name_string = "Bootstrap";

@@ -29,8 +29,8 @@ nano::vote_generator::vote_generator (nano::node_config const & config_a, nano::
 	stats (stats_a),
 	logger (logger_a),
 	is_final (is_final_a),
-	vote_generation_queue{ stats, nano::stat::type::vote_generator, nano::thread_role::name::vote_generator_queue, /* single threaded */ 1, /* max queue size */ 1024 * 32, /* max batch size */ 256 },
-	inproc_channel{ std::make_shared<nano::transport::inproc::channel> (node, node) }
+	inproc_channel{ std::make_shared<nano::transport::inproc::channel> (node, node) },
+	vote_generation_queue{ stats, nano::stat::type::vote_generator, is_final ? nano::thread_role::name::voting_final : nano::thread_role::name::voting, /* single threaded */ 1, /* max queue size */ 1024 * 32, /* max batch size */ 256 }
 {
 	vote_generation_queue.process_batch = [this] (auto & batch) {
 		process_batch (batch);
@@ -77,7 +77,7 @@ void nano::vote_generator::start ()
 {
 	debug_assert (!thread.joinable ());
 	thread = std::thread ([this] () {
-		nano::thread_role::set (nano::thread_role::name::voting);
+		nano::thread_role::set (is_final ? nano::thread_role::name::voting_final : nano::thread_role::name::voting);
 		run ();
 	});
 	vote_generation_queue.start ();

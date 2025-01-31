@@ -72,9 +72,6 @@ private: // Dependencies
 	nano::logger & logger;
 
 private:
-	nano::processing_queue<queue_entry_t> vote_generation_queue;
-
-private:
 	const bool is_final;
 	mutable nano::mutex mutex;
 	nano::condition_variable condition;
@@ -84,5 +81,6 @@ private:
 	std::atomic<bool> stopped{ false };
 	std::thread thread;
 	std::shared_ptr<nano::transport::channel> inproc_channel;
+	nano::processing_queue<queue_entry_t> vote_generation_queue;
 };
 }
