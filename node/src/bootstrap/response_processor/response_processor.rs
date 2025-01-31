@@ -115,7 +115,7 @@ impl ResponseProcessor {
             AscPullAckType::Blocks(blocks) => self.process_blocks(&blocks, query),
             AscPullAckType::AccountInfo(info) => self.process_accounts(&info, query),
             AscPullAckType::Frontiers(frontiers) => {
-                self.frontier_processor.process(frontiers, query)
+                self.frontier_processor.process(query, frontiers)
             }
         };
 
