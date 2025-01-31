@@ -121,146 +121,146 @@ mod tests {
 
     #[test]
     fn no_frontiers_and_empty_ledger() {
-        let ledger = Ledger::new_null();
-        let tx = ledger.read_txn();
-        let mut checker = FrontierChecker::new(&ledger, &tx);
-        let result = checker.get_outdated_accounts(&[]);
-        assert_eq!(result, Default::default());
+        assert_frontier_check(LedgerSpec::default(), &[], OutdatedAccounts::default());
     }
 
     #[test]
     fn empty_ledger() {
-        let ledger = Ledger::new_null();
-        let tx = ledger.read_txn();
-        let mut checker = FrontierChecker::new(&ledger, &tx);
-        let result = checker.get_outdated_accounts(&[Frontier::new_test_instance()]);
-        assert_eq!(result, Default::default());
+        let frontiers = [Frontier::new_test_instance()];
+        assert_frontier_check(
+            LedgerSpec::default(),
+            &frontiers,
+            OutdatedAccounts::default(),
+        );
     }
 
     #[test]
     fn one_outdated() {
         let account = Account::from(1);
-        let head = BlockHash::from(2);
-        let info = AccountInfo {
-            head,
+        let ledger = LedgerSpec {
+            frontiers: vec![Frontier::new(account, BlockHash::from(2))],
             ..Default::default()
         };
-        let ledger = Ledger::new_null_builder()
-            .account_info(&account, &info)
-            .finish();
-        let tx = ledger.read_txn();
-        let mut checker = FrontierChecker::new(&ledger, &tx);
-
-        let result = checker.get_outdated_accounts(&[Frontier::new(account, BlockHash::from(3))]);
-
-        assert_eq!(
-            result,
-            OutdatedAccounts {
-                accounts: vec![account],
-                outdated: 1,
-                pending: 0
-            }
-        );
+        let frontiers = [Frontier::new(account, BlockHash::from(3))];
+        let expected = OutdatedAccounts {
+            accounts: vec![account],
+            outdated: 1,
+            pending: 0,
+        };
+        assert_frontier_check(ledger, &frontiers, expected);
     }
 
     #[test]
     fn one_up_to_date() {
-        let account = Account::from(1);
-        let head = BlockHash::from(2);
-        let info = AccountInfo {
-            head,
+        let frontier = Frontier::new(Account::from(1), BlockHash::from(2));
+        let ledger = LedgerSpec {
+            frontiers: vec![frontier.clone()],
             ..Default::default()
         };
-        let ledger = Ledger::new_null_builder()
-            .account_info(&account, &info)
-            .finish();
-        let tx = ledger.read_txn();
-        let mut checker = FrontierChecker::new(&ledger, &tx);
-
-        let result = checker.get_outdated_accounts(&[Frontier::new(account, head)]);
-
-        assert_eq!(result, Default::default());
+        let expected = OutdatedAccounts::default();
+        assert_frontier_check(ledger, &[frontier], expected);
     }
 
     #[test]
     fn one_pending() {
         let account = Account::from(1);
-        let ledger = Ledger::new_null_builder()
-            .pending(
-                &PendingKey {
-                    receiving_account: account,
-                    send_block_hash: BlockHash::from(2),
-                },
-                &PendingInfo::new_test_instance(),
-            )
-            .finish();
-        let tx = ledger.read_txn();
-        let mut checker = FrontierChecker::new(&ledger, &tx);
-
-        let result = checker.get_outdated_accounts(&[Frontier::new(account, BlockHash::from(2))]);
-
-        assert_eq!(
-            result,
-            OutdatedAccounts {
-                accounts: vec![account],
-                outdated: 0,
-                pending: 1
-            }
-        );
+        let ledger = LedgerSpec {
+            pending: vec![account],
+            ..Default::default()
+        };
+        let frontiers = [Frontier::new(account, BlockHash::from(2))];
+        let expected = OutdatedAccounts {
+            accounts: vec![account],
+            outdated: 0,
+            pending: 1,
+        };
+        assert_frontier_check(ledger, &frontiers, expected);
     }
 
     #[test]
     fn frontier_is_obsolete() {
         let account = Account::from(1);
-        let head = BlockHash::from(2);
         let frontier = BlockHash::from(3);
 
-        let info = AccountInfo {
-            head,
+        let ledger = LedgerSpec {
+            frontiers: vec![Frontier::new(account, BlockHash::from(2))],
+            pruned: vec![frontier],
             ..Default::default()
         };
-        let ledger = Ledger::new_null_builder()
-            .account_info(&account, &info)
-            .pruned(&frontier)
-            .finish();
-        let tx = ledger.read_txn();
-        let mut checker = FrontierChecker::new(&ledger, &tx);
-
-        let result = checker.get_outdated_accounts(&[Frontier::new(account, frontier)]);
-
-        assert_eq!(result, Default::default());
+        let frontiers = [Frontier::new(account, frontier)];
+        let expected = OutdatedAccounts::default();
+        assert_frontier_check(ledger, &frontiers, expected);
     }
 
     #[test]
     fn unknown_frontier_with_unrelated_account_info() {
-        let account = Account::from(999);
-        let ledger = Ledger::new_null_builder()
-            .account_info(&account, &AccountInfo::new_test_instance())
-            .finish();
+        let ledger = LedgerSpec {
+            frontiers: vec![Frontier::new(Account::from(999), BlockHash::from(3))],
+            ..Default::default()
+        };
+        let frontiers = [Frontier::new(Account::from(1), BlockHash::from(2))];
+        let expected = OutdatedAccounts::default();
+        assert_frontier_check(ledger, &frontiers, expected);
+    }
+
+    #[test]
+    fn unrelated_pending_info() {
+        let ledger = LedgerSpec {
+            pending: vec![Account::from(999)],
+            ..Default::default()
+        };
+        let frontiers = [Frontier::new(Account::from(1), BlockHash::from(2))];
+        let expected = OutdatedAccounts::default();
+        assert_frontier_check(ledger, &frontiers, expected);
+    }
+
+    fn assert_frontier_check(
+        ledger_spec: LedgerSpec,
+        frontiers: &[Frontier],
+        expected: OutdatedAccounts,
+    ) {
+        let ledger = build_ledger(ledger_spec);
+        let result = get_outdated_accounts(&ledger, &frontiers);
+        assert_eq!(result, expected);
+    }
+
+    fn get_outdated_accounts(ledger: &Ledger, frontiers: &[Frontier]) -> OutdatedAccounts {
         let tx = ledger.read_txn();
         let mut checker = FrontierChecker::new(&ledger, &tx);
-
-        let result =
-            checker.get_outdated_accounts(&[Frontier::new(Account::from(1), BlockHash::from(2))]);
-
-        assert_eq!(result, Default::default());
+        checker.get_outdated_accounts(frontiers)
     }
-    #[test]
 
-    fn unrelated_pending_info() {
-        let account = Account::from(999);
-        let ledger = Ledger::new_null_builder()
-            .pending(
-                &PendingKey::new(account, BlockHash::from(2)),
+    fn build_ledger(spec: LedgerSpec) -> Ledger {
+        let mut ledger_builder = Ledger::new_null_builder();
+
+        for frontier in spec.frontiers {
+            ledger_builder = ledger_builder.account_info(
+                &frontier.account,
+                &AccountInfo {
+                    head: frontier.hash,
+                    ..Default::default()
+                },
+            );
+        }
+
+        for pending_acc in spec.pending {
+            ledger_builder = ledger_builder.pending(
+                &PendingKey::new(pending_acc, BlockHash::from(2)),
                 &PendingInfo::new_test_instance(),
             )
-            .finish();
-        let tx = ledger.read_txn();
-        let mut checker = FrontierChecker::new(&ledger, &tx);
+        }
 
-        let result =
-            checker.get_outdated_accounts(&[Frontier::new(Account::from(1), BlockHash::from(2))]);
+        for hash in spec.pruned {
+            ledger_builder = ledger_builder.pruned(&hash)
+        }
 
-        assert_eq!(result, Default::default());
+        ledger_builder.finish()
+    }
+
+    #[derive(Default)]
+    struct LedgerSpec {
+        frontiers: Vec<Frontier>,
+        pending: Vec<Account>,
+        pruned: Vec<BlockHash>,
     }
 }
