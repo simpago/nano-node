@@ -21,11 +21,7 @@ impl<'a> AccountDatabaseCrawler<'a> {
         }
     }
 
-    pub fn initialize(&mut self, start: Account) {
-        self.seek(start);
-    }
-
-    fn seek(&mut self, start: Account) {
+    pub fn seek(&mut self, start: Account) {
         self.it = Some(Box::new(
             self.ledger.store.account.iter_range(self.tx, start..),
         ));

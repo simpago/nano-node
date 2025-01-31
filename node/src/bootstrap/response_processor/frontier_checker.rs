@@ -104,8 +104,8 @@ impl<'a> FrontierChecker<'a> {
     }
 
     fn initialize(&mut self, start: Account) {
-        self.account_crawler.initialize(start);
-        self.pending_crawler.initialize(start);
+        self.account_crawler.seek(start);
+        self.pending_crawler.seek(start);
     }
 
     fn advance_to(&mut self, account: &Account) {
