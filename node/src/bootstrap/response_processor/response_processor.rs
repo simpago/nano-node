@@ -1,6 +1,6 @@
 use super::{
     super::{
-        state::{BootstrapState, CandidateAccounts, PriorityDownResult, QueryType, RunningQuery},
+        state::{BootstrapState, PriorityDownResult, QueryType, RunningQuery},
         BootstrapConfig,
     },
     account_processor::AccountProcessor,
@@ -13,7 +13,7 @@ use crate::{
     utils::ThreadPoolImpl,
 };
 use rsnano_ledger::Ledger;
-use rsnano_messages::{AccountInfoAckPayload, AscPullAck, AscPullAckType, BlocksAckPayload};
+use rsnano_messages::{AscPullAck, AscPullAckType, BlocksAckPayload};
 use rsnano_network::ChannelId;
 use rsnano_nullable_clock::Timestamp;
 use std::{
@@ -224,59 +224,6 @@ impl ResponseProcessor {
                 false
             }
         }
-    }
-
-    pub fn process_accounts(&self, response: &AccountInfoAckPayload, query: &RunningQuery) -> bool {
-        if response.account.is_zero() {
-            self.stats
-                .inc(StatType::BootstrapProcess, DetailType::AccountInfoEmpty);
-            // OK, but nothing to do
-            return true;
-        }
-
-        self.stats
-            .inc(StatType::BootstrapProcess, DetailType::AccountInfo);
-
-        // Prioritize account containing the dependency
-        {
-            let mut guard = self.state.lock().unwrap();
-            let updated = guard
-                .candidate_accounts
-                .dependency_update(&query.hash, response.account);
-            if updated > 0 {
-                self.stats.add(
-                    StatType::BootstrapAccountSets,
-                    DetailType::DependencyUpdate,
-                    updated as u64,
-                );
-            } else {
-                self.stats.inc(
-                    StatType::BootstrapAccountSets,
-                    DetailType::DependencyUpdateFailed,
-                );
-            }
-
-            if guard
-                .candidate_accounts
-                .priority_set(&response.account, CandidateAccounts::PRIORITY_CUTOFF)
-            {
-                self.priority_inserted();
-            } else {
-                self.priority_insertion_failed()
-            };
-        }
-        // OK, no way to verify the response
-        true
-    }
-
-    fn priority_inserted(&self) {
-        self.stats
-            .inc(StatType::BootstrapAccountSets, DetailType::PriorityInsert);
-    }
-
-    fn priority_insertion_failed(&self) {
-        self.stats
-            .inc(StatType::BootstrapAccountSets, DetailType::PrioritizeFailed);
     }
 }
 
