@@ -2,12 +2,12 @@ use super::{
     block_inspector::BlockInspector,
     cleanup::BootstrapCleanup,
     requesters::Requesters,
-    response_handler::ResponseHandler,
+    response_handler::{BootstrapProcessError, ResponseHandler},
     state::{AccountRangesConfig, BootstrapState, CandidateAccountsConfig, QueryType},
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, LedgerNotifications},
-    stats::{DetailType, StatType, Stats},
+    stats::{DetailType, Sample, StatType, Stats},
     transport::MessageSender,
     utils::ThreadPoolImpl,
 };
@@ -193,8 +193,31 @@ impl Bootstrapper {
 
     /// Process `asc_pull_ack` message coming from network
     pub fn process(&self, message: AscPullAck, channel_id: ChannelId) {
-        self.response_handler
-            .process(message, channel_id, self.clock.now());
+        let now = self.clock.now();
+        let result = self.response_handler.process(message, channel_id, now);
+        match result {
+            Ok(info) => {
+                self.stats.inc(StatType::Bootstrap, DetailType::Reply);
+                self.stats
+                    .inc(StatType::BootstrapReply, info.query_type.into());
+                self.stats.sample(
+                    Sample::BootstrapTagDuration,
+                    info.response_time.as_millis() as i64,
+                    (0, self.config.request_timeout.as_millis() as i64),
+                );
+            }
+            Err(BootstrapProcessError::NoRunningQueryFound) => {
+                self.stats.inc(StatType::Bootstrap, DetailType::MissingTag);
+            }
+            Err(BootstrapProcessError::InvalidResponseType) => {
+                self.stats
+                    .inc(StatType::Bootstrap, DetailType::InvalidResponseType);
+            }
+            Err(BootstrapProcessError::InvalidResponse) => {
+                self.stats
+                    .inc(StatType::Bootstrap, DetailType::InvalidResponse);
+            }
+        }
     }
 
     fn priority_inserted(&self) {

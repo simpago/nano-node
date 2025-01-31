@@ -5,7 +5,7 @@ use super::{
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
     bootstrap::crawlers::{AccountDatabaseCrawler, PendingDatabaseCrawler},
-    stats::{DetailType, Direction, Sample, StatType, Stats},
+    stats::{DetailType, Direction, StatType, Stats},
     utils::{ThreadPool, ThreadPoolImpl},
 };
 use rsnano_core::{Account, Frontier};
@@ -13,7 +13,10 @@ use rsnano_ledger::Ledger;
 use rsnano_messages::{AccountInfoAckPayload, AscPullAck, AscPullAckType, BlocksAckPayload};
 use rsnano_network::ChannelId;
 use rsnano_nullable_clock::Timestamp;
-use std::sync::{Arc, Condvar, Mutex};
+use std::{
+    sync::{Arc, Condvar, Mutex},
+    time::Duration,
+};
 use tracing::debug;
 
 pub(super) struct ResponseHandler {
@@ -24,6 +27,26 @@ pub(super) struct ResponseHandler {
     workers: Arc<ThreadPoolImpl>,
     ledger: Arc<Ledger>,
     config: BootstrapConfig,
+}
+
+pub enum BootstrapProcessError {
+    NoRunningQueryFound,
+    InvalidResponseType,
+    InvalidResponse,
+}
+
+pub struct ProcessInfo {
+    pub query_type: QueryType,
+    pub response_time: Duration,
+}
+
+impl ProcessInfo {
+    pub fn new(query: &RunningQuery, now: Timestamp) -> Self {
+        Self {
+            query_type: query.query_type,
+            response_time: query.sent.elapsed(now),
+        }
+    }
 }
 
 impl ResponseHandler {
@@ -47,62 +70,61 @@ impl ResponseHandler {
         }
     }
 
-    pub fn process(&self, message: AscPullAck, channel_id: ChannelId, now: Timestamp) {
+    pub fn process(
+        &self,
+        response: AscPullAck,
+        channel_id: ChannelId,
+        now: Timestamp,
+    ) -> Result<ProcessInfo, BootstrapProcessError> {
+        let query = self.take_running_query_for(&response)?;
+        self.process_response(&query, response)?;
+        self.update_peer_scoring(channel_id);
+        self.condition.notify_all();
+        Ok(ProcessInfo::new(&query, now))
+    }
+
+    fn take_running_query_for(
+        &self,
+        response: &AscPullAck,
+    ) -> Result<RunningQuery, BootstrapProcessError> {
         let mut guard = self.state.lock().unwrap();
 
         // Only process messages that have a known running query
-        let Some(query) = guard.running_queries.remove(message.id) else {
-            self.stats.inc(StatType::Bootstrap, DetailType::MissingTag);
-            return;
+        let Some(query) = guard.running_queries.remove(response.id) else {
+            return Err(BootstrapProcessError::NoRunningQueryFound);
         };
 
-        self.stats.inc(StatType::Bootstrap, DetailType::Reply);
-
-        let valid = match message.pull_type {
-            AscPullAckType::Blocks(_) => matches!(
-                query.query_type,
-                QueryType::BlocksByHash | QueryType::BlocksByAccount
-            ),
-            AscPullAckType::AccountInfo(_) => query.query_type == QueryType::AccountInfoByHash,
-            AscPullAckType::Frontiers(_) => query.query_type == QueryType::Frontiers,
-        };
-
-        if !valid {
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::InvalidResponseType);
-            return;
+        if !query.is_valid_response(response) {
+            return Err(BootstrapProcessError::InvalidResponseType);
         }
 
-        // Track bootstrap request response time
-        self.stats
-            .inc(StatType::BootstrapReply, query.query_type.into());
+        Ok(query)
+    }
 
-        self.stats.sample(
-            Sample::BootstrapTagDuration,
-            query.sent.elapsed(now).as_millis() as i64,
-            (0, self.config.request_timeout.as_millis() as i64),
-        );
+    fn update_peer_scoring(&self, channel_id: ChannelId) {
+        self.state
+            .lock()
+            .unwrap()
+            .scoring
+            .received_message(channel_id);
+    }
 
-        drop(guard);
-        // Process the response payload
-        let ok = match message.pull_type {
-            AscPullAckType::Blocks(blocks) => self.process_blocks(&blocks, &query),
-            AscPullAckType::AccountInfo(info) => self.process_accounts(&info, &query),
-            AscPullAckType::Frontiers(frontiers) => self.process_frontiers(frontiers, &query),
+    fn process_response(
+        &self,
+        query: &RunningQuery,
+        response: AscPullAck,
+    ) -> Result<(), BootstrapProcessError> {
+        let ok = match response.pull_type {
+            AscPullAckType::Blocks(blocks) => self.process_blocks(&blocks, query),
+            AscPullAckType::AccountInfo(info) => self.process_accounts(&info, query),
+            AscPullAckType::Frontiers(frontiers) => self.process_frontiers(frontiers, query),
         };
 
         if ok {
-            self.state
-                .lock()
-                .unwrap()
-                .scoring
-                .received_message(channel_id);
+            Ok(())
         } else {
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::InvalidResponse);
+            Err(BootstrapProcessError::InvalidResponse)
         }
-
-        self.condition.notify_all();
     }
 
     pub fn process_blocks(&self, response: &BlocksAckPayload, query: &RunningQuery) -> bool {

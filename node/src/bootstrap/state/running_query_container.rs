@@ -1,6 +1,6 @@
 use crate::{bootstrap::AscPullQuerySpec, stats::DetailType};
 use rsnano_core::{Account, BlockHash, HashOrAccount};
-use rsnano_messages::{AscPullReqType, HashType};
+use rsnano_messages::{AscPullAck, AscPullAckType, AscPullReqType, HashType};
 use rsnano_nullable_clock::Timestamp;
 use std::{
     collections::{HashMap, VecDeque},
@@ -112,6 +112,17 @@ impl RunningQuery {
             id,
             sent: now,
             response_cutoff: now + timeout * 4,
+        }
+    }
+
+    pub fn is_valid_response(&self, response: &AscPullAck) -> bool {
+        match response.pull_type {
+            AscPullAckType::Blocks(_) => matches!(
+                self.query_type,
+                QueryType::BlocksByHash | QueryType::BlocksByAccount
+            ),
+            AscPullAckType::AccountInfo(_) => self.query_type == QueryType::AccountInfoByHash,
+            AscPullAckType::Frontiers(_) => self.query_type == QueryType::Frontiers,
         }
     }
 }
