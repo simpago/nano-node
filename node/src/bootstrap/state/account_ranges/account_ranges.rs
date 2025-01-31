@@ -80,10 +80,17 @@ impl AccountRanges {
         done
     }
 
+    pub fn total_processed(&self) -> usize {
+        self.heads.iter().map(|i| i.processed).sum()
+    }
+
+    pub fn total_completed(&self) -> usize {
+        self.heads.iter().map(|i| i.completed).sum()
+    }
+
     pub fn container_info(&self) -> ContainerInfo {
         // TODO port the detailed container info from nano_node
-        let total_processed = self.heads.iter().map(|i| i.processed).sum();
-        [("total_processed", total_processed, 0)].into()
+        [("total_processed", self.total_processed(), 0)].into()
     }
 }
 

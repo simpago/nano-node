@@ -52,32 +52,7 @@ impl FrontierProcessor {
             VerifyResult::Ok => {
                 self.stats
                     .inc(StatType::BootstrapVerifyFrontiers, DetailType::Ok);
-                self.stats.add_dir(
-                    StatType::Bootstrap,
-                    DetailType::Frontiers,
-                    Direction::In,
-                    frontiers.len() as u64,
-                );
-
-                self.update_account_ranges(query, &frontiers);
-
-                // Allow some overfill to avoid unnecessarily dropping responses
-                if self.workers.num_queued_tasks() < self.config.frontier_scan.max_pending * 4 {
-                    let ledger = self.ledger.clone();
-                    let stats = self.stats.clone();
-                    let state = self.state.clone();
-                    self.workers.post(Box::new(move || {
-                        let tx = ledger.read_txn();
-                        let mut worker = FrontierWorker::new(&ledger, &tx, &stats, &state);
-                        worker.process(frontiers);
-                    }));
-                } else {
-                    self.stats.add(
-                        StatType::Bootstrap,
-                        DetailType::FrontiersDropped,
-                        frontiers.len() as u64,
-                    );
-                }
+                self.spawn_worker(query, frontiers);
                 true
             }
             VerifyResult::NothingNew => {
@@ -93,6 +68,34 @@ impl FrontierProcessor {
         }
     }
 
+    fn spawn_worker(&self, query: &RunningQuery, frontiers: Vec<Frontier>) {
+        self.stats.add_dir(
+            StatType::Bootstrap,
+            DetailType::Frontiers,
+            Direction::In,
+            frontiers.len() as u64,
+        );
+
+        self.update_account_ranges(query, &frontiers);
+
+        if self.can_spawn_worker() {
+            let ledger = self.ledger.clone();
+            let stats = self.stats.clone();
+            let state = self.state.clone();
+            self.workers.post(Box::new(move || {
+                let tx = ledger.read_txn();
+                let mut worker = FrontierWorker::new(&ledger, &tx, &stats, &state);
+                worker.process(frontiers);
+            }));
+        } else {
+            self.stats.add(
+                StatType::Bootstrap,
+                DetailType::FrontiersDropped,
+                frontiers.len() as u64,
+            );
+        }
+    }
+
     fn update_account_ranges(&self, query: &RunningQuery, frontiers: &[Frontier]) {
         let mut guard = self.state.lock().unwrap();
         self.stats
@@ -102,5 +105,40 @@ impl FrontierProcessor {
             self.stats
                 .inc(StatType::BootstrapFrontierScan, DetailType::Done);
         }
+    }
+
+    fn can_spawn_worker(&self) -> bool {
+        // Allow some overfill to avoid unnecessarily dropping responses
+        self.workers.num_queued_tasks() < self.config.frontier_scan.max_pending * 4
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bootstrap::state::{QuerySource, QueryType};
+
+    #[test]
+    fn update_account_ranges() {
+        let stats = Arc::new(Stats::default());
+        let ledger = Arc::new(Ledger::new_null());
+        let state = Arc::new(Mutex::new(BootstrapState::default()));
+        let config = BootstrapConfig::default();
+        let workers = Arc::new(ThreadPoolImpl::create(1, "test"));
+        let processor = FrontierProcessor::new(stats, ledger, state.clone(), config, workers);
+
+        let query = RunningQuery {
+            source: QuerySource::Frontiers,
+            query_type: QueryType::Frontiers,
+            start: 1.into(),
+            ..RunningQuery::new_test_instance()
+        };
+
+        let success = processor.process(&query, Vec::new());
+        assert!(success);
+
+        let success = processor.process(&query, vec![Frontier::new_test_instance()]);
+        assert!(success);
+        assert_eq!(state.lock().unwrap().account_ranges.total_completed(), 1);
     }
 }

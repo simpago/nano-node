@@ -14,7 +14,7 @@ pub(super) struct FrontierHead {
     candidates: BTreeSet<Account>,
 
     pub requests: usize,
-    completed: usize,
+    pub completed: usize,
     pub timestamp: Timestamp,
 
     /// Total number of accounts processed
