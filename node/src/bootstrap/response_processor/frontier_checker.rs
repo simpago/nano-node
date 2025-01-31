@@ -1,6 +1,4 @@
-use crate::bootstrap::response_processor::crawlers::{
-    AccountDatabaseCrawler, PendingDatabaseCrawler,
-};
+use super::{account_crawler::AccountDatabaseCrawler, pending_crawler::PendingDatabaseCrawler};
 use rsnano_core::{Account, Frontier};
 use rsnano_ledger::Ledger;
 use rsnano_store_lmdb::LmdbReadTransaction;
