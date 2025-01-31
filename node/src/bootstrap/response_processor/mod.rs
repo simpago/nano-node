@@ -1,4 +1,5 @@
 mod account_crawler;
+mod account_processor;
 mod frontier_checker;
 mod frontier_processor;
 mod frontier_worker;

@@ -3,6 +3,7 @@ use super::{
         state::{BootstrapState, CandidateAccounts, PriorityDownResult, QueryType, RunningQuery},
         BootstrapConfig,
     },
+    account_processor::AccountProcessor,
     frontier_processor::FrontierProcessor,
 };
 use crate::{
@@ -26,6 +27,7 @@ pub(crate) struct ResponseProcessor {
     block_processor: Arc<BlockProcessor>,
     condition: Arc<Condvar>,
     frontier_processor: FrontierProcessor,
+    account_processor: AccountProcessor,
 }
 
 pub(crate) enum ProcessError {
@@ -61,12 +63,15 @@ impl ResponseProcessor {
         let frontier_processor =
             FrontierProcessor::new(stats.clone(), ledger, state.clone(), config, workers);
 
+        let account_processor = AccountProcessor::new(stats.clone(), state.clone());
+
         Self {
             state,
             stats,
             block_processor,
             condition,
             frontier_processor,
+            account_processor,
         }
     }
 
@@ -113,7 +118,7 @@ impl ResponseProcessor {
     ) -> Result<(), ProcessError> {
         let ok = match response.pull_type {
             AscPullAckType::Blocks(blocks) => self.process_blocks(&blocks, query),
-            AscPullAckType::AccountInfo(info) => self.process_accounts(&info, query),
+            AscPullAckType::AccountInfo(info) => self.account_processor.process(query, &info),
             AscPullAckType::Frontiers(frontiers) => {
                 self.frontier_processor.process(query, frontiers)
             }
