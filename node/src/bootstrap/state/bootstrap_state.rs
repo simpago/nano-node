@@ -3,7 +3,6 @@ use super::{
     RunningQueryContainer,
 };
 use crate::bootstrap::{AscPullQuerySpec, BootstrapConfig};
-use crate::stats::Stats;
 use rsnano_core::Account;
 use rsnano_core::{utils::ContainerInfo, BlockHash};
 use rsnano_messages::AscPullReqType;
@@ -19,11 +18,11 @@ pub(crate) struct BootstrapState {
 }
 
 impl BootstrapState {
-    pub fn new(config: BootstrapConfig, stats: Arc<Stats>) -> Self {
+    pub fn new(config: BootstrapConfig) -> Self {
         Self {
             candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
             scoring: PeerScoring::new(config.clone()),
-            account_ranges: AccountRanges::new(config.frontier_scan.clone(), stats),
+            account_ranges: AccountRanges::new(config.frontier_scan.clone()),
             running_queries: RunningQueryContainer::default(),
         }
     }
@@ -116,6 +115,6 @@ impl BootstrapState {
 
 impl Default for BootstrapState {
     fn default() -> Self {
-        Self::new(Default::default(), Arc::new(Stats::default()))
+        Self::new(Default::default())
     }
 }

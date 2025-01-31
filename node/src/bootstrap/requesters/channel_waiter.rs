@@ -72,10 +72,7 @@ impl Default for ChannelWaiter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        bootstrap::{state::RunningQuery, BootstrapConfig},
-        stats::Stats,
-    };
+    use crate::bootstrap::{state::RunningQuery, BootstrapConfig};
 
     #[test]
     fn initial_state() {
@@ -88,7 +85,7 @@ mod tests {
     fn happy_path_no_waiting() {
         let limiter = Arc::new(RateLimiter::new(TEST_RATE_LIMIT));
         let mut waiter = ChannelWaiter::new(limiter, MAX_TEST_REQUESTS);
-        let mut state = BootstrapState::new(BootstrapConfig::default(), Arc::new(Stats::default()));
+        let mut state = BootstrapState::new(BootstrapConfig::default());
         let channel = Arc::new(Channel::new_test_instance());
         state.scoring.sync(vec![channel.clone()]);
 
@@ -109,7 +106,7 @@ mod tests {
     fn wait_for_running_queries() {
         let limiter = Arc::new(RateLimiter::new(TEST_RATE_LIMIT));
         let mut waiter = ChannelWaiter::new(limiter, 1);
-        let mut state = BootstrapState::new(BootstrapConfig::default(), Arc::new(Stats::default()));
+        let mut state = BootstrapState::new(BootstrapConfig::default());
 
         assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress)); // initial
 
@@ -131,7 +128,7 @@ mod tests {
         let limiter = Arc::new(RateLimiter::new(TEST_RATE_LIMIT));
         limiter.should_pass(TEST_RATE_LIMIT);
         let mut waiter = ChannelWaiter::new(limiter.clone(), MAX_TEST_REQUESTS);
-        let mut state = BootstrapState::new(BootstrapConfig::default(), Arc::new(Stats::default()));
+        let mut state = BootstrapState::new(BootstrapConfig::default());
 
         assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress)); // initial
         assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress)); // running queries
@@ -153,7 +150,7 @@ mod tests {
     fn wait_scoring() {
         let limiter = Arc::new(RateLimiter::new(TEST_RATE_LIMIT));
         let mut waiter = ChannelWaiter::new(limiter, MAX_TEST_REQUESTS);
-        let mut state = BootstrapState::new(BootstrapConfig::default(), Arc::new(Stats::default()));
+        let mut state = BootstrapState::new(BootstrapConfig::default());
 
         assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress)); // initial
         assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress)); // running queries

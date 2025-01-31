@@ -112,6 +112,9 @@ impl BootstrapPromise<AscPullQuerySpec> for FrontierRequester {
                     let spec = Self::create_query_spec(channel, start);
                     self.state = FrontierState::Initial;
                     return PromiseResult::Finished(spec);
+                } else {
+                    self.stats
+                        .inc(StatType::BootstrapFrontierScan, DetailType::NextNone);
                 }
             }
         }
@@ -228,6 +231,6 @@ mod tests {
             },
             ..Default::default()
         };
-        BootstrapState::new(config, Arc::new(Stats::default()))
+        BootstrapState::new(config)
     }
 }

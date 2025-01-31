@@ -281,7 +281,13 @@ impl ResponseHandler {
 
                 {
                     let mut guard = self.state.lock().unwrap();
-                    guard.account_ranges.process(query.start.into(), &frontiers);
+                    self.stats
+                        .inc(StatType::BootstrapFrontierScan, DetailType::Process);
+                    let done = guard.account_ranges.process(query.start.into(), &frontiers);
+                    if done {
+                        self.stats
+                            .inc(StatType::BootstrapFrontierScan, DetailType::Done);
+                    }
                 }
 
                 // Allow some overfill to avoid unnecessarily dropping responses

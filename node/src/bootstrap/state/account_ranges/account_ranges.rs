@@ -1,8 +1,5 @@
 use super::heads_container::HeadsContainer;
-use crate::{
-    bootstrap::state::account_ranges::heads_container::FrontierHead,
-    stats::{DetailType, StatType, Stats},
-};
+use crate::bootstrap::state::account_ranges::heads_container::FrontierHead;
 use primitive_types::U256;
 use rsnano_core::{utils::ContainerInfo, Account, Frontier};
 use rsnano_nullable_clock::Timestamp;
@@ -34,12 +31,11 @@ impl Default for AccountRangesConfig {
 /// This class is used to track the progress of each range.
 pub struct AccountRanges {
     config: AccountRangesConfig,
-    stats: Arc<Stats>,
     heads: HeadsContainer,
 }
 
 impl AccountRanges {
-    pub fn new(config: AccountRangesConfig, stats: Arc<Stats>) -> Self {
+    pub fn new(config: AccountRangesConfig) -> Self {
         // Divide nano::account numeric range into consecutive and equal ranges
         let max_account = Account::MAX.number();
         let range_size = max_account / config.head_parallelism;
@@ -62,11 +58,7 @@ impl AccountRanges {
 
         assert!(!heads.len() > 0);
 
-        Self {
-            config,
-            stats,
-            heads,
-        }
+        Self { config, heads }
     }
 
     pub fn next(&mut self, now: Timestamp) -> Account {
@@ -75,18 +67,6 @@ impl AccountRanges {
         let mut it = Account::zero();
         for head in self.heads.ordered_by_timestamp() {
             if head.requests < self.config.consideration_count || head.timestamp < cutoff {
-                debug_assert!(head.next.number() >= head.start.number());
-                debug_assert!(head.next.number() < head.end.number());
-
-                self.stats.inc(
-                    StatType::BootstrapFrontierScan,
-                    if head.requests < self.config.consideration_count {
-                        DetailType::NextByRequests
-                    } else {
-                        DetailType::NextByTimestamp
-                    },
-                );
-
                 next_account = head.next;
                 it = head.start;
                 break;
@@ -94,8 +74,6 @@ impl AccountRanges {
         }
 
         if next_account.is_zero() {
-            self.stats
-                .inc(StatType::BootstrapFrontierScan, DetailType::NextNone);
         } else {
             self.heads.modify(&it, |head| {
                 head.requests += 1;
@@ -111,14 +89,11 @@ impl AccountRanges {
             .iter()
             .all(|f| f.account.number() >= start.number()));
 
-        self.stats
-            .inc(StatType::BootstrapFrontierScan, DetailType::Process);
-
         // Find the first head with head.start <= start
-        let it = self.heads.find_first_less_than_or_equal_to(start).unwrap();
+        let range_start = self.heads.find_first_less_than_or_equal_to(start).unwrap();
 
         let mut done = false;
-        self.heads.modify(&it, |entry| {
+        self.heads.modify(&range_start, |entry| {
             entry.completed += 1;
 
             for frontier in response {
@@ -136,16 +111,11 @@ impl AccountRanges {
             // Special case for the last frontier head that won't receive larger than max frontier
             if entry.completed >= self.config.consideration_count * 2 && entry.candidates.is_empty()
             {
-                self.stats
-                    .inc(StatType::BootstrapFrontierScan, DetailType::DoneEmpty);
                 entry.candidates.insert(entry.end);
             }
 
             // Check if done
             if entry.completed >= self.config.consideration_count && !entry.candidates.is_empty() {
-                self.stats
-                    .inc(StatType::BootstrapFrontierScan, DetailType::Done);
-
                 // Take the last candidate as the next frontier
                 assert!(!entry.candidates.is_empty());
                 let last = entry.candidates.last().unwrap();
@@ -159,8 +129,6 @@ impl AccountRanges {
 
                 // Bound the search range
                 if entry.next.number() >= entry.end.number() {
-                    self.stats
-                        .inc(StatType::BootstrapFrontierScan, DetailType::DoneRange);
                     entry.next = entry.start;
                 }
 
@@ -190,8 +158,7 @@ mod tests {
             consideration_count: 3,
             ..Default::default()
         };
-        let stats = Arc::new(Stats::default());
-        let mut ranges = AccountRanges::new(config, stats);
+        let mut ranges = AccountRanges::new(config);
         let now = Timestamp::new_test_instance();
 
         // First call should return first head, account number 1 (avoiding burn account 0)
@@ -219,8 +186,7 @@ mod tests {
             candidates: 5,
             ..Default::default()
         };
-        let stats = Arc::new(Stats::default());
-        let mut ranges = AccountRanges::new(config, stats);
+        let mut ranges = AccountRanges::new(config);
         let now = Timestamp::new_test_instance();
 
         // Get initial account to scan
@@ -255,9 +221,8 @@ mod tests {
             candidates: 1,
             ..Default::default()
         };
-        let stats = Arc::new(Stats::default());
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config, stats);
+        let mut ranges = AccountRanges::new(config);
 
         let start = ranges.next(now);
 
@@ -280,9 +245,8 @@ mod tests {
             cooldown: Duration::from_millis(250),
             ..Default::default()
         };
-        let stats = Arc::new(Stats::default());
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config, stats);
+        let mut ranges = AccountRanges::new(config);
 
         // First call should succeed
         let first = ranges.next(now);
@@ -305,9 +269,8 @@ mod tests {
             candidates: 3, // Only keep the lowest candidates
             ..Default::default()
         };
-        let stats = Arc::new(Stats::default());
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config, stats);
+        let mut ranges = AccountRanges::new(config);
 
         let start = ranges.next(now);
         // Create response with more candidates than limit
@@ -340,9 +303,8 @@ mod tests {
             head_parallelism: 4,
             ..Default::default()
         };
-        let stats = Arc::new(Stats::default());
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config, stats);
+        let mut ranges = AccountRanges::new(config);
 
         // Collect initial accounts from each head
         let first0 = ranges.next(now);
@@ -363,9 +325,8 @@ mod tests {
             consideration_count: 1,
             ..Default::default()
         };
-        let stats = Arc::new(Stats::default());
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config, stats);
+        let mut ranges = AccountRanges::new(config);
 
         let start = ranges.next(now);
 
@@ -387,9 +348,8 @@ mod tests {
             consideration_count: 2,
             ..Default::default()
         };
-        let stats = Arc::new(Stats::default());
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config, stats);
+        let mut ranges = AccountRanges::new(config);
 
         let start = ranges.next(now);
 
@@ -415,7 +375,7 @@ mod tests {
 
     #[test]
     fn container_info() {
-        let ranges = AccountRanges::new(Default::default(), Arc::new(Stats::default()));
+        let ranges = AccountRanges::new(Default::default());
         let info = ranges.container_info();
         assert_eq!(info, [("total_processed", 0, 0)].into());
     }

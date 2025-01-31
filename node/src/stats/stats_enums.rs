@@ -485,8 +485,6 @@ pub enum DetailType {
     DependencyUpdate,
     DependencyUpdateFailed,
 
-    DoneRange,
-    DoneEmpty,
     NextByRequests,
     NextByTimestamp,
     Advance,
