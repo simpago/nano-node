@@ -250,6 +250,10 @@ nano::error nano::node_config::serialize_toml (nano::tomlconfig & toml) const
 	tcp.serialize (tcp_l);
 	toml.put_child ("tcp", tcp_l);
 
+	nano::tomlconfig network_l;
+	network.serialize (network_l);
+	toml.put_child ("network", network_l);
+
 	nano::tomlconfig request_aggregator_l;
 	request_aggregator.serialize (request_aggregator_l);
 	toml.put_child ("request_aggregator", request_aggregator_l);
@@ -389,6 +393,12 @@ nano::error nano::node_config::deserialize_toml (nano::tomlconfig & toml)
 		{
 			auto config_l = toml.get_required_child ("tcp");
 			tcp.deserialize (config_l);
+		}
+
+		if (toml.has_key ("network"))
+		{
+			auto config_l = toml.get_required_child ("network");
+			network.deserialize (config_l);
 		}
 
 		if (toml.has_key ("request_aggregator"))

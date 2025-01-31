@@ -430,7 +430,7 @@ std::deque<std::shared_ptr<nano::transport::channel>> nano::network::list_non_pr
 // Simulating with sqrt_broadcast_simulate shows we only need to broadcast to sqrt(total_peers) random peers in order to successfully publish to everyone with high probability
 std::size_t nano::network::fanout (float scale) const
 {
-	auto fanout_l = std::max (2.0f, size_log ());
+	auto fanout_l = std::max (static_cast<float> (config.minimum_fanout), size_log ());
 	return static_cast<std::size_t> (std::ceil (scale * fanout_l));
 }
 
@@ -737,4 +737,34 @@ nano::container_info nano::syn_cookies::container_info () const
 	info.put ("syn_cookies", cookies.size ());
 	info.put ("syn_cookies_per_ip", cookies_per_ip.size ());
 	return info;
+}
+
+/*
+ * network_config
+ */
+
+nano::error nano::network_config::serialize (nano::tomlconfig & toml) const
+{
+	toml.put ("peer_reachout", peer_reachout.count (), "Time between attempts to reach out to peers. \ntype:milliseconds");
+	toml.put ("cached_peer_reachout", cached_peer_reachout.count (), "Time between attempts to reach out to cached peers. \ntype:milliseconds");
+	toml.put ("max_peers_per_ip", max_peers_per_ip, "Maximum number of peers allowed from a single IP address. \ntype:size_t");
+	toml.put ("max_peers_per_subnetwork", max_peers_per_subnetwork, "Maximum number of peers allowed from the same subnetwork. \ntype:size_t");
+	toml.put ("duplicate_filter_size", duplicate_filter_size, "Size of the duplicate detection filter. \ntype:size_t");
+	toml.put ("duplicate_filter_cutoff", duplicate_filter_cutoff, "Time in seconds before a duplicate entry expires. \ntype:uint64");
+	toml.put ("minimum_fanout", minimum_fanout, "Minimum number of peers to fan out messages to. \ntype:size_t");
+
+	return toml.get_error ();
+}
+
+nano::error nano::network_config::deserialize (nano::tomlconfig & toml)
+{
+	toml.get_duration ("peer_reachout", peer_reachout);
+	toml.get_duration ("cached_peer_reachout", cached_peer_reachout);
+	toml.get ("max_peers_per_ip", max_peers_per_ip);
+	toml.get ("max_peers_per_subnetwork", max_peers_per_subnetwork);
+	toml.get ("duplicate_filter_size", duplicate_filter_size);
+	toml.get ("duplicate_filter_cutoff", duplicate_filter_cutoff);
+	toml.get ("minimum_fanout", minimum_fanout);
+
+	return toml.get_error ();
 }

@@ -66,7 +66,8 @@ public:
 		}
 	}
 
-	// TODO: Serialization & deserialization
+	nano::error deserialize (nano::tomlconfig &);
+	nano::error serialize (nano::tomlconfig &) const;
 
 public:
 	std::chrono::milliseconds peer_reachout{ 250ms };
@@ -79,6 +80,8 @@ public:
 
 	size_t duplicate_filter_size{ 1024 * 1024 };
 	uint64_t duplicate_filter_cutoff{ 60 };
+
+	size_t minimum_fanout{ 2 };
 };
 
 class network final
