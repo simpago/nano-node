@@ -16,6 +16,7 @@ pub enum StatType {
     VoteProcessor,
     VoteProcessorTier,
     VoteProcessorOverfill,
+    VoteRebroadcaster,
     Election,
     ElectionCleanup,
     ElectionVote,
@@ -589,6 +590,9 @@ pub enum DetailType {
     PruningTarget,
     PrunedCount,
     CollectTargets,
+
+    // vote rebroadcaster
+    RebroadcastHashes,
 }
 
 impl DetailType {

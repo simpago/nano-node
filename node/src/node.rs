@@ -983,12 +983,13 @@ impl Node {
             }
         }));
 
-        let vote_rebroadcast_queue = Arc::new(VoteRebroadcastQueue::new());
+        let vote_rebroadcast_queue = Arc::new(VoteRebroadcastQueue::new(stats.clone()));
 
         let vote_rebroadcaster = VoteRebroadcaster::new(
             vote_rebroadcast_queue.clone(),
             wallets.clone(),
             message_flooder.clone(),
+            stats.clone(),
         );
 
         vote_router.on_vote_processed(Box::new(move |vote, _source, results| {
@@ -1296,6 +1297,10 @@ impl Node {
                 self.inbound_message_queue.container_info(),
             )
             .node("bounded_backlog", self.bounded_backlog.container_info())
+            .node(
+                "vote_rebroadcaster",
+                self.vote_rebroadcaster.container_info(),
+            )
             .finish()
     }
 

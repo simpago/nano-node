@@ -1,5 +1,9 @@
-use crate::{transport::MessageFlooder, wallets::Wallets};
-use rsnano_core::{BlockHash, Vote, VoteCode};
+use crate::{
+    stats::{DetailType, StatType, Stats},
+    transport::MessageFlooder,
+    wallets::Wallets,
+};
+use rsnano_core::{utils::ContainerInfo, BlockHash, Vote, VoteCode};
 use rsnano_messages::{ConfirmAck, Message};
 use rsnano_network::TrafficType;
 use std::{
@@ -9,6 +13,7 @@ use std::{
         Arc, Condvar, Mutex,
     },
     thread::JoinHandle,
+    time::{Duration, Instant},
 };
 
 pub(crate) struct VoteRebroadcaster {
@@ -16,6 +21,7 @@ pub(crate) struct VoteRebroadcaster {
     join_handle: Option<JoinHandle<()>>,
     wallets: Arc<Wallets>,
     message_flooder: MessageFlooder,
+    stats: Arc<Stats>,
 }
 
 impl VoteRebroadcaster {
@@ -23,12 +29,14 @@ impl VoteRebroadcaster {
         queue: Arc<VoteRebroadcastQueue>,
         wallets: Arc<Wallets>,
         message_flooder: MessageFlooder,
+        stats: Arc<Stats>,
     ) -> Self {
         Self {
             queue,
             wallets,
             join_handle: None,
             message_flooder,
+            stats,
         }
     }
 
@@ -37,6 +45,8 @@ impl VoteRebroadcaster {
             queue: self.queue.clone(),
             wallets: self.wallets.clone(),
             message_flooder: self.message_flooder.clone(),
+            last_refresh: Instant::now(),
+            stats: self.stats.clone(),
         };
 
         let handle = std::thread::Builder::new()
@@ -52,29 +62,63 @@ impl VoteRebroadcaster {
             handle.join().unwrap();
         }
     }
+
+    pub fn container_info(&self) -> ContainerInfo {
+        self.queue.container_info()
+    }
+}
+
+impl Drop for VoteRebroadcaster {
+    fn drop(&mut self) {
+        self.stop();
+    }
 }
 
 struct RebroadcastLoop {
     queue: Arc<VoteRebroadcastQueue>,
     wallets: Arc<Wallets>,
     message_flooder: MessageFlooder,
+    stats: Arc<Stats>,
+    last_refresh: Instant,
 }
 
 impl RebroadcastLoop {
     fn run(&mut self) {
+        self.refresh();
+
         while let Some(vote) = self.queue.dequeue() {
-            // Republish vote if it is new and the node does not host a principal representative (or close to)
-            if self
-                .wallets
-                .should_republish_vote(vote.voting_account.into())
-            {
-                let ack = Message::ConfirmAck(ConfirmAck::new_with_rebroadcasted_vote(
-                    vote.as_ref().clone(),
-                ));
-                self.message_flooder
-                    .flood(&ack, TrafficType::VoteRebroadcast, 0.5);
-            }
+            self.refresh_if_needed();
+
+            self.stats
+                .inc(StatType::VoteRebroadcaster, DetailType::Rebroadcast);
+
+            self.stats.add(
+                StatType::VoteRebroadcaster,
+                DetailType::RebroadcastHashes,
+                vote.hashes.len() as u64,
+            );
+
+            let ack = Message::ConfirmAck(ConfirmAck::new_with_rebroadcasted_vote(
+                vote.as_ref().clone(),
+            ));
+
+            self.message_flooder
+                .flood(&ack, TrafficType::VoteRebroadcast, 0.5);
         }
+    }
+
+    fn refresh_if_needed(&mut self) {
+        if self.last_refresh.elapsed() >= Duration::from_secs(15) {
+            self.refresh();
+        }
+    }
+
+    fn refresh(&mut self) {
+        // Disable vote rebroadcasting if the node has a principal representative (or close to)
+        if self.wallets.have_half_rep() {
+            self.queue.pause();
+        }
+        self.last_refresh = Instant::now();
     }
 }
 
@@ -82,16 +126,20 @@ pub(crate) struct VoteRebroadcastQueue {
     queue: Mutex<VecDeque<Arc<Vote>>>,
     enqueued: Condvar,
     stopped: AtomicBool,
+    stats: Arc<Stats>,
+    paused: AtomicBool,
 }
 
 impl VoteRebroadcastQueue {
     const MAX_QUEUE: usize = 1024 * 16;
 
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(stats: Arc<Stats>) -> Self {
         Self {
             queue: Mutex::new(Default::default()),
             enqueued: Condvar::new(),
             stopped: AtomicBool::new(false),
+            paused: AtomicBool::new(false),
+            stats,
         }
     }
 
@@ -103,6 +151,10 @@ impl VoteRebroadcastQueue {
     }
 
     pub fn enqueue(&self, vote: Arc<Vote>) {
+        if self.paused.load(Ordering::Relaxed) {
+            return;
+        }
+
         let added = {
             let mut queue = self.queue.lock().unwrap();
             if queue.len() < Self::MAX_QUEUE && !self.stopped() {
@@ -115,6 +167,9 @@ impl VoteRebroadcastQueue {
 
         if added {
             self.enqueued.notify_all();
+        } else {
+            self.stats
+                .inc(StatType::VoteRebroadcaster, DetailType::Overfill);
         }
     }
 
@@ -141,5 +196,14 @@ impl VoteRebroadcastQueue {
             self.stopped.store(true, Ordering::SeqCst);
         }
         self.enqueued.notify_all();
+    }
+
+    pub fn container_info(&self) -> ContainerInfo {
+        let queue = self.queue.lock().unwrap();
+        [("queue", queue.len(), 0)].into()
+    }
+
+    pub fn pause(&self) {
+        self.paused.store(true, Ordering::Relaxed);
     }
 }

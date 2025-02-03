@@ -879,6 +879,10 @@ impl Wallets {
         !guard.have_half_rep() && !guard.exists(&voting_account)
     }
 
+    pub fn have_half_rep(&self) -> bool {
+        self.representative_wallets.lock().unwrap().have_half_rep()
+    }
+
     pub fn container_info(&self) -> ContainerInfo {
         [
             (
