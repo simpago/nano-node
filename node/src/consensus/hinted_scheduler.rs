@@ -341,8 +341,10 @@ impl OrderedCooldowns {
     fn trim(&mut self, now: Instant) {
         while let Some(entry) = self.by_time.first_entry() {
             if *entry.key() <= now {
-                entry.remove();
-                // TODO
+                let hashes = entry.remove();
+                for hash in hashes {
+                    self.by_hash.remove(&hash);
+                }
             } else {
                 break;
             }
