@@ -622,10 +622,11 @@ fn bootstrap_fork_open() {
 
     // They disagree about open0/open1
     node0.process(open0.clone()).unwrap();
+    node1.process(open1.clone()).unwrap();
+
     node0.confirming_set.add(open0.hash());
     assert_timely2(|| node0.block_confirmed(&open0.hash()));
 
-    node1.process(open1.clone()).unwrap();
     // Start election for open block which is necessary to resolve the fork
     start_election(&node1, &open1.hash());
     assert_timely2(|| node1.active.active(&open1));
