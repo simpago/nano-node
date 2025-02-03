@@ -124,6 +124,10 @@ impl BootstrapPromise<AscPullQuerySpec> for FrontierRequester {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::RwLock;
+
+    use rsnano_network::Network;
+
     use super::*;
     use crate::{
         bootstrap::{progress, state::CandidateAccountsConfig, BootstrapConfig},
@@ -133,7 +137,7 @@ mod tests {
     #[test]
     fn happy_path() {
         let mut requester = create_test_requester();
-        let mut state = BootstrapState::default();
+        let mut state = BootstrapState::new_test_instance();
         state.add_test_channel();
 
         let PromiseResult::Finished(result) = progress(&mut requester, &mut state) else {
@@ -173,7 +177,7 @@ mod tests {
     #[test]
     fn wait_limiter() {
         let mut requester = create_test_requester();
-        let mut state = BootstrapState::default();
+        let mut state = BootstrapState::new_test_instance();
 
         // Should wait because rate limit reached
         requester.frontiers_limiter.should_pass(TEST_RATE_LIMIT);
@@ -196,7 +200,7 @@ mod tests {
     #[test]
     fn wait_channel() {
         let mut requester = create_test_requester();
-        let mut state = BootstrapState::default();
+        let mut state = BootstrapState::new_test_instance();
 
         let result = progress(&mut requester, &mut state);
         assert!(matches!(result, PromiseResult::Wait));
@@ -231,6 +235,7 @@ mod tests {
             },
             ..Default::default()
         };
-        BootstrapState::new(config)
+        let network = Arc::new(RwLock::new(Network::new_test_instance()));
+        BootstrapState::new(config, network)
     }
 }

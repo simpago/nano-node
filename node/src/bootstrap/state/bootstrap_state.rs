@@ -6,9 +6,9 @@ use crate::bootstrap::{AscPullQuerySpec, BootstrapConfig};
 use rsnano_core::Account;
 use rsnano_core::{utils::ContainerInfo, BlockHash};
 use rsnano_messages::AscPullReqType;
-use rsnano_network::Channel;
+use rsnano_network::{Channel, Network};
 use rsnano_nullable_clock::Timestamp;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 pub(crate) struct BootstrapState {
     pub candidate_accounts: CandidateAccounts,
@@ -18,21 +18,28 @@ pub(crate) struct BootstrapState {
 }
 
 impl BootstrapState {
-    pub fn new(config: BootstrapConfig) -> Self {
+    pub fn new(config: BootstrapConfig, network: Arc<RwLock<Network>>) -> Self {
         Self {
             candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
-            scoring: PeerScoring::new(config.clone()),
+            scoring: PeerScoring::new(config.clone(), network),
             account_ranges: AccountRanges::new(config.frontier_scan.clone()),
             running_queries: RunningQueryContainer::default(),
         }
     }
 
     #[cfg(test)]
-    pub fn add_test_channel(&mut self) {
-        use rsnano_network::Channel;
+    pub fn new_test_instance() -> Self {
+        Self::new(
+            BootstrapConfig::default(),
+            Arc::new(RwLock::new(Network::new_test_instance())),
+        )
+    }
 
-        self.scoring
-            .sync(vec![Arc::new(Channel::new_test_instance())]);
+    #[cfg(test)]
+    pub fn add_test_channel(&mut self) -> Arc<Channel> {
+        let channel = Arc::new(Channel::new_test_instance());
+        self.scoring.sync(vec![channel.clone()]);
+        channel
     }
 
     pub fn next_blocking_query(&self, channel: &Arc<Channel>) -> Option<AscPullQuerySpec> {
@@ -110,11 +117,5 @@ impl BootstrapState {
             .node("frontiers", self.account_ranges.container_info())
             .node("peers", self.scoring.container_info())
             .finish()
-    }
-}
-
-impl Default for BootstrapState {
-    fn default() -> Self {
-        Self::new(Default::default())
     }
 }

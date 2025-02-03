@@ -68,7 +68,7 @@ mod tests {
     #[test]
     fn happy_path() {
         let mut requester = create_test_requester();
-        let mut state = BootstrapState::default();
+        let mut state = BootstrapState::new_test_instance();
         state.add_test_channel();
 
         let account = Account::from(1);
@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn wait_channel() {
         let mut requester = create_test_requester();
-        let mut state = BootstrapState::default();
+        let mut state = BootstrapState::new_test_instance();
 
         let result = progress(&mut requester, &mut state);
         assert!(matches!(result, PromiseResult::Wait));
@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn wait_dependency() {
         let mut requester = create_test_requester();
-        let mut state = BootstrapState::default();
+        let mut state = BootstrapState::new_test_instance();
         state.add_test_channel();
 
         let result = progress(&mut requester, &mut state);

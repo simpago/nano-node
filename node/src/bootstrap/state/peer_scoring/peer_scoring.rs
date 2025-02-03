@@ -1,22 +1,24 @@
 use super::{peer_score::PeerScore, peer_score_container::PeerScoreContainer};
 use crate::bootstrap::BootstrapConfig;
 use rsnano_core::utils::ContainerInfo;
-use rsnano_network::{Channel, ChannelId, TrafficType};
-use std::sync::Arc;
+use rsnano_network::{Channel, ChannelId, Network, TrafficType};
+use std::sync::{Arc, RwLock};
 
 /// Container for tracking and scoring peers with respect to bootstrapping
 pub(crate) struct PeerScoring {
     scoring: PeerScoreContainer,
     config: BootstrapConfig,
     channels: Vec<Arc<Channel>>,
+    network: Arc<RwLock<Network>>,
 }
 
 impl PeerScoring {
-    pub fn new(config: BootstrapConfig) -> Self {
+    pub fn new(config: BootstrapConfig, network: Arc<RwLock<Network>>) -> Self {
         Self {
             scoring: PeerScoreContainer::default(),
             config,
             channels: Vec::new(),
+            network,
         }
     }
 

@@ -122,7 +122,7 @@ mod tests {
     fn update_account_ranges() {
         let stats = Arc::new(Stats::default());
         let ledger = Arc::new(Ledger::new_null());
-        let state = Arc::new(Mutex::new(BootstrapState::default()));
+        let state = Arc::new(Mutex::new(BootstrapState::new_test_instance()));
         let config = BootstrapConfig::default();
         let workers = Arc::new(ThreadPoolImpl::create(1, "test"));
         let processor = FrontierAckProcessor::new(stats, ledger, state.clone(), config, workers);

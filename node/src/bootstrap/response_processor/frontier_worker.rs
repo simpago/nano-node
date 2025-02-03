@@ -75,7 +75,7 @@ mod tests {
         let ledger = Ledger::new_null();
         let tx = ledger.read_txn();
         let stats = Stats::default();
-        let state = Mutex::new(BootstrapState::default());
+        let state = Mutex::new(BootstrapState::new_test_instance());
         let mut worker = FrontierWorker::new(&ledger, &tx, &stats, &state);
 
         worker.process(Vec::new());
@@ -97,7 +97,7 @@ mod tests {
             .finish();
         let tx = ledger.read_txn();
         let stats = Stats::default();
-        let state = Mutex::new(BootstrapState::default());
+        let state = Mutex::new(BootstrapState::new_test_instance());
         let mut worker = FrontierWorker::new(&ledger, &tx, &stats, &state);
 
         worker.process(vec![Frontier::new(account, BlockHash::from(3))]);
