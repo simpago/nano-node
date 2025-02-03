@@ -37,9 +37,7 @@ impl BootstrapState {
 
     #[cfg(test)]
     pub fn add_test_channel(&mut self) -> Arc<Channel> {
-        let channel = Arc::new(Channel::new_test_instance());
-        self.scoring.sync(vec![channel.clone()]);
-        channel
+        self.scoring.add_test_channel()
     }
 
     pub fn next_blocking_query(&self, channel: &Arc<Channel>) -> Option<AscPullQuerySpec> {

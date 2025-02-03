@@ -72,7 +72,7 @@ impl Default for ChannelWaiter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bootstrap::{state::RunningQuery, BootstrapConfig};
+    use crate::bootstrap::state::RunningQuery;
 
     #[test]
     fn initial_state() {
@@ -87,7 +87,6 @@ mod tests {
         let mut waiter = ChannelWaiter::new(limiter, MAX_TEST_REQUESTS);
         let mut state = BootstrapState::new_test_instance();
         let channel = state.add_test_channel();
-        state.scoring.sync(vec![channel.clone()]);
 
         let found = loop {
             match waiter.poll(&mut state) {

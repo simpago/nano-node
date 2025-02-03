@@ -174,6 +174,21 @@ impl Network {
         self.attempts.remove(&remote);
     }
 
+    pub fn add_test_channel(&mut self) -> Arc<Channel> {
+        use rsnano_core::utils::{TEST_ENDPOINT_1, TEST_ENDPOINT_2};
+
+        let channel = self
+            .add_new_channel(
+                TEST_ENDPOINT_1,
+                TEST_ENDPOINT_2,
+                ChannelDirection::Outbound,
+                Timestamp::new_test_instance(),
+            )
+            .unwrap();
+        channel.set_mode(ChannelMode::Realtime);
+        channel
+    }
+
     pub fn add(
         &mut self,
         local_addr: SocketAddrV6,
@@ -181,6 +196,22 @@ impl Network {
         direction: ChannelDirection,
         now: Timestamp,
     ) -> Result<(Arc<Channel>, Box<dyn DataReceiver + Send>), NetworkError> {
+        let channel = self.add_new_channel(local_addr, peer_addr, direction, now)?;
+
+        let receiver = self
+            .data_receiver_factory
+            .create_receiver_for(channel.clone());
+
+        Ok((channel, receiver))
+    }
+
+    fn add_new_channel(
+        &mut self,
+        local_addr: SocketAddrV6,
+        peer_addr: SocketAddrV6,
+        direction: ChannelDirection,
+        now: Timestamp,
+    ) -> Result<Arc<Channel>, NetworkError> {
         let result = self.validate_new_connection(&peer_addr, direction, now);
         if let Err(e) = result {
             self.observer.error(e, &peer_addr, direction);
@@ -200,11 +231,7 @@ impl Network {
         ));
         self.channels.insert(channel_id, channel.clone());
         self.observer.accepted(&peer_addr, direction);
-        let receiver = self
-            .data_receiver_factory
-            .create_receiver_for(channel.clone());
-
-        Ok((channel, receiver))
+        Ok(channel)
     }
 
     fn get_next_channel_id(&mut self) -> ChannelId {
@@ -290,19 +317,13 @@ impl Network {
             .collect()
     }
 
-    pub fn list_realtime_channels(&self, min_version: u8) -> Vec<Arc<Channel>> {
-        let mut result = self.list_realtime(min_version);
-        result.sort_by_key(|i| i.peer_addr());
-        result
-    }
-
     pub fn not_a_peer(&self, endpoint: &SocketAddrV6, allow_local_peers: bool) -> bool {
         endpoint.ip().is_unspecified()
             || reserved_address(endpoint, allow_local_peers)
             || endpoint == &SocketAddrV6::new(Ipv6Addr::LOCALHOST, self.listening_port(), 0, 0)
     }
 
-    pub fn random_list_realtime(&self, count: usize, min_version: u8) -> Vec<Arc<Channel>> {
+    pub fn random_list(&self, count: usize, min_version: u8) -> Vec<Arc<Channel>> {
         let mut channels = self.list_realtime(min_version);
         let mut rng = thread_rng();
         channels.shuffle(&mut rng);
@@ -312,11 +333,10 @@ impl Network {
         channels
     }
 
-    pub fn random_list_realtime_ids(&self) -> Vec<ChannelId> {
-        self.random_list_realtime(usize::MAX, 0)
-            .iter()
-            .map(|c| c.channel_id())
-            .collect()
+    pub fn list_channels(&self, min_version: u8) -> Vec<Arc<Channel>> {
+        let mut result = self.list_realtime(min_version);
+        result.sort_by_key(|i| i.peer_addr());
+        result
     }
 
     /// Returns channel IDs of removed channels
@@ -737,7 +757,7 @@ mod tests {
                 Timestamp::new_test_instance(),
             )
             .unwrap();
-        assert_eq!(network.list_realtime_channels(0).len(), 0);
+        assert_eq!(network.list_channels(0).len(), 0);
     }
 
     #[test]
@@ -779,7 +799,7 @@ mod tests {
         assert!(network
             .upgrade_to_realtime_connection(channel.channel_id(), NodeId::from(456))
             .is_some());
-        assert_eq!(network.list_realtime_channels(0).len(), 1);
+        assert_eq!(network.list_channels(0).len(), 1);
     }
 
     #[test]

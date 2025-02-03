@@ -257,16 +257,16 @@ impl Telemetry {
     }
 
     fn run_requests(&self) {
-        let channel_ids = self.network.read().unwrap().random_list_realtime_ids();
-        for channel_id in channel_ids {
-            self.request(channel_id);
+        let channels = self.network.read().unwrap().random_list(usize::MAX, 0);
+        for channel in channels {
+            self.request(&channel);
         }
     }
 
-    fn request(&self, channel_id: ChannelId) {
+    fn request(&self, channel: &Channel) {
         self.stats.inc(StatType::Telemetry, DetailType::Request);
-        self.message_sender.lock().unwrap().try_send(
-            channel_id,
+        self.message_sender.lock().unwrap().try_send_channel(
+            channel,
             &Message::TelemetryReq,
             TrafficType::Telemetry,
         );
@@ -274,19 +274,20 @@ impl Telemetry {
 
     fn run_broadcasts(&self) {
         let telemetry = self.local_telemetry();
-        let channel_ids = self.network.read().unwrap().random_list_realtime_ids();
+        let channels = self.network.read().unwrap().random_list(usize::MAX, 0);
         let message = Message::TelemetryAck(TelemetryAck(Some(telemetry)));
-        for channel_id in channel_ids {
-            self.broadcast(channel_id, &message);
+        for channel in channels {
+            self.broadcast(&channel, &message);
         }
     }
 
-    fn broadcast(&self, channel_id: ChannelId, message: &Message) {
+    fn broadcast(&self, channel: &Channel, message: &Message) {
         self.stats.inc(StatType::Telemetry, DetailType::Broadcast);
-        self.message_sender
-            .lock()
-            .unwrap()
-            .try_send(channel_id, message, TrafficType::Telemetry);
+        self.message_sender.lock().unwrap().try_send_channel(
+            channel,
+            message,
+            TrafficType::Telemetry,
+        );
     }
 
     fn cleanup(&self, data: &mut TelemetryImpl) {

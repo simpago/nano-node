@@ -70,7 +70,7 @@ impl AppViewModel {
 
         if let Some(node) = self.node_runner.node() {
             self.ledger_stats.update(&node, now);
-            let channels = node.network.read().unwrap().list_realtime_channels(0);
+            let channels = node.network.read().unwrap().list_channels(0);
             let telemetries = node.telemetry.get_all_telemetries();
             let (peered_reps, min_rep_weight) = {
                 let guard = node.online_reps.lock().unwrap();

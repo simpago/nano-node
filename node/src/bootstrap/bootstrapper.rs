@@ -79,7 +79,6 @@ impl Default for BootstrapConfig {
 
 pub struct Bootstrapper {
     stats: Arc<Stats>,
-    network: Arc<RwLock<Network>>,
     threads: Mutex<Option<Threads>>,
     state: Arc<Mutex<BootstrapState>>,
     condition: Arc<Condvar>,
@@ -107,10 +106,7 @@ impl Bootstrapper {
     ) -> Self {
         let workers = Arc::new(ThreadPoolImpl::create(1, "Bootstrap work"));
         let limiter = Arc::new(RateLimiter::new(config.rate_limit));
-        let state = Arc::new(Mutex::new(BootstrapState::new(
-            config.clone(),
-            network.clone(),
-        )));
+        let state = Arc::new(Mutex::new(BootstrapState::new(config.clone(), network)));
         let condition = Arc::new(Condvar::new());
 
         let response_handler = ResponseProcessor::new(
@@ -145,7 +141,6 @@ impl Bootstrapper {
             stats,
             clock,
             response_handler,
-            network,
             stopped: AtomicBool::new(false),
             block_inspector,
             requesters,
@@ -176,8 +171,7 @@ impl Bootstrapper {
     }
 
     fn run_timeouts(&self) {
-        let mut cleanup =
-            BootstrapCleanup::new(self.clock.clone(), self.stats.clone(), self.network.clone());
+        let mut cleanup = BootstrapCleanup::new(self.clock.clone(), self.stats.clone());
         let mut guard = self.state.lock().unwrap();
         while !self.stopped.load(Ordering::SeqCst) {
             cleanup.cleanup(&mut guard);

@@ -1,29 +1,22 @@
 use super::state::{BootstrapState, RunningQuery};
 use crate::stats::{DetailType, StatType, Stats};
-use rsnano_network::Network;
 use rsnano_nullable_clock::SteadyClock;
 use std::{
-    sync::{Arc, RwLock},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
 pub(super) struct BootstrapCleanup {
     clock: Arc<SteadyClock>,
     stats: Arc<Stats>,
-    network: Arc<RwLock<Network>>,
     sync_dependencies_interval: Instant,
 }
 
 impl BootstrapCleanup {
-    pub(super) fn new(
-        clock: Arc<SteadyClock>,
-        stats: Arc<Stats>,
-        network: Arc<RwLock<Network>>,
-    ) -> Self {
+    pub(super) fn new(clock: Arc<SteadyClock>, stats: Arc<Stats>) -> Self {
         Self {
             clock,
             stats,
-            network,
             sync_dependencies_interval: Instant::now(),
         }
     }
@@ -31,8 +24,6 @@ impl BootstrapCleanup {
     pub fn cleanup(&mut self, state: &mut BootstrapState) {
         let now = self.clock.now();
         self.stats.inc(StatType::Bootstrap, DetailType::LoopCleanup);
-        let channels = self.network.read().unwrap().list_realtime_channels(0);
-        state.scoring.sync(channels);
         state.scoring.timeout();
 
         let should_timeout = |query: &RunningQuery| query.response_cutoff < now;

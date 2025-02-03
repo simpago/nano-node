@@ -8,7 +8,6 @@ use std::sync::{Arc, RwLock};
 pub(crate) struct PeerScoring {
     scoring: PeerScoreContainer,
     config: BootstrapConfig,
-    channels: Vec<Arc<Channel>>,
     network: Arc<RwLock<Network>>,
 }
 
@@ -17,9 +16,13 @@ impl PeerScoring {
         Self {
             scoring: PeerScoreContainer::default(),
             config,
-            channels: Vec::new(),
             network,
         }
+    }
+
+    #[cfg(test)]
+    pub fn add_test_channel(&mut self) -> Arc<Channel> {
+        self.network.write().unwrap().add_test_channel()
     }
 
     pub fn received_message(&mut self, channel_id: ChannelId) {
@@ -32,7 +35,10 @@ impl PeerScoring {
     }
 
     pub fn channel(&mut self) -> Option<Arc<Channel>> {
-        self.channels
+        self.network
+            .read()
+            .unwrap()
+            .random_list(usize::MAX, 0)
             .iter()
             .find(|c| {
                 if !c.should_drop(TrafficType::BootstrapRequests) {
@@ -73,7 +79,10 @@ impl PeerScoring {
     }
 
     pub fn available(&self) -> usize {
-        self.channels
+        self.network
+            .read()
+            .unwrap()
+            .list_channels(0)
             .iter()
             .filter(|c| !self.limit_exceeded(c))
             .count()
@@ -92,16 +101,10 @@ impl PeerScoring {
         self.scoring.modify_all(|i| i.decay());
     }
 
-    // Synchronize channels with the network, passed channels should be shuffled
-    pub fn sync(&mut self, channels: Vec<Arc<Channel>>) {
-        self.channels = channels;
-    }
-
     pub fn container_info(&self) -> ContainerInfo {
         [
             ("scores", self.len(), 0),
             ("available", self.available(), 0),
-            ("channels", self.channels.len(), 0),
         ]
         .into()
     }

@@ -41,7 +41,7 @@ impl PeerCacheUpdater {
     }
 
     fn save_peers(&self, tx: &mut LmdbWriteTransaction) {
-        let live_peers = self.network.read().unwrap().list_realtime_channels(0);
+        let live_peers = self.network.read().unwrap().list_channels(0);
         for peer in &live_peers {
             self.save_peer(tx, peer);
         }
