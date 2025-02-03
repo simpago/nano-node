@@ -148,33 +148,6 @@ fn rep_weight() {
     assert_eq!(node.online_reps.lock().unwrap().is_pr(channel3), true);
 }
 
-// This test checks that if a block is in the recently_confirmed list then the repcrawler will not send a request for it.
-// The behaviour of this test previously was the opposite, that the repcrawler eventually send out such a block and deleted the block
-// from the recently confirmed list to try to make ammends for sending it, which is bad behaviour.
-// In the long term, we should have a better way to check for reps and this test should become redundant
-#[test]
-fn recently_confirmed() {
-    let mut system = System::new();
-    let node1 = system.make_node();
-    node1.active.insert_recently_confirmed(&DEV_GENESIS_BLOCK);
-
-    let node2 = system.make_node();
-    node2.insert_into_wallet(&DEV_GENESIS_KEY);
-    let channel = node1
-        .network
-        .read()
-        .unwrap()
-        .find_node_id(&node2.get_node_id())
-        .unwrap()
-        .clone();
-    node1.rep_crawler.query_with_priority(channel); // this query should be dropped due to the recently_confirmed entry
-    assert_always_eq(
-        Duration::from_millis(500),
-        || node1.online_reps.lock().unwrap().peered_reps_count(),
-        0,
-    );
-}
-
 // Test that nodes can track nodes that have rep weight for priority broadcasting
 #[test]
 fn rep_list() {

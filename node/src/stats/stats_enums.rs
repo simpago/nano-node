@@ -525,7 +525,6 @@ pub enum DetailType {
 
     // rep_crawler
     ChannelDead,
-    QueryTargetFailed,
     QueryChannelBusy,
     QuerySent,
     QueryDuplicate,

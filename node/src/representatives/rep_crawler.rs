@@ -152,15 +152,7 @@ impl RepCrawler {
 
     /// Attempt to determine if the peer manages one or more representative accounts
     pub fn query(&self, target_channels: Vec<Arc<Channel>>) {
-        let Some(hash_root) = self.prepare_query_target() else {
-            debug!("No block to query");
-            self.stats.inc_dir(
-                StatType::RepCrawler,
-                DetailType::QueryTargetFailed,
-                Direction::In,
-            );
-            return;
-        };
+        let hash_root = self.prepare_query_target();
 
         let mut guard = self.rep_crawler_impl.lock().unwrap();
 
@@ -359,19 +351,30 @@ impl RepCrawler {
         }
     }
 
-    fn prepare_query_target(&self) -> Option<(BlockHash, Root)> {
-        const MAX_ATTEMPTS: usize = 10;
-
+    fn prepare_query_target(&self) -> (BlockHash, Root) {
+        const MAX_ATTEMPTS: usize = 32;
         let tx = self.ledger.read_txn();
         let random_blocks = self.ledger.random_blocks(&tx, MAX_ATTEMPTS);
 
         for block in &random_blocks {
-            if !self.active.recently_confirmed.hash_exists(&block.hash()) {
-                return Some((block.hash(), block.root()));
+            // Avoid blocks that could still have live votes coming in
+            if self.active.recently_confirmed.hash_exists(&block.hash()) {
+                continue;
             }
+
+            // Nodes will not respond to queries for blocks that are not confirmed
+            if !self.ledger.confirmed().block_exists(&tx, &block.hash()) {
+                continue;
+            }
+
+            return (block.hash(), block.root());
         }
 
-        None
+        // If no suitable block was found, query genesis
+        (
+            self.network_params.ledger.genesis_block.hash(),
+            self.network_params.ledger.genesis_block.root(),
+        )
     }
 
     fn query_interval(&self, sufficient_weight: bool) -> Duration {
