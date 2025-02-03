@@ -58,7 +58,7 @@ impl MessageFlooder {
         {
             let network = self.network.read().unwrap();
             fanout = network.fanout(scale);
-            channels = network.random_channels(usize::MAX)
+            channels = network.shuffled_channels()
         }
 
         self.remove_no_pr(&mut channels, fanout);

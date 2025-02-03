@@ -257,7 +257,7 @@ impl Telemetry {
     }
 
     fn run_requests(&self) {
-        let channels = self.network.read().unwrap().random_channels(usize::MAX);
+        let channels = self.network.read().unwrap().shuffled_channels();
         for channel in channels {
             self.request(&channel);
         }
@@ -274,7 +274,7 @@ impl Telemetry {
 
     fn run_broadcasts(&self) {
         let telemetry = self.local_telemetry();
-        let channels = self.network.read().unwrap().random_channels(usize::MAX);
+        let channels = self.network.read().unwrap().shuffled_channels();
         let message = Message::TelemetryAck(TelemetryAck(Some(telemetry)));
         for channel in channels {
             self.broadcast(&channel, &message);

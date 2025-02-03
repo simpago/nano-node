@@ -287,11 +287,8 @@ impl RepCrawler {
                 };
 
                 /* include channels with ephemeral remote ports */
-                let random_peers = self
-                    .network
-                    .read()
-                    .unwrap()
-                    .random_channels(required_peer_count);
+                let mut random_peers = self.network.read().unwrap().shuffled_channels();
+                random_peers.truncate(required_peer_count);
 
                 guard = self.rep_crawler_impl.lock().unwrap();
                 let targets = guard.prepare_crawl_targets(
