@@ -291,8 +291,12 @@ impl Network {
             .map(|c| c.channel_id())
     }
 
-    pub fn random_realtime_channels(&self, count: usize, min_version: u8) -> Vec<Arc<Channel>> {
-        let mut channels = self.list_realtime(min_version);
+    pub fn random_fanout(&self, scale: f32) -> Vec<Arc<Channel>> {
+        self.random_channels(self.fanout(scale))
+    }
+
+    pub fn random_channels(&self, count: usize) -> Vec<Arc<Channel>> {
+        let mut channels = self.channels();
         let mut rng = thread_rng();
         channels.shuffle(&mut rng);
         if count > 0 {
@@ -301,18 +305,16 @@ impl Network {
         channels
     }
 
-    pub fn random_fanout_realtime(&self, scale: f32) -> Vec<Arc<Channel>> {
-        self.random_realtime_channels(self.fanout(scale), 0)
+    pub fn sorted_channels(&self) -> Vec<Arc<Channel>> {
+        let mut result = self.channels();
+        result.sort_by_key(|i| i.peer_addr());
+        result
     }
 
-    pub fn list_realtime(&self, min_version: u8) -> Vec<Arc<Channel>> {
+    pub fn channels(&self) -> Vec<Arc<Channel>> {
         self.channels
             .values()
-            .filter(|c| {
-                c.protocol_version() >= min_version
-                    && c.is_alive()
-                    && c.mode() == ChannelMode::Realtime
-            })
+            .filter(|c| c.is_alive() && c.mode() == ChannelMode::Realtime)
             .map(|c| c.clone())
             .collect()
     }
@@ -321,22 +323,6 @@ impl Network {
         endpoint.ip().is_unspecified()
             || reserved_address(endpoint, allow_local_peers)
             || endpoint == &SocketAddrV6::new(Ipv6Addr::LOCALHOST, self.listening_port(), 0, 0)
-    }
-
-    pub fn random_list(&self, count: usize, min_version: u8) -> Vec<Arc<Channel>> {
-        let mut channels = self.list_realtime(min_version);
-        let mut rng = thread_rng();
-        channels.shuffle(&mut rng);
-        if count > 0 {
-            channels.truncate(count)
-        }
-        channels
-    }
-
-    pub fn list_channels(&self, min_version: u8) -> Vec<Arc<Channel>> {
-        let mut result = self.list_realtime(min_version);
-        result.sort_by_key(|i| i.peer_addr());
-        result
     }
 
     /// Returns channel IDs of removed channels
@@ -614,7 +600,7 @@ impl Network {
     }
 
     pub fn random_fill_realtime(&self, endpoints: &mut [SocketAddrV6]) {
-        let mut peers = self.list_realtime(0);
+        let mut peers = self.channels();
         // Don't include channels with ephemeral remote ports
         peers.retain(|c| c.peering_addr().is_some());
         let mut rng = thread_rng();
@@ -757,7 +743,7 @@ mod tests {
                 Timestamp::new_test_instance(),
             )
             .unwrap();
-        assert_eq!(network.list_channels(0).len(), 0);
+        assert_eq!(network.channels().len(), 0);
     }
 
     #[test]
@@ -799,7 +785,7 @@ mod tests {
         assert!(network
             .upgrade_to_realtime_connection(channel.channel_id(), NodeId::from(456))
             .is_some());
-        assert_eq!(network.list_channels(0).len(), 1);
+        assert_eq!(network.channels().len(), 1);
     }
 
     #[test]

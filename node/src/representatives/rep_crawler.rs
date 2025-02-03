@@ -291,7 +291,7 @@ impl RepCrawler {
                     .network
                     .read()
                     .unwrap()
-                    .random_realtime_channels(required_peer_count, 0);
+                    .random_channels(required_peer_count);
 
                 guard = self.rep_crawler_impl.lock().unwrap();
                 let targets = guard.prepare_crawl_targets(

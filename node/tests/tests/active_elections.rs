@@ -657,7 +657,7 @@ fn confirm_election_by_request() {
     );
 
     // Get random peer list (of size 1) from node2 -- so basically just node2
-    let peers = node2.network.read().unwrap().random_realtime_channels(1, 0);
+    let peers = node2.network.read().unwrap().random_channels(1);
     assert_eq!(peers.is_empty(), false);
 
     // Add representative (node1) to disabled rep crawler of node2
@@ -740,7 +740,7 @@ fn confirm_frontier() {
         .finish();
 
     // Add representative to disabled rep crawler
-    let peers = node2.network.read().unwrap().random_realtime_channels(1, 0);
+    let peers = node2.network.read().unwrap().random_channels(1);
     assert!(!peers.is_empty());
     node2.online_reps.lock().unwrap().vote_observed_directly(
         *DEV_GENESIS_PUB_KEY,

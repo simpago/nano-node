@@ -11,7 +11,7 @@ impl RpcCommandHandler {
             .network
             .read()
             .unwrap()
-            .random_realtime_channels(usize::MAX, 0)
+            .random_channels(usize::MAX)
             .iter()
             .for_each(|channel| {
                 peers.insert(

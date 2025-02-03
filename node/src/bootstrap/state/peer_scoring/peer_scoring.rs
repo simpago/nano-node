@@ -38,7 +38,7 @@ impl PeerScoring {
         self.network
             .read()
             .unwrap()
-            .random_list(usize::MAX, 0)
+            .random_channels(usize::MAX)
             .iter()
             .find(|c| {
                 if !c.should_drop(TrafficType::BootstrapRequests) {
@@ -82,7 +82,7 @@ impl PeerScoring {
         self.network
             .read()
             .unwrap()
-            .list_channels(0)
+            .channels()
             .iter()
             .filter(|c| !self.limit_exceeded(c))
             .count()
