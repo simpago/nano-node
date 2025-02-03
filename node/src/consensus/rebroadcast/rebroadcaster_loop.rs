@@ -6,6 +6,7 @@ use crate::{
 };
 use rsnano_messages::{ConfirmAck, Message};
 use rsnano_network::TrafficType;
+use rsnano_nullable_clock::SteadyClock;
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -19,14 +20,18 @@ pub(super) struct RebroadcastLoop {
     wallet_reps_copy: WalletRepresentatives,
     last_refresh: Instant,
     paused: bool,
+    clock: Arc<SteadyClock>,
 }
 
 impl RebroadcastLoop {
+    const REFRESH_INTERVAL: Duration = Duration::from_secs(15);
+
     pub(super) fn new(
         queue: Arc<VoteRebroadcastQueue>,
         wallet_reps: Arc<Mutex<WalletRepresentatives>>,
         message_flooder: MessageFlooder,
         stats: Arc<Stats>,
+        clock: Arc<SteadyClock>,
     ) -> Self {
         Self {
             queue,
@@ -36,6 +41,7 @@ impl RebroadcastLoop {
             wallet_reps_copy: Default::default(),
             last_refresh: Instant::now(),
             paused: false,
+            clock,
         }
     }
 
@@ -73,7 +79,7 @@ impl RebroadcastLoop {
     }
 
     fn refresh_if_needed(&mut self) {
-        if self.last_refresh.elapsed() >= Duration::from_secs(15) {
+        if self.last_refresh.elapsed() >= Self::REFRESH_INTERVAL {
             self.refresh();
         }
     }
@@ -89,6 +95,8 @@ impl RebroadcastLoop {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transport::FloodEvent;
+    use rsnano_core::Vote;
 
     #[test]
     fn empty_queue() {
@@ -100,8 +108,102 @@ mod tests {
         let wallet_reps = Arc::new(Mutex::new(WalletRepresentatives::default()));
         let message_flooder = MessageFlooder::new_null();
         let stats = Arc::new(Stats::default());
-        let mut rebroadcast_loop = RebroadcastLoop::new(queue, wallet_reps, message_flooder, stats);
+        let clock = Arc::new(SteadyClock::new_null());
+        let mut rebroadcast_loop =
+            RebroadcastLoop::new(queue, wallet_reps, message_flooder, stats, clock);
 
         rebroadcast_loop.run();
+    }
+
+    #[test]
+    fn rebroadcast_vote() {
+        let queue = Arc::new(
+            VoteRebroadcastQueue::build()
+                .block_when_empty(false)
+                .finish(),
+        );
+        let wallet_reps = Arc::new(Mutex::new(WalletRepresentatives::default()));
+        let message_flooder = MessageFlooder::new_null();
+        let stats = Arc::new(Stats::default());
+        let flood_tracker = message_flooder.track_floods();
+        let clock = Arc::new(SteadyClock::new_null());
+        let mut rebroadcast_loop =
+            RebroadcastLoop::new(queue.clone(), wallet_reps, message_flooder, stats, clock);
+
+        let vote = Vote::new_test_instance();
+        queue.enqueue(Arc::new(vote.clone()));
+
+        rebroadcast_loop.run();
+
+        assert_eq!(
+            flood_tracker.output(),
+            vec![FloodEvent {
+                message: Message::ConfirmAck(ConfirmAck::new_with_rebroadcasted_vote(vote)),
+                traffic_type: TrafficType::VoteRebroadcast,
+                scale: 0.5
+            }]
+        )
+    }
+
+    #[test]
+    fn dont_rebroadcast_when_node_has_half_rep() {
+        let queue = Arc::new(
+            VoteRebroadcastQueue::build()
+                .block_when_empty(false)
+                .finish(),
+        );
+        let wallet_reps = Arc::new(Mutex::new(WalletRepresentatives::default()));
+        let message_flooder = MessageFlooder::new_null();
+        let stats = Arc::new(Stats::default());
+        let flood_tracker = message_flooder.track_floods();
+        let clock = Arc::new(SteadyClock::new_null());
+        wallet_reps.lock().unwrap().set_have_half_rep(true);
+        let mut rebroadcast_loop =
+            RebroadcastLoop::new(queue.clone(), wallet_reps, message_flooder, stats, clock);
+
+        let vote = Vote::new_test_instance();
+        queue.enqueue(Arc::new(vote.clone()));
+
+        rebroadcast_loop.run();
+
+        assert_eq!(flood_tracker.output(), vec![]);
+    }
+
+    #[test]
+    #[ignore]
+    fn update_rep_status_periodically() {
+        let queue = Arc::new(
+            VoteRebroadcastQueue::build()
+                .block_when_empty(false)
+                .finish(),
+        );
+        let wallet_reps = Arc::new(Mutex::new(WalletRepresentatives::default()));
+        let message_flooder = MessageFlooder::new_null();
+        let stats = Arc::new(Stats::default());
+        let flood_tracker = message_flooder.track_floods();
+        let clock = Arc::new(SteadyClock::new_null());
+        let mut rebroadcast_loop = RebroadcastLoop::new(
+            queue.clone(),
+            wallet_reps.clone(),
+            message_flooder,
+            stats,
+            clock.clone(),
+        );
+
+        let vote = Vote::new_test_instance();
+        queue.enqueue(Arc::new(vote.clone()));
+        rebroadcast_loop.run();
+        assert_eq!(flood_tracker.output().len(), 1);
+
+        wallet_reps.lock().unwrap().set_have_half_rep(true);
+        let vote = Vote::new_test_instance();
+        queue.enqueue(Arc::new(vote.clone()));
+        rebroadcast_loop.run();
+        assert_eq!(flood_tracker.output().len(), 2);
+
+        clock.advance(RebroadcastLoop::REFRESH_INTERVAL);
+        queue.enqueue(Arc::new(vote.clone()));
+        rebroadcast_loop.run();
+        assert_eq!(flood_tracker.output().len(), 2);
     }
 }

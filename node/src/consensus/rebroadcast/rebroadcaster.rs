@@ -1,6 +1,7 @@
 use super::{rebroadcaster_loop::RebroadcastLoop, VoteRebroadcastQueue};
 use crate::{stats::Stats, transport::MessageFlooder, wallets::WalletRepresentatives};
 use rsnano_core::utils::ContainerInfo;
+use rsnano_nullable_clock::SteadyClock;
 use std::{
     sync::{Arc, Mutex},
     thread::JoinHandle,
@@ -12,6 +13,7 @@ pub(crate) struct VoteRebroadcaster {
     wallet_reps: Arc<Mutex<WalletRepresentatives>>,
     message_flooder: MessageFlooder,
     stats: Arc<Stats>,
+    clock: Arc<SteadyClock>,
 }
 
 impl VoteRebroadcaster {
@@ -20,6 +22,7 @@ impl VoteRebroadcaster {
         wallet_reps: Arc<Mutex<WalletRepresentatives>>,
         message_flooder: MessageFlooder,
         stats: Arc<Stats>,
+        clock: Arc<SteadyClock>,
     ) -> Self {
         Self {
             queue,
@@ -27,6 +30,7 @@ impl VoteRebroadcaster {
             join_handle: None,
             message_flooder,
             stats,
+            clock,
         }
     }
 
@@ -36,6 +40,7 @@ impl VoteRebroadcaster {
             self.wallet_reps.clone(),
             self.message_flooder.clone(),
             self.stats.clone(),
+            self.clock.clone(),
         );
 
         let handle = std::thread::Builder::new()

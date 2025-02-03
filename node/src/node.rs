@@ -991,6 +991,7 @@ impl Node {
             wallets.wallet_reps.clone(),
             message_flooder.clone(),
             stats.clone(),
+            steady_clock.clone(),
         );
 
         vote_router.on_vote_processed(Box::new(move |vote, _source, results| {

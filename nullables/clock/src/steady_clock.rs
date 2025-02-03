@@ -1,5 +1,6 @@
 use std::{
     ops::{Add, Sub},
+    sync::atomic::{AtomicI64, Ordering},
     time::{Duration, Instant},
 };
 
@@ -10,12 +11,16 @@ pub struct SteadyClock {
 impl SteadyClock {
     pub fn new_null() -> Self {
         Self {
-            time_source: TimeSource::Stub(DEFAULT_STUB_DURATION),
+            time_source: TimeSource::Stub(AtomicI64::new(DEFAULT_STUB_DURATION)),
         }
     }
 
     pub fn now(&self) -> Timestamp {
         Timestamp(self.time_source.now())
+    }
+
+    pub fn advance(&self, duration: Duration) {
+        self.time_source.advance(duration)
     }
 }
 
@@ -29,14 +34,25 @@ impl Default for SteadyClock {
 
 enum TimeSource {
     System(Instant),
-    Stub(i64),
+    Stub(AtomicI64),
 }
 
 impl TimeSource {
     fn now(&self) -> i64 {
         match self {
             TimeSource::System(instant) => instant.elapsed().as_millis() as i64,
-            TimeSource::Stub(value) => *value,
+            TimeSource::Stub(value) => value.load(Ordering::SeqCst),
+        }
+    }
+
+    pub fn advance(&self, duration: Duration) {
+        match self {
+            TimeSource::System(_) => {
+                panic!("Advancing the clock is not supported for a real clock")
+            }
+            TimeSource::Stub(i) => {
+                i.fetch_add(duration.as_millis() as i64, Ordering::SeqCst);
+            }
         }
     }
 }
@@ -134,6 +150,7 @@ mod tests {
 
     mod nullability {
         use super::*;
+
         #[test]
         fn can_be_nulled() {
             let clock = SteadyClock::new_null();

@@ -60,6 +60,11 @@ impl WalletRepresentatives {
         self.voting += 1;
         true
     }
+
+    #[cfg(test)]
+    pub fn set_have_half_rep(&mut self, value: bool) {
+        self.half_principal = value;
+    }
 }
 
 impl Default for WalletRepresentatives {
