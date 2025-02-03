@@ -11,6 +11,7 @@ use rand::{seq::SliceRandom, thread_rng};
 use rsnano_core::{utils::ContainerInfo, Networks, NodeId};
 use rsnano_nullable_clock::Timestamp;
 use std::{
+    cmp::max,
     collections::HashMap,
     net::{Ipv6Addr, SocketAddrV6},
     sync::Arc,
@@ -381,14 +382,17 @@ impl Network {
             .unwrap_or(true)
     }
 
-    fn len_sqrt(&self) -> f32 {
-        f32::sqrt(self.count_by_mode(ChannelMode::Realtime) as f32)
+    fn size_ln(&self) -> f32 {
+        // Clamp size to domain of std::log
+        let size = max(1, self.count_by_mode(ChannelMode::Realtime));
+        (size as f32).ln()
     }
 
     /// Desired fanout for a given scale
     /// Simulating with sqrt_broadcast_simulate shows we only need to broadcast to sqrt(total_peers) random peers in order to successfully publish to everyone with high probability
     pub fn fanout(&self, scale: f32) -> usize {
-        (self.len_sqrt() * scale).ceil() as usize
+        let fanout = 2.0_f32.max(self.size_ln());
+        (scale * fanout).ceil() as usize
     }
 
     fn count_by_ip(&self, ip: &Ipv6Addr) -> usize {
