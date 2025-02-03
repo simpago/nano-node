@@ -1,12 +1,15 @@
 use super::{rebroadcaster_loop::RebroadcastLoop, VoteRebroadcastQueue};
-use crate::{stats::Stats, transport::MessageFlooder, wallets::Wallets};
+use crate::{stats::Stats, transport::MessageFlooder, wallets::WalletRepresentatives};
 use rsnano_core::utils::ContainerInfo;
-use std::{sync::Arc, thread::JoinHandle};
+use std::{
+    sync::{Arc, Mutex},
+    thread::JoinHandle,
+};
 
 pub(crate) struct VoteRebroadcaster {
     queue: Arc<VoteRebroadcastQueue>,
     join_handle: Option<JoinHandle<()>>,
-    wallets: Arc<Wallets>,
+    wallet_reps: Arc<Mutex<WalletRepresentatives>>,
     message_flooder: MessageFlooder,
     stats: Arc<Stats>,
 }
@@ -14,13 +17,13 @@ pub(crate) struct VoteRebroadcaster {
 impl VoteRebroadcaster {
     pub(crate) fn new(
         queue: Arc<VoteRebroadcastQueue>,
-        wallets: Arc<Wallets>,
+        wallet_reps: Arc<Mutex<WalletRepresentatives>>,
         message_flooder: MessageFlooder,
         stats: Arc<Stats>,
     ) -> Self {
         Self {
             queue,
-            wallets,
+            wallet_reps,
             join_handle: None,
             message_flooder,
             stats,
@@ -30,7 +33,7 @@ impl VoteRebroadcaster {
     pub fn start(&mut self) {
         let mut rebroadcast_loop = RebroadcastLoop::new(
             self.queue.clone(),
-            self.wallets.clone(),
+            self.wallet_reps.clone(),
             self.message_flooder.clone(),
             self.stats.clone(),
         );

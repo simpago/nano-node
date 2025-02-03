@@ -2,21 +2,21 @@ use super::VoteRebroadcastQueue;
 use crate::{
     stats::{DetailType, StatType, Stats},
     transport::MessageFlooder,
-    wallets::{WalletRepresentatives, Wallets},
+    wallets::WalletRepresentatives,
 };
 use rsnano_messages::{ConfirmAck, Message};
 use rsnano_network::TrafficType;
 use std::{
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
 pub(super) struct RebroadcastLoop {
     queue: Arc<VoteRebroadcastQueue>,
-    wallets: Arc<Wallets>,
+    wallet_reps: Arc<Mutex<WalletRepresentatives>>,
     message_flooder: MessageFlooder,
     stats: Arc<Stats>,
-    wallet_reps: WalletRepresentatives,
+    wallet_reps_copy: WalletRepresentatives,
     last_refresh: Instant,
     paused: bool,
 }
@@ -24,16 +24,16 @@ pub(super) struct RebroadcastLoop {
 impl RebroadcastLoop {
     pub(super) fn new(
         queue: Arc<VoteRebroadcastQueue>,
-        wallets: Arc<Wallets>,
+        wallet_reps: Arc<Mutex<WalletRepresentatives>>,
         message_flooder: MessageFlooder,
         stats: Arc<Stats>,
     ) -> Self {
         Self {
             queue,
-            wallets,
+            wallet_reps,
             message_flooder,
             stats,
-            wallet_reps: Default::default(),
+            wallet_reps_copy: Default::default(),
             last_refresh: Instant::now(),
             paused: false,
         }
@@ -49,7 +49,7 @@ impl RebroadcastLoop {
                 continue;
             }
 
-            if self.wallet_reps.exists(&vote.voting_account.into()) {
+            if self.wallet_reps_copy.exists(&vote.voting_account.into()) {
                 // Don't republish votes created by this node
                 continue;
             }
@@ -79,9 +79,9 @@ impl RebroadcastLoop {
     }
 
     fn refresh(&mut self) {
-        self.wallet_reps = self.wallets.representatives();
+        self.wallet_reps_copy = self.wallet_reps.lock().unwrap().clone();
         // Disable vote rebroadcasting if the node has a principal representative (or close to)
-        self.paused = self.wallet_reps.have_half_rep();
+        self.paused = self.wallet_reps_copy.have_half_rep();
         self.last_refresh = Instant::now();
     }
 }

@@ -90,7 +90,7 @@ pub struct Wallets {
     workers: Arc<dyn ThreadPool>,
     wallet_actions: WalletActionThread,
     block_processor: Arc<BlockProcessor>,
-    pub representative_wallets: Mutex<WalletRepresentatives>,
+    pub wallet_reps: Arc<Mutex<WalletRepresentatives>>,
     online_reps: Arc<Mutex<OnlineReps>>,
     pub kdf: KeyDerivationFunction,
     start_election: Mutex<Option<Box<dyn Fn(SavedBlock) + Send + Sync>>>,
@@ -158,10 +158,10 @@ impl Wallets {
             workers,
             wallet_actions: WalletActionThread::new(),
             block_processor,
-            representative_wallets: Mutex::new(WalletRepresentatives::new(
+            wallet_reps: Arc::new(Mutex::new(WalletRepresentatives::new(
                 node_config.vote_minimum,
                 ledger.rep_weights.clone(),
-            )),
+            ))),
             online_reps,
             kdf: kdf.clone(),
             start_election: Mutex::new(None),
@@ -228,7 +228,7 @@ impl Wallets {
     }
 
     pub fn voting_reps_count(&self) -> u64 {
-        self.representative_wallets.lock().unwrap().voting_reps()
+        self.wallet_reps.lock().unwrap().voting_reps()
     }
 
     fn iter_wallets<'tx>(&self, tx: &'tx dyn Transaction) -> impl Iterator<Item = WalletId> + 'tx {
@@ -448,7 +448,7 @@ impl Wallets {
 
     pub fn compute_reps(&self) {
         let wallets_guard = self.mutex.lock().unwrap();
-        let mut reps_guard = self.representative_wallets.lock().unwrap();
+        let mut reps_guard = self.wallet_reps.lock().unwrap();
         reps_guard.clear();
         let half_principal_weight = self.online_reps.lock().unwrap().minimum_principal_weight() / 2;
         let tx = self.env.tx_begin_read();
@@ -874,14 +874,6 @@ impl Wallets {
         Ok(wallet.store.serialize_json(&tx))
     }
 
-    pub fn representatives(&self) -> WalletRepresentatives {
-        self.representative_wallets.lock().unwrap().clone()
-    }
-
-    pub fn have_half_rep(&self) -> bool {
-        self.representative_wallets.lock().unwrap().have_half_rep()
-    }
-
     pub fn container_info(&self) -> ContainerInfo {
         [
             (
@@ -1204,7 +1196,7 @@ impl WalletsExt for Arc<Wallets> {
             self.work_ensure(wallet, key.into(), key.into());
         }
         let half_principal_weight = self.online_reps.lock().unwrap().minimum_principal_weight() / 2;
-        let mut reps = self.representative_wallets.lock().unwrap();
+        let mut reps = self.wallet_reps.lock().unwrap();
         if reps.check_rep(key, half_principal_weight) {
             info!(account=%key.as_account().encode_account(), "New account qualified as representative");
             wallet.representatives.lock().unwrap().insert(key);
@@ -1266,7 +1258,7 @@ impl WalletsExt for Arc<Wallets> {
         // Makes sure that the representatives container will
         // be in sync with any added keys.
         tx.commit();
-        let mut rep_guard = self.representative_wallets.lock().unwrap();
+        let mut rep_guard = self.wallet_reps.lock().unwrap();
         if rep_guard.check_rep(key, half_principal_weight) {
             wallet.representatives.lock().unwrap().insert(key);
         }

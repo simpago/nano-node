@@ -988,7 +988,7 @@ impl Node {
 
         let vote_rebroadcaster = VoteRebroadcaster::new(
             vote_rebroadcast_queue.clone(),
-            wallets.clone(),
+            wallets.wallet_reps.clone(),
             message_flooder.clone(),
             stats.clone(),
         );
