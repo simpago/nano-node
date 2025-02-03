@@ -983,7 +983,8 @@ impl Node {
             }
         }));
 
-        let vote_rebroadcast_queue = Arc::new(VoteRebroadcastQueue::new(stats.clone()));
+        let vote_rebroadcast_queue =
+            Arc::new(VoteRebroadcastQueue::build().stats(stats.clone()).finish());
 
         let vote_rebroadcaster = VoteRebroadcaster::new(
             vote_rebroadcast_queue.clone(),
