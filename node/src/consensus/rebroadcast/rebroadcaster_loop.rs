@@ -85,3 +85,23 @@ impl RebroadcastLoop {
         self.last_refresh = Instant::now();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_queue() {
+        let queue = Arc::new(
+            VoteRebroadcastQueue::build()
+                .block_when_empty(false)
+                .finish(),
+        );
+        let wallet_reps = Arc::new(Mutex::new(WalletRepresentatives::default()));
+        let message_flooder = MessageFlooder::new_null();
+        let stats = Arc::new(Stats::default());
+        let mut rebroadcast_loop = RebroadcastLoop::new(queue, wallet_reps, message_flooder, stats);
+
+        rebroadcast_loop.run();
+    }
+}
