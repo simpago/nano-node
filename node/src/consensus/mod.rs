@@ -20,6 +20,7 @@ mod vote_cache_processor;
 mod vote_generation;
 mod vote_processor;
 mod vote_processor_queue;
+mod vote_rebroadcaster;
 mod vote_router;
 
 pub use active_elections::*;
@@ -42,4 +43,5 @@ pub(crate) use vote_cache_processor::*;
 pub use vote_generation::*;
 pub use vote_processor::*;
 pub use vote_processor_queue::*;
+pub(crate) use vote_rebroadcaster::{VoteRebroadcastQueue, VoteRebroadcaster};
 pub use vote_router::*;

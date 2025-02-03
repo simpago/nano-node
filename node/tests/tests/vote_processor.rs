@@ -413,15 +413,19 @@ fn local_broadcast_without_a_representative() {
     let existing = votes.get(&DEV_GENESIS_PUB_KEY).unwrap();
     assert_eq!(existing.timestamp, vote.timestamp());
     // Ensure the vote was broadcast
-    assert_eq!(
-        node.stats
-            .count(StatType::Message, DetailType::ConfirmAck, Direction::Out),
-        1
+    assert_timely_eq2(
+        || {
+            node.stats
+                .count(StatType::Message, DetailType::ConfirmAck, Direction::Out)
+        },
+        1,
     );
-    assert_eq!(
-        node.stats
-            .count(StatType::Message, DetailType::Publish, Direction::Out),
-        1
+    assert_timely_eq2(
+        || {
+            node.stats
+                .count(StatType::Message, DetailType::Publish, Direction::Out)
+        },
+        1,
     );
 }
 

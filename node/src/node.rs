@@ -12,7 +12,7 @@ use crate::{
         ActiveElections, ActiveElectionsExt, LocalVoteHistory, RecentlyConfirmedCache, RepTiers,
         RequestAggregator, RequestAggregatorCleanup, VoteApplier, VoteBroadcaster, VoteCache,
         VoteCacheProcessor, VoteGenerators, VoteProcessor, VoteProcessorExt, VoteProcessorQueue,
-        VoteProcessorQueueCleanup, VoteRouter,
+        VoteProcessorQueueCleanup, VoteRebroadcastQueue, VoteRebroadcaster, VoteRouter,
     },
     http_callbacks::HttpCallbacks,
     monitor::Monitor,
@@ -47,7 +47,7 @@ use rsnano_core::{
     VoteSource,
 };
 use rsnano_ledger::{BlockStatus, Ledger, RepWeightCache, Writer};
-use rsnano_messages::{ConfirmAck, Message, NetworkFilter};
+use rsnano_messages::NetworkFilter;
 use rsnano_network::{
     ChannelId, DeadChannelCleanup, Network, NetworkCleanup, PeerConnector, TcpListener,
     TcpListenerExt, TcpNetworkAdapter, TrafficType,
@@ -133,6 +133,7 @@ pub struct Node {
     block_flooder: BlockFlooder,
     ledger_notification_thread: LedgerNotificationThread,
     pub ledger_notifications: LedgerNotifications,
+    vote_rebroadcaster: VoteRebroadcaster,
 }
 
 pub(crate) struct NodeArgs {
@@ -982,26 +983,16 @@ impl Node {
             }
         }));
 
-        let wallets_w = Arc::downgrade(&wallets);
-        let flooder_l = Mutex::new(message_flooder.clone());
-        vote_router.on_vote_processed(Box::new(move |vote, _source, results| {
-            let Some(wallets) = wallets_w.upgrade() else {
-                return;
-            };
+        let vote_rebroadcast_queue = Arc::new(VoteRebroadcastQueue::new());
 
-            // Republish vote if it is new and the node does not host a principal representative (or close to)
-            let processed = results.iter().any(|(_, code)| *code == VoteCode::Vote);
-            if processed {
-                if wallets.should_republish_vote(vote.voting_account.into()) {
-                    let ack = Message::ConfirmAck(ConfirmAck::new_with_rebroadcasted_vote(
-                        vote.as_ref().clone(),
-                    ));
-                    flooder_l
-                        .lock()
-                        .unwrap()
-                        .flood(&ack, TrafficType::VoteRebroadcast, 0.5);
-                }
-            }
+        let vote_rebroadcaster = VoteRebroadcaster::new(
+            vote_rebroadcast_queue.clone(),
+            wallets.clone(),
+            message_flooder.clone(),
+        );
+
+        vote_router.on_vote_processed(Box::new(move |vote, _source, results| {
+            vote_rebroadcast_queue.handle_processed_vote(vote, results);
         }));
 
         let keepalive_factory_w = Arc::downgrade(&keepalive_factory);
@@ -1251,6 +1242,7 @@ impl Node {
             block_flooder,
             ledger_notification_thread,
             ledger_notifications,
+            vote_rebroadcaster,
         }
     }
 
@@ -1548,6 +1540,7 @@ impl Node {
         if self.config.enable_monitor {
             self.monitor.start_delayed(self.config.monitor.interval);
         }
+        self.vote_rebroadcaster.start();
     }
 
     pub fn stop(&mut self) {
@@ -1595,6 +1588,7 @@ impl Node {
         self.message_processor.lock().unwrap().stop();
         self.network_threads.lock().unwrap().stop(); // Stop network last to avoid killing in-use sockets
         self.monitor.stop();
+        self.vote_rebroadcaster.stop();
 
         self.wallet_workers.stop();
         self.election_workers.stop();
