@@ -83,7 +83,6 @@ impl PeerScoring {
             .read()
             .unwrap()
             .channels()
-            .iter()
             .filter(|c| !self.limit_exceeded(c))
             .count()
     }

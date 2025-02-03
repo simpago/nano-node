@@ -296,7 +296,7 @@ impl Network {
     }
 
     pub fn random_channels(&self, count: usize) -> Vec<Arc<Channel>> {
-        let mut channels = self.channels();
+        let mut channels: Vec<_> = self.channels().cloned().collect();
         let mut rng = thread_rng();
         channels.shuffle(&mut rng);
         if count > 0 {
@@ -306,17 +306,15 @@ impl Network {
     }
 
     pub fn sorted_channels(&self) -> Vec<Arc<Channel>> {
-        let mut result = self.channels();
+        let mut result: Vec<_> = self.channels().cloned().collect();
         result.sort_by_key(|i| i.peer_addr());
         result
     }
 
-    pub fn channels(&self) -> Vec<Arc<Channel>> {
+    pub fn channels(&self) -> impl Iterator<Item = &Arc<Channel>> {
         self.channels
             .values()
             .filter(|c| c.is_alive() && c.mode() == ChannelMode::Realtime)
-            .map(|c| c.clone())
-            .collect()
     }
 
     pub fn not_a_peer(&self, endpoint: &SocketAddrV6, allow_local_peers: bool) -> bool {
@@ -600,9 +598,13 @@ impl Network {
     }
 
     pub fn random_fill_realtime(&self, endpoints: &mut [SocketAddrV6]) {
-        let mut peers = self.channels();
         // Don't include channels with ephemeral remote ports
-        peers.retain(|c| c.peering_addr().is_some());
+        let mut peers: Vec<_> = self
+            .channels()
+            .filter(|c| c.peering_addr().is_some())
+            .cloned()
+            .collect();
+
         let mut rng = thread_rng();
         peers.shuffle(&mut rng);
         peers.truncate(endpoints.len());
@@ -743,7 +745,7 @@ mod tests {
                 Timestamp::new_test_instance(),
             )
             .unwrap();
-        assert_eq!(network.channels().len(), 0);
+        assert_eq!(network.channels().count(), 0);
     }
 
     #[test]
@@ -785,7 +787,7 @@ mod tests {
         assert!(network
             .upgrade_to_realtime_connection(channel.channel_id(), NodeId::from(456))
             .is_some());
-        assert_eq!(network.channels().len(), 1);
+        assert_eq!(network.channels().count(), 1);
     }
 
     #[test]
