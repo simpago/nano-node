@@ -160,7 +160,7 @@ impl Wallets {
             block_processor,
             representative_wallets: Mutex::new(WalletRepresentatives::new(
                 node_config.vote_minimum,
-                Arc::clone(&ledger),
+                ledger.rep_weights.clone(),
             )),
             online_reps,
             kdf: kdf.clone(),
@@ -874,9 +874,8 @@ impl Wallets {
         Ok(wallet.store.serialize_json(&tx))
     }
 
-    pub fn should_republish_vote(&self, voting_account: Account) -> bool {
-        let guard = self.representative_wallets.lock().unwrap();
-        !guard.have_half_rep() && !guard.exists(&voting_account)
+    pub fn representatives(&self) -> WalletRepresentatives {
+        self.representative_wallets.lock().unwrap().clone()
     }
 
     pub fn have_half_rep(&self) -> bool {
