@@ -1,7 +1,7 @@
 use super::{VoteProcessorQueue, VoteRouter};
 use crate::stats::{DetailType, StatType, Stats};
 use rsnano_core::{Vote, VoteCode, VoteSource};
-use rsnano_network::ChannelId;
+use rsnano_network::{Channel, ChannelId};
 use std::{
     cmp::{max, min},
     sync::{
@@ -89,8 +89,8 @@ impl VoteProcessor {
 
             let start = Instant::now();
 
-            for ((_, channel_id), (vote, source)) in &batch {
-                self.vote_blocking(vote, *channel_id, *source);
+            for (_, (vote, source, channel)) in &batch {
+                self.vote_blocking2(vote, channel.clone(), *source);
             }
 
             self.total_processed
@@ -106,6 +106,19 @@ impl VoteProcessor {
                 );
             }
         }
+    }
+
+    pub fn vote_blocking2(
+        &self,
+        vote: &Arc<Vote>,
+        channel: Option<Arc<Channel>>,
+        source: VoteSource,
+    ) -> VoteCode {
+        let channel_id = match channel {
+            Some(c) => c.channel_id(),
+            None => ChannelId::LOOPBACK,
+        };
+        self.vote_blocking(vote, channel_id, source)
     }
 
     pub fn vote_blocking(

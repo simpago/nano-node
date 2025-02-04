@@ -56,7 +56,7 @@ impl VoteProcessorQueue {
 
     /// Queue vote for processing. @returns true if the vote was queued
     pub fn vote(&self, vote: Arc<Vote>, channel: Option<Arc<Channel>>, source: VoteSource) -> bool {
-        let channel_id = match channel {
+        let channel_id = match &channel {
             Some(channel) => channel.channel_id(),
             None => ChannelId::LOOPBACK,
         };
@@ -65,7 +65,9 @@ impl VoteProcessorQueue {
 
         let added = {
             let mut guard = self.data.lock().unwrap();
-            guard.queue.push((tier, channel_id), (vote, source))
+            guard
+                .queue
+                .push((tier, channel_id), (vote, source, channel))
         };
 
         if added {
@@ -84,7 +86,10 @@ impl VoteProcessorQueue {
     pub(crate) fn wait_for_votes(
         &self,
         max_batch_size: usize,
-    ) -> VecDeque<((RepTier, ChannelId), (Arc<Vote>, VoteSource))> {
+    ) -> VecDeque<(
+        (RepTier, ChannelId),
+        (Arc<Vote>, VoteSource, Option<Arc<Channel>>),
+    )> {
         let mut guard = self.data.lock().unwrap();
         loop {
             if guard.stopped {
@@ -157,5 +162,5 @@ impl DeadChannelCleanupStep for VoteProcessorQueueCleanup {
 
 struct VoteProcessorQueueData {
     stopped: bool,
-    queue: FairQueue<(RepTier, ChannelId), (Arc<Vote>, VoteSource)>,
+    queue: FairQueue<(RepTier, ChannelId), (Arc<Vote>, VoteSource, Option<Arc<Channel>>)>,
 }
