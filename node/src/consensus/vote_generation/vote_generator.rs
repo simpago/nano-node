@@ -26,6 +26,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub struct VoteGeneratorRequest {
+    pub candidates: Vec<(Root, BlockHash)>,
+    pub channel: ChannelId,
+}
+
 pub(crate) struct VoteGenerator {
     ledger: Arc<Ledger>,
     vote_generation_queue: ProcessingQueue<(Root, BlockHash)>,
@@ -137,7 +142,11 @@ impl VoteGenerator {
 
         let result = req_candidates.len();
         let mut guard = self.shared_state.queues.lock().unwrap();
-        guard.requests.push_back((req_candidates, channel_id));
+        let vote_req = VoteGeneratorRequest {
+            candidates: req_candidates,
+            channel: channel_id,
+        };
+        guard.requests.push_back(vote_req);
         while guard.requests.len() > Self::MAX_REQUESTS {
             // On a large queue of requests, erase the oldest one
             guard.requests.pop_front();
@@ -310,8 +319,8 @@ impl SharedState {
         }
     }
 
-    fn reply(&self, request: (Vec<(Root, BlockHash)>, ChannelId)) {
-        let mut i = request.0.iter().peekable();
+    fn reply(&self, request: VoteGeneratorRequest) {
+        let mut i = request.candidates.iter().peekable();
         while i.peek().is_some() && !self.stopped.load(Ordering::SeqCst) {
             let mut hashes = Vec::with_capacity(VoteGenerator::MAX_HASHES);
             let mut roots = Vec::with_capacity(VoteGenerator::MAX_HASHES);
@@ -340,7 +349,7 @@ impl SharedState {
                     hashes.len() as u64,
                 );
                 self.vote(&hashes, &roots, |vote| {
-                    let channel_id = &request.1;
+                    let channel_id = &request.channel;
                     let confirm =
                         Message::ConfirmAck(ConfirmAck::new_with_own_vote((*vote).clone()));
                     self.message_sender.lock().unwrap().try_send(
@@ -430,7 +439,7 @@ impl SharedState {
 
 struct Queues {
     candidates: VecDeque<(Root, BlockHash)>,
-    requests: VecDeque<(Vec<(Root, BlockHash)>, ChannelId)>,
+    requests: VecDeque<VoteGeneratorRequest>,
     next_broadcast: Instant,
 }
 
