@@ -153,18 +153,18 @@ impl OnlineReps {
     }
 
     /// Request a list of the top \p count known representatives in descending order of weight, with at least \p weight_a voting weight, and optionally with a minimum version \p minimum_protocol_version
-    pub fn peered_reps(&self) -> Vec<PeeredRep> {
+    pub fn peered_reps(&self) -> Vec<PeeredRepInfo> {
         self.representatives_filter(Amount::zero())
     }
 
     /// Request a list of the top \p count known principal representatives in descending order of weight, optionally with a minimum version \p minimum_protocol_version
-    pub fn peered_principal_reps(&self) -> Vec<PeeredRep> {
+    pub fn peered_principal_reps(&self) -> Vec<PeeredRepInfo> {
         self.representatives_filter(self.minimum_principal_weight())
     }
 
     /// Request a list of known representatives in descending order
     /// of weight, with at least **weight** voting weight
-    pub fn representatives_filter(&self, min_weight: Amount) -> Vec<PeeredRep> {
+    pub fn representatives_filter(&self, min_weight: Amount) -> Vec<PeeredRepInfo> {
         let mut reps_with_weight = Vec::new();
 
         for rep in self.peered_reps.iter() {
@@ -176,7 +176,14 @@ impl OnlineReps {
 
         reps_with_weight.sort_by(|a, b| b.1.cmp(&a.1));
 
-        reps_with_weight.drain(..).map(|(rep, _)| rep).collect()
+        reps_with_weight
+            .drain(..)
+            .map(|(rep, weight)| PeeredRepInfo {
+                account: rep.account,
+                channel: rep.channel,
+                weight,
+            })
+            .collect()
     }
 
     /// Add voting account rep_account to the set of online representatives.
@@ -245,6 +252,19 @@ impl OnlineReps {
 impl Default for OnlineReps {
     fn default() -> Self {
         Self::builder().finish()
+    }
+}
+
+#[derive(Clone)]
+pub struct PeeredRepInfo {
+    pub account: PublicKey,
+    pub channel: Arc<Channel>,
+    pub weight: Amount,
+}
+
+impl PeeredRepInfo {
+    pub fn channel_id(&self) -> ChannelId {
+        self.channel.channel_id()
     }
 }
 

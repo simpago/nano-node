@@ -1,5 +1,5 @@
 use super::{Election, ElectionData};
-use crate::{representatives::PeeredRep, transport::MessageFlooder, NetworkParams};
+use crate::{representatives::PeeredRepInfo, transport::MessageFlooder, NetworkParams};
 use rsnano_core::{BlockHash, Root};
 use rsnano_messages::{ConfirmReq, Message, Publish};
 use rsnano_network::{ChannelId, Network, TrafficType};
@@ -18,8 +18,8 @@ pub struct ConfirmationSolicitor<'a> {
     max_election_requests: usize,
     /// Maximum amount of directed broadcasts to be sent per election
     max_election_broadcasts: usize,
-    representative_requests: Vec<PeeredRep>,
-    representative_broadcasts: Vec<PeeredRep>,
+    representative_requests: Vec<PeeredRepInfo>,
+    representative_broadcasts: Vec<PeeredRepInfo>,
     requests: HashMap<ChannelId, Vec<(BlockHash, Root)>>,
     prepared: bool,
     rebroadcasted: usize,
@@ -52,7 +52,7 @@ impl<'a> ConfirmationSolicitor<'a> {
     }
 
     /// Prepare object for batching election confirmation requests
-    pub fn prepare(&mut self, representatives: &[PeeredRep]) {
+    pub fn prepare(&mut self, representatives: &[PeeredRepInfo]) {
         debug_assert!(!self.prepared);
         self.requests.clear();
         self.rebroadcasted = 0;

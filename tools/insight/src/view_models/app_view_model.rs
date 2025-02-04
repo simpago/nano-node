@@ -76,14 +76,8 @@ impl AppViewModel {
                 let guard = node.online_reps.lock().unwrap();
                 (guard.peered_reps(), guard.minimum_principal_weight())
             };
-            let rep_weights = node.ledger.rep_weights.clone();
-            self.channels.update(
-                channels,
-                telemetries,
-                peered_reps,
-                &rep_weights,
-                min_rep_weight,
-            );
+            self.channels
+                .update(channels, telemetries, peered_reps, min_rep_weight);
             self.aec_info = node.active.info();
             self.confirming_set = node.confirming_set.info();
             self.block_processor_info = node.block_processor.info();

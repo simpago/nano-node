@@ -1,9 +1,8 @@
 use crate::message_collection::MessageCollection;
 use rsnano_core::Amount;
-use rsnano_ledger::RepWeightCache;
 use rsnano_messages::TelemetryData;
 use rsnano_network::{Channel, ChannelDirection, ChannelId};
-use rsnano_node::representatives::PeeredRep;
+use rsnano_node::representatives::PeeredRepInfo;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddrV6,
@@ -49,8 +48,7 @@ impl Channels {
         &mut self,
         channels: Vec<Arc<Channel>>,
         telemetries: HashMap<SocketAddrV6, TelemetryData>,
-        reps: Vec<PeeredRep>,
-        rep_weights: &RepWeightCache,
+        reps: Vec<PeeredRepInfo>,
         min_rep_weight: Amount,
     ) {
         let mut inserted = false;
@@ -91,10 +89,9 @@ impl Channels {
             self.sorted_channels.sort_by_key(|c| c.1);
         }
 
-        let weights = rep_weights.read();
         for rep in reps {
             if let Some(channel) = self.channel_map.get_mut(&rep.channel_id()) {
-                channel.rep_weight = weights.get(&rep.account).cloned().unwrap_or_default();
+                channel.rep_weight = rep.weight;
                 channel.rep_state = if channel.rep_weight > min_rep_weight {
                     RepState::PrincipalRep
                 } else if channel.rep_weight > Amount::zero() {
@@ -168,7 +165,6 @@ mod tests {
             vec![Arc::new(Channel::new_test_instance())],
             HashMap::new(),
             Vec::new(),
-            &RepWeightCache::new(),
             Amount::zero(),
         );
         channels.select_index(0);
@@ -187,7 +183,6 @@ mod tests {
             vec![Arc::new(Channel::new_test_instance())],
             HashMap::new(),
             Vec::new(),
-            &RepWeightCache::new(),
             Amount::zero(),
         );
         channels.select_index(0);

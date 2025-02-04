@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use rsnano_core::{Account, PublicKey, UnsavedBlockLatticeBuilder};
+use rsnano_core::{Account, Amount, PublicKey, UnsavedBlockLatticeBuilder};
 use rsnano_ledger::DEV_GENESIS_PUB_KEY;
 use rsnano_messages::ConfirmReq;
 use rsnano_network::Channel;
 use rsnano_node::{
     config::NodeFlags,
     consensus::{ConfirmationSolicitor, Election, ElectionBehavior, VoteInfo},
-    representatives::PeeredRep,
+    representatives::PeeredRepInfo,
     stats::{DetailType, Direction, StatType},
     DEV_NETWORK_PARAMS,
 };
@@ -23,7 +23,11 @@ fn batches() {
     let node2 = system.build_node().flags(flags).finish();
     let channel1 = establish_tcp(&node2, &node1);
     // Solicitor will only solicit from this representative
-    let representative = PeeredRep::new(*DEV_GENESIS_PUB_KEY, channel1, node2.steady_clock.now());
+    let representative = PeeredRepInfo {
+        account: *DEV_GENESIS_PUB_KEY,
+        channel: channel1,
+        weight: Amount::nano(100_000),
+    };
     let representatives = vec![representative];
 
     let mut solicitor = ConfirmationSolicitor::new(
@@ -94,7 +98,11 @@ fn different_hashes() {
     let node2 = system.build_node().flags(flags).finish();
     let channel1 = establish_tcp(&node2, &node1);
     // Solicitor will only solicit from this representative
-    let representative = PeeredRep::new(*DEV_GENESIS_PUB_KEY, channel1, node2.steady_clock.now());
+    let representative = PeeredRepInfo {
+        account: *DEV_GENESIS_PUB_KEY,
+        channel: channel1,
+        weight: Amount::nano(100_000),
+    };
     let representatives = vec![representative];
 
     let mut solicitor = ConfirmationSolicitor::new(
@@ -158,11 +166,11 @@ fn bypass_max_requests_cap() {
     const MAX_REPRESENTATIVES: usize = 50;
     for i in 0..=MAX_REPRESENTATIVES {
         // Make a temporary channel associated with node2
-        let rep = PeeredRep::new(
-            PublicKey::from(i as u64),
-            Arc::new(Channel::new_test_instance_with_id(i)),
-            node2.steady_clock.now(),
-        );
+        let rep = PeeredRepInfo {
+            account: PublicKey::from(i as u64),
+            channel: Arc::new(Channel::new_test_instance_with_id(i)),
+            weight: Amount::nano(100_000),
+        };
         representatives.push(rep);
     }
     assert_eq!(representatives.len(), MAX_REPRESENTATIVES + 1);
