@@ -84,6 +84,7 @@ impl AccountRanges {
         self.heads.iter().map(|i| i.processed).sum()
     }
 
+    #[allow(dead_code)]
     pub fn total_completed(&self) -> usize {
         self.heads.iter().map(|i| i.completed).sum()
     }

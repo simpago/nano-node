@@ -1,7 +1,5 @@
 use rsnano_core::{Amount, PrivateKey, UnsavedBlockLatticeBuilder, Vote, DEV_GENESIS_KEY};
-use rsnano_ledger::{
-    DEV_GENESIS_ACCOUNT, DEV_GENESIS_BLOCK, DEV_GENESIS_HASH, DEV_GENESIS_PUB_KEY,
-};
+use rsnano_ledger::{DEV_GENESIS_ACCOUNT, DEV_GENESIS_HASH, DEV_GENESIS_PUB_KEY};
 use rsnano_messages::{ConfirmAck, Message};
 use rsnano_network::{ChannelId, ChannelMode, TrafficType};
 use std::{sync::Arc, time::Duration};

@@ -176,6 +176,7 @@ impl PriorityContainer {
         }
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.by_account.clear();
         self.by_priority.clear();

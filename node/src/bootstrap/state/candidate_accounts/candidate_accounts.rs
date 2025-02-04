@@ -336,6 +336,7 @@ impl CandidateAccounts {
         return Priority::ZERO;
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.priorities.clear();
         self.blocking.clear();

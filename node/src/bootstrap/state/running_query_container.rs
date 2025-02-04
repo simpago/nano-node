@@ -343,6 +343,7 @@ impl RunningQueryContainer {
         }
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.by_id.clear();
         self.by_account.clear();
