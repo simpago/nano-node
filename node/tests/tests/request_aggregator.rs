@@ -33,14 +33,13 @@ fn one() {
         .genesis()
         .send(&*DEV_GENESIS_KEY, Amount::nano(1000));
 
+    let channel = make_fake_channel(&node);
     let request = AggregatorRequest {
+        channel: channel.clone(),
         roots_hashes: vec![(send1.hash(), send1.root())],
     };
 
-    let channel = make_fake_channel(&node);
-
-    node.request_aggregator
-        .request(request.clone(), channel.channel_id());
+    node.request_aggregator.request(request.clone());
     assert_timely_msg(
         Duration::from_secs(3),
         || node.request_aggregator.is_empty(),
@@ -64,10 +63,8 @@ fn one() {
         .unwrap();
     node.confirm(send1.hash());
 
-    let channel = make_fake_channel(&node);
     // In the ledger but no vote generated yet
-    node.request_aggregator
-        .request(request.clone(), channel.channel_id());
+    node.request_aggregator.request(request.clone());
     assert_timely_msg(
         Duration::from_secs(3),
         || node.request_aggregator.is_empty(),
@@ -87,9 +84,7 @@ fn one() {
 
     // Already cached
     // TODO: This is outdated, aggregator should not be using cache
-    let dummy_channel = make_fake_channel(&node);
-    node.request_aggregator
-        .request(request, dummy_channel.channel_id());
+    node.request_aggregator.request(request);
     assert_timely_msg(
         Duration::from_secs(3),
         || node.request_aggregator.is_empty(),
@@ -185,17 +180,17 @@ fn one_update() {
     let dummy_channel = make_fake_channel(&node);
 
     let request1 = AggregatorRequest {
+        channel: dummy_channel.clone(),
         roots_hashes: vec![(send2.hash(), send2.root())],
     };
-    node.request_aggregator
-        .request(request1, dummy_channel.channel_id());
+    node.request_aggregator.request(request1);
 
     // Update the pool of requests with another hash
     let request2 = AggregatorRequest {
+        channel: dummy_channel.clone(),
         roots_hashes: vec![(receive1.hash(), receive1.root())],
     };
-    node.request_aggregator
-        .request(request2, dummy_channel.channel_id());
+    node.request_aggregator.request(request2);
 
     // In the ledger but no vote generated yet
     assert_timely_msg(
@@ -299,17 +294,17 @@ fn two() {
 
     node.process_and_confirm_multi(&[send1, send2.clone(), receive1.clone()]);
 
+    let dummy_channel = make_fake_channel(&node);
     let request = AggregatorRequest {
+        channel: dummy_channel.clone(),
         roots_hashes: vec![
             (send2.hash(), send2.root()),
             (receive1.hash(), receive1.root()),
         ],
     };
-    let dummy_channel = make_fake_channel(&node);
 
     // Process both blocks
-    node.request_aggregator
-        .request(request.clone(), dummy_channel.channel_id());
+    node.request_aggregator.request(request.clone());
     // One vote should be generated for both blocks
     assert_timely_msg(
         Duration::from_secs(3),
@@ -328,8 +323,7 @@ fn two() {
         "aggregator empty",
     );
     // The same request should now send the cached vote
-    node.request_aggregator
-        .request(request.clone(), dummy_channel.channel_id());
+    node.request_aggregator.request(request.clone());
     assert_timely_msg(
         Duration::from_secs(3),
         || node.request_aggregator.is_empty(),
@@ -419,25 +413,27 @@ fn split() {
         )
         .unwrap();
 
-    let mut request = AggregatorRequest {
-        roots_hashes: Vec::new(),
-    };
+    let mut roots_hashes = Vec::new();
     let mut blocks = Vec::new();
     let mut lattice = UnsavedBlockLatticeBuilder::new();
 
     for _ in 0..=MAX_VBH {
         let block = lattice.genesis().send(&*DEV_GENESIS_KEY, 1);
         node.process(block.clone()).unwrap();
-        request.roots_hashes.push((block.hash(), block.root()));
+        roots_hashes.push((block.hash(), block.root()));
         blocks.push(block);
     }
     // Confirm all blocks
     node.confirm(blocks.last().unwrap().hash());
     assert_eq!(node.ledger.cemented_count(), MAX_VBH as u64 + 2);
-    assert_eq!(MAX_VBH + 1, request.roots_hashes.len());
+    assert_eq!(MAX_VBH + 1, roots_hashes.len());
+
     let dummy_channel = make_fake_channel(&node);
-    node.request_aggregator
-        .request(request, dummy_channel.channel_id());
+    let request = AggregatorRequest {
+        channel: dummy_channel.clone(),
+        roots_hashes,
+    };
+    node.request_aggregator.request(request);
     // In the ledger but no vote generated yet
     assert_timely_eq(
         Duration::from_secs(3),
@@ -512,14 +508,13 @@ fn channel_max_queue() {
         .send(&*DEV_GENESIS_KEY, Amount::nano(1000));
     node.process(send1.clone()).unwrap();
 
+    let channel = make_fake_channel(&node);
     let request = AggregatorRequest {
+        channel: channel.clone(),
         roots_hashes: vec![(send1.hash(), send1.root())],
     };
-    let channel = make_fake_channel(&node);
-    node.request_aggregator
-        .request(request.clone(), channel.channel_id());
-    node.request_aggregator
-        .request(request.clone(), channel.channel_id());
+    node.request_aggregator.request(request.clone());
+    node.request_aggregator.request(request.clone());
 
     assert!(
         node.stats.count(
@@ -557,13 +552,13 @@ fn cannot_vote() {
         false
     );
 
+    let dummy_channel = make_fake_channel(&node);
     // correct + incorrect
     let request = AggregatorRequest {
+        channel: dummy_channel.clone(),
         roots_hashes: vec![(send2.hash(), send2.root()), (1.into(), send2.root())],
     };
-    let dummy_channel = make_fake_channel(&node);
-    node.request_aggregator
-        .request(request.clone(), dummy_channel.channel_id());
+    node.request_aggregator.request(request.clone());
 
     assert_timely_msg(
         Duration::from_secs(3),
@@ -622,8 +617,7 @@ fn cannot_vote() {
         "no election",
     );
 
-    node.request_aggregator
-        .request(request.clone(), dummy_channel.channel_id());
+    node.request_aggregator.request(request.clone());
 
     assert_timely_msg(
         Duration::from_secs(3),
@@ -678,8 +672,7 @@ fn cannot_vote() {
     node.confirm(send1.hash());
     node.confirm(send2.hash());
 
-    node.request_aggregator
-        .request(request.clone(), dummy_channel.channel_id());
+    node.request_aggregator.request(request.clone());
 
     assert_timely_msg(
         Duration::from_secs(3),
@@ -738,10 +731,10 @@ fn forked_open() {
 
     // Request vote for the wrong fork
     let request = AggregatorRequest {
+        channel: channel.clone(),
         roots_hashes: vec![(open1.hash(), open1.root())],
     };
-    node.request_aggregator
-        .request(request, channel.channel_id());
+    node.request_aggregator.request(request);
 
     let vote_event = wait_vote_event(&vote_tracker);
 
@@ -785,10 +778,10 @@ fn epoch_conflict() {
 
     // Request vote for conflicting epoch block
     let request = AggregatorRequest {
+        channel: channel.clone(),
         roots_hashes: vec![(epoch_open.hash(), epoch_open.root())],
     };
-    node.request_aggregator
-        .request(request.clone(), channel.channel_id());
+    node.request_aggregator.request(request.clone());
 
     let vote_event = wait_vote_event(&vote_tracker);
 
@@ -805,10 +798,10 @@ fn epoch_conflict() {
     // FIXME: Vote spacing should use full qualified root
     std::thread::sleep(Duration::from_secs(1));
     let channel = make_fake_channel(&node);
+    let request = AggregatorRequest { channel, ..request };
 
     // Request vote for the conflicting epoch block again
-    node.request_aggregator
-        .request(request, channel.channel_id());
+    node.request_aggregator.request(request);
 
     let vote_event = wait_vote_event(&vote_tracker);
     assert_eq!(vote_event.blocks.len(), 1);
@@ -840,6 +833,7 @@ fn cemented_no_spacing() {
 
     // Request votes for blocks at different positions in the chain
     let request = AggregatorRequest {
+        channel: channel.clone(),
         roots_hashes: vec![
             (send1.hash(), send1.root()),
             (send2.hash(), send2.root()),
@@ -848,8 +842,7 @@ fn cemented_no_spacing() {
     };
 
     // Request votes for all blocks
-    node.request_aggregator
-        .request(request, channel.channel_id());
+    node.request_aggregator.request(request);
 
     let vote_event = wait_vote_event(&vote_tracker);
 

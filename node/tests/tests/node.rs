@@ -2206,10 +2206,10 @@ fn rollback_vote_self() {
         let channel = make_fake_channel(&node);
 
         let aggregator_req = AggregatorRequest {
+            channel: channel.clone(),
             roots_hashes: vec![(send2.hash(), send2.root())],
         };
-        node.request_aggregator
-            .request(aggregator_req, channel.channel_id());
+        node.request_aggregator.request(aggregator_req);
 
         assert_always_eq(
             Duration::from_secs(1),

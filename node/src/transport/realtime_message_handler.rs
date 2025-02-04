@@ -108,10 +108,10 @@ impl RealtimeMessageHandler {
                 // TODO: This check should be cached somewhere
                 if self.config.enable_voting && self.wallets.voting_reps_count() > 0 {
                     let aggregator_req = AggregatorRequest {
+                        channel: channel.clone(),
                         roots_hashes: req.roots_hashes,
                     };
-                    self.request_aggregator
-                        .request(aggregator_req, channel.channel_id());
+                    self.request_aggregator.request(aggregator_req);
                 }
             }
             Message::ConfirmAck(ack) => {

@@ -8,7 +8,7 @@ use rsnano_core::{
     BlockHash, Root,
 };
 use rsnano_ledger::Ledger;
-use rsnano_network::{ChannelId, DeadChannelCleanupStep, Network, TrafficType};
+use rsnano_network::{Channel, ChannelId, DeadChannelCleanupStep, Network, TrafficType};
 use rsnano_store_lmdb::{LmdbReadTransaction, Transaction};
 use std::{
     cmp::{max, min},
@@ -98,14 +98,20 @@ impl RequestAggregator {
         }
     }
 
-    pub fn request(&self, request: AggregatorRequest, channel_id: ChannelId) -> bool {
+    pub fn request(&self, request: AggregatorRequest) -> bool {
         if request.roots_hashes.is_empty() {
             return false;
         }
 
         let request_len = request.roots_hashes.len();
 
-        let added = { self.state.lock().unwrap().queue.push(channel_id, request) };
+        let added = {
+            self.state
+                .lock()
+                .unwrap()
+                .queue
+                .push(request.channel.channel_id(), request)
+        };
 
         if added {
             self.stats
@@ -177,6 +183,7 @@ impl Drop for RequestAggregator {
 
 #[derive(Clone)]
 pub struct AggregatorRequest {
+    pub channel: Arc<Channel>,
     pub roots_hashes: Vec<(BlockHash, Root)>,
 }
 
