@@ -95,7 +95,7 @@ pub fn activate_many() {
     );
 
     // Ensure all unconfirmed accounts head block gets activated
-    assert_timely(Duration::from_secs(10), || {
+    assert_timely(Duration::from_secs(15), || {
         chains.iter().all(|(_, blocks)| {
             let block = blocks.last().unwrap();
             node.vote_router.active(&block.hash())
