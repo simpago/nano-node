@@ -9,6 +9,7 @@ pub enum InsertResult {
     Inserted,
     Updated,
     /// Returns the old channel id
+    // TODO return old peer address
     ChannelChanged(ChannelId),
 }
 

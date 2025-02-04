@@ -108,9 +108,8 @@ impl RepCrawler {
     /// Called when a non-replay vote arrives that might be of interest to rep crawler.
     /// @return true, if the vote was of interest and was processed, this indicates that the rep is likely online and voting
     pub fn process(&self, vote: &Arc<Vote>, channel: Option<&Arc<Channel>>) -> bool {
-        let channel_id = match channel {
-            Some(c) => c.channel_id(),
-            None => ChannelId::LOOPBACK,
+        let Some(channel) = channel.cloned() else {
+            return false;
         };
         let mut guard = self.rep_crawler_impl.lock().unwrap();
         let mut processed = false;
@@ -119,7 +118,7 @@ impl RepCrawler {
         let x = guard.deref_mut();
         let queries = &mut x.queries;
         let responses = &mut x.responses;
-        queries.modify_for_channel(channel_id, |query| {
+        queries.modify_for_channel(channel.channel_id(), |query| {
             // TODO: This linear search could be slow, especially with large votes.
             let target_hash = query.hash;
             let found = vote.hashes.iter().any(|h| *h == target_hash);
@@ -127,8 +126,9 @@ impl RepCrawler {
 
             if found {
                 debug!(
-                    "Processing response for block: {} from channel: {}",
-                    target_hash, channel_id
+                    "Processing response for block: {} from: {}",
+                    target_hash,
+                    channel.peer_addr()
                 );
                 self.stats
                     .inc_dir(StatType::RepCrawler, DetailType::Response, Direction::In);
@@ -139,7 +139,7 @@ impl RepCrawler {
                     (0, query_timeout.as_millis() as i64),
                 );
 
-                responses.push_back((channel_id, Arc::clone(&vote)));
+                responses.push_back((channel.clone(), Arc::clone(&vote)));
                 query.replies += 1;
                 self.condition.notify_all();
                 processed = true;
@@ -193,7 +193,7 @@ impl RepCrawler {
     pub fn force_process2(&self, vote: Arc<Vote>, channel: Arc<Channel>) {
         assert!(self.network_params.network.is_dev_network());
         let mut guard = self.rep_crawler_impl.lock().unwrap();
-        guard.responses.push_back((channel.channel_id(), vote));
+        guard.responses.push_back((channel, vote));
     }
 
     // Only for tests
@@ -312,12 +312,7 @@ impl RepCrawler {
         );
 
         // TODO: Is it really faster to repeatedly lock/unlock the mutex for each response?
-        for (channel_id, vote) in responses {
-            if channel_id == ChannelId::LOOPBACK {
-                debug!("Ignoring vote from loopback channel");
-                continue;
-            }
-
+        for (channel, vote) in responses {
             let rep_weight = self.ledger.weight(&vote.voting_account);
             if rep_weight < minimum {
                 debug!(
@@ -330,23 +325,23 @@ impl RepCrawler {
 
             let result = self.online_reps.lock().unwrap().vote_observed_directly(
                 vote.voting_account,
-                channel_id,
+                channel.clone(),
                 self.steady_clock.now(),
             );
 
             match result {
                 InsertResult::Inserted => {
                     info!(
-                        "Found representative: {} at channel: {}",
+                        "Found representative: {} at {}",
                         Account::from(vote.voting_account).encode_account(),
-                        channel_id
+                        channel.peer_addr()
                     );
                 }
                 InsertResult::ChannelChanged(previous) => {
                     warn!(
-                        "Updated representative: {} at channel: {} (was at: {})",
+                        "Updated representative: {} at : {} (was at: {})",
                         Account::from(vote.voting_account).encode_account(),
-                        channel_id,
+                        channel.peer_addr(),
                         previous
                     )
                 }
@@ -418,7 +413,7 @@ struct RepCrawlerImpl {
     query_timeout: Duration,
     stopped: bool,
     last_query: Option<Instant>,
-    responses: BoundedVecDeque<(ChannelId, Arc<Vote>)>,
+    responses: BoundedVecDeque<(Arc<Channel>, Arc<Vote>)>,
 
     /// Freshly established connections that should be queried asap
     prioritized: Vec<Arc<Channel>>,

@@ -207,26 +207,16 @@ impl OnlineReps {
     }
 
     /// Add rep_account to the set of peered representatives
-    pub fn vote_observed_directly2(
+    pub fn vote_observed_directly(
         &mut self,
         rep_account: PublicKey,
         channel: Arc<Channel>,
         now: Timestamp,
     ) -> InsertResult {
-        self.vote_observed_directly(rep_account, channel.channel_id(), now)
-    }
-
-    /// Add rep_account to the set of peered representatives
-    pub fn vote_observed_directly(
-        &mut self,
-        rep_account: PublicKey,
-        channel_id: ChannelId,
-        now: Timestamp,
-    ) -> InsertResult {
         let is_rep = self.vote_observed(rep_account, now);
         if is_rep {
             self.peered_reps
-                .update_or_insert(rep_account, channel_id, now)
+                .update_or_insert(rep_account, channel.channel_id(), now)
         } else {
             InsertResult::Updated
         }
@@ -316,7 +306,7 @@ mod tests {
         let mut online_reps = OnlineReps::builder().rep_weights(weights).finish();
 
         let channel = Arc::new(Channel::new_test_instance());
-        online_reps.vote_observed_directly2(account, channel, clock.now());
+        online_reps.vote_observed_directly(account, channel, clock.now());
 
         assert_eq!(online_reps.online_weight(), weight, "online");
         assert_eq!(online_reps.peered_weight(), weight, "peered");
@@ -367,7 +357,7 @@ mod tests {
         assert_eq!(online_reps.is_pr(channel_id), false);
 
         // below PR limit
-        online_reps.vote_observed_directly2(rep_account, channel, clock.now());
+        online_reps.vote_observed_directly(rep_account, channel, clock.now());
         assert_eq!(online_reps.is_pr(channel_id), false);
 
         // above PR limit
