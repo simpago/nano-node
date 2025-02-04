@@ -281,15 +281,12 @@ impl Network {
     pub fn find_realtime_channel_by_peering_addr(
         &self,
         peering_addr: &SocketAddrV6,
-    ) -> Option<ChannelId> {
-        self.channels
-            .values()
-            .find(|c| {
-                c.mode() == ChannelMode::Realtime
-                    && c.is_alive()
-                    && c.peering_addr() == Some(*peering_addr)
-            })
-            .map(|c| c.channel_id())
+    ) -> Option<&Arc<Channel>> {
+        self.channels.values().find(|c| {
+            c.mode() == ChannelMode::Realtime
+                && c.is_alive()
+                && c.peering_addr() == Some(*peering_addr)
+        })
     }
 
     pub fn random_fanout(&self, scale: f32) -> Vec<Arc<Channel>> {

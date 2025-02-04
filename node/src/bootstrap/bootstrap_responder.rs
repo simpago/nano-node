@@ -105,7 +105,7 @@ impl BootstrapResponder {
         }
     }
 
-    pub fn set_response_callback(&self, cb: Box<dyn Fn(&AscPullAck, ChannelId) + Send + Sync>) {
+    pub fn set_response_callback(&self, cb: Box<dyn Fn(&AscPullAck, &Arc<Channel>) + Send + Sync>) {
         *self.server_impl.on_response.lock().unwrap() = Some(cb);
     }
 
@@ -165,7 +165,7 @@ impl Drop for BootstrapResponder {
 pub(crate) struct BootstrapResponderImpl {
     stats: Arc<Stats>,
     ledger: Arc<Ledger>,
-    on_response: Arc<Mutex<Option<Box<dyn Fn(&AscPullAck, ChannelId) + Send + Sync>>>>,
+    on_response: Arc<Mutex<Option<Box<dyn Fn(&AscPullAck, &Arc<Channel>) + Send + Sync>>>>,
     stopped: AtomicBool,
     condition: Condvar,
     queue: Mutex<FairQueue<ChannelId, (AscPullReq, Arc<Channel>)>>,
@@ -204,7 +204,7 @@ impl BootstrapResponderImpl {
 
             if !channel.should_drop(TrafficType::BootstrapServer) {
                 let response = self.process(&tx, request);
-                self.respond(response, channel.channel_id());
+                self.respond(response, &channel);
             } else {
                 self.stats.inc_dir(
                     StatType::BootstrapServer,
@@ -365,7 +365,7 @@ impl BootstrapResponderImpl {
         result
     }
 
-    fn respond(&self, response: AscPullAck, channel_id: ChannelId) {
+    fn respond(&self, response: AscPullAck, channel: &Arc<Channel>) {
         self.stats.inc_dir(
             StatType::BootstrapServer,
             DetailType::Response,
@@ -406,13 +406,13 @@ impl BootstrapResponderImpl {
         {
             let callback = self.on_response.lock().unwrap();
             if let Some(cb) = &*callback {
-                (cb)(&response, channel_id);
+                (cb)(&response, channel);
             }
         }
 
         let msg = Message::AscPullAck(response);
-        self.message_sender.lock().unwrap().try_send(
-            channel_id,
+        self.message_sender.lock().unwrap().try_send_channel(
+            channel,
             &msg,
             TrafficType::BootstrapServer,
         );

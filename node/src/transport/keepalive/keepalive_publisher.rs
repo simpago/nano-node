@@ -2,7 +2,7 @@ use super::KeepaliveMessageFactory;
 use crate::transport::MessageSender;
 use rsnano_core::utils::Peer;
 use rsnano_network::{
-    utils::into_ipv6_socket_address, ChannelId, Network, PeerConnector, TrafficType,
+    utils::into_ipv6_socket_address, Channel, Network, PeerConnector, TrafficType,
 };
 use rsnano_output_tracker::{OutputListenerMt, OutputTrackerMt};
 use std::{
@@ -62,15 +62,16 @@ impl KeepalivePublisher {
     fn keepalive_or_connect_socket(&self, peer: SocketAddr) {
         let peer_v6 = into_ipv6_socket_address(peer);
 
-        let channel_id = self
+        let channel = self
             .network
             .read()
             .unwrap()
-            .find_realtime_channel_by_peering_addr(&peer_v6);
+            .find_realtime_channel_by_peering_addr(&peer_v6)
+            .cloned();
 
-        match channel_id {
-            Some(channel_id) => {
-                self.try_send_keepalive(channel_id);
+        match channel {
+            Some(channel) => {
+                self.try_send_keepalive(&channel);
             }
             None => {
                 self.peer_connector.connect_to(peer_v6);
@@ -78,11 +79,11 @@ impl KeepalivePublisher {
         }
     }
 
-    fn try_send_keepalive(&self, channel_id: ChannelId) {
+    fn try_send_keepalive(&self, channel: &Channel) {
         let keepalive = self.message_factory.create_keepalive();
 
-        self.message_sender.lock().unwrap().try_send(
-            channel_id,
+        self.message_sender.lock().unwrap().try_send_channel(
+            channel,
             &keepalive,
             TrafficType::Keepalive,
         );
