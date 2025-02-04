@@ -1,11 +1,7 @@
-use crate::config::NetworkConstants;
 use rsnano_core::Networks;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-pub fn working_path() -> Option<PathBuf> {
-    working_path_for(NetworkConstants::active_network())
-}
 pub fn working_path_for(network: Networks) -> Option<PathBuf> {
     if let Ok(path_override) = std::env::var("NANO_APP_PATH") {
         eprintln!(

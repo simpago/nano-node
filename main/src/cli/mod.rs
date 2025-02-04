@@ -5,7 +5,7 @@ use commands::{
     wallets::WalletsCommand,
 };
 use rsnano_core::{Networks, PrivateKeyFactory};
-use rsnano_node::{config::NetworkConstants, working_path};
+use rsnano_node::{config::NetworkConstants, working_path_for};
 use rsnano_nullable_console::Console;
 use std::{path::PathBuf, str::FromStr};
 
@@ -53,7 +53,8 @@ pub(crate) fn get_path(path_str: &Option<String>, network_str: &Option<String>) 
         let network = Networks::from_str(&network).unwrap();
         NetworkConstants::set_active_network(network);
     }
-    working_path().unwrap()
+    let network = NetworkConstants::active_network();
+    working_path_for(network).unwrap()
 }
 
 #[derive(Default)]
