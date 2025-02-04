@@ -1,21 +1,18 @@
-use super::{
-    rebroadcaster_loop::RebroadcastLoop, wallet_reps_cache::WalletRepsCache, VoteRebroadcastQueue,
-};
+use super::{rebroadcast_processor::RebroadcastProcessor, VoteRebroadcastQueue};
 use crate::{stats::Stats, transport::MessageFlooder, wallets::WalletRepresentatives};
 use rsnano_core::utils::ContainerInfo;
-use rsnano_nullable_clock::SteadyClock;
 use std::{
     sync::{Arc, Mutex},
     thread::JoinHandle,
 };
 
+/// Rebroadcasts votes that were created by other nodes
 pub(crate) struct VoteRebroadcaster {
     queue: Arc<VoteRebroadcastQueue>,
     join_handle: Option<JoinHandle<()>>,
     wallet_reps: Arc<Mutex<WalletRepresentatives>>,
     message_flooder: MessageFlooder,
     stats: Arc<Stats>,
-    clock: Arc<SteadyClock>,
 }
 
 impl VoteRebroadcaster {
@@ -24,7 +21,6 @@ impl VoteRebroadcaster {
         wallet_reps: Arc<Mutex<WalletRepresentatives>>,
         message_flooder: MessageFlooder,
         stats: Arc<Stats>,
-        clock: Arc<SteadyClock>,
     ) -> Self {
         Self {
             queue,
@@ -32,22 +28,24 @@ impl VoteRebroadcaster {
             join_handle: None,
             message_flooder,
             stats,
-            clock,
         }
     }
 
     pub fn start(&mut self) {
-        let wallet_reps_cache = WalletRepsCache::new(self.wallet_reps.clone());
-        let mut rebroadcast_loop = RebroadcastLoop::new(
-            self.queue.clone(),
+        let queue = self.queue.clone();
+        let mut rebroadcast_processor = RebroadcastProcessor::new(
+            self.wallet_reps.clone(),
             self.message_flooder.clone(),
-            wallet_reps_cache,
             self.stats.clone(),
         );
 
         let handle = std::thread::Builder::new()
             .name("Vote rebroad".to_owned())
-            .spawn(move || rebroadcast_loop.run())
+            .spawn(move || {
+                while let Some(vote) = queue.dequeue() {
+                    rebroadcast_processor.process_vote(&vote);
+                }
+            })
             .unwrap();
         self.join_handle = Some(handle);
     }
