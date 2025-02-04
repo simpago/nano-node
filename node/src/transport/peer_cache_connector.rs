@@ -59,7 +59,7 @@ impl Runnable for PeerCacheConnector {
         for peer in cached_peers {
             self.stats
                 .inc(StatType::Network, DetailType::ReachoutCached);
-            self.peer_connector.connect_to(peer);
+            let _ = self.peer_connector.connect_to(peer);
             // Throttle reachout attempts
             if cancel_token.wait_for_cancellation(self.reach_out_delay) {
                 break;

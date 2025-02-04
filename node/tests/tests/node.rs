@@ -1323,8 +1323,6 @@ fn auto_bootstrap_reverse() {
     );
     assert!(send_result.is_ok());
 
-    establish_tcp(&node0, &node1);
-
     assert_timely_msg(
         Duration::from_secs(10),
         || node1.balance(&key2.account()) == node0.config.receive_minimum,
@@ -1635,9 +1633,10 @@ fn local_block_broadcast() {
     });
 
     // Connect the nodes and check that the block is propagated
-    node1
+    let _ = node1
         .peer_connector
         .connect_to(node2.tcp_listener.local_address());
+
     assert_timely_msg(
         Duration::from_secs(5),
         || {
@@ -2345,7 +2344,7 @@ fn rep_crawler_rep_remove() {
 
     // Start a node for Rep2 and wait until it is connected
     let node_rep2 = system.make_node();
-    searching_node
+    let _ = searching_node
         .peer_connector
         .connect_to(node_rep2.tcp_listener.local_address());
 
@@ -2489,7 +2488,7 @@ fn node_receive_quorum() {
         .unwrap();
     assert!(node1.balance(&key.account()).is_zero());
 
-    node2
+    let _ = node2
         .peer_connector
         .connect_to(node1.tcp_listener.local_address());
 
@@ -2545,8 +2544,6 @@ fn auto_bootstrap() {
     );
 
     let node1 = system.make_node();
-
-    establish_tcp(&node1, &node0);
 
     assert_timely_msg(
         Duration::from_secs(10),

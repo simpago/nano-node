@@ -1,4 +1,6 @@
-use crate::{ChannelDirection, NetworkObserver, NullNetworkObserver, TcpNetworkAdapter};
+use crate::{
+    ChannelDirection, NetworkError, NetworkObserver, NullNetworkObserver, TcpNetworkAdapter,
+};
 use rsnano_nullable_tcp::TcpStream;
 use rsnano_output_tracker::{OutputListenerMt, OutputTrackerMt};
 use std::{net::SocketAddrV6, sync::Arc, time::Duration};
@@ -49,18 +51,14 @@ impl PeerConnector {
     }
 
     /// Establish a network connection to the given peer
-    pub fn connect_to(&self, peer: SocketAddrV6) -> bool {
+    pub fn connect_to(&self, peer: SocketAddrV6) -> Result<(), NetworkError> {
         self.connect_listener.emit(peer);
 
         if self.cancel_token.is_cancelled() {
-            return false;
+            return Err(NetworkError::Cancelled);
         }
 
-        let added = self.network_adapter.add_outbound_attempt(peer);
-
-        if !added {
-            return false;
-        }
+        self.network_adapter.add_outbound_attempt(peer)?;
 
         let network_l = self.network_adapter.clone();
         let connect_timeout = self.connect_timeout;
@@ -88,7 +86,7 @@ impl PeerConnector {
             network_l.remove_attempt(&peer);
         });
 
-        true
+        Ok(())
     }
 
     pub fn stop(&self) {
@@ -120,7 +118,7 @@ mod tests {
         let peer_connector = Arc::new(PeerConnector::new_null(tokio::runtime::Handle::current()));
         let connect_tracker = peer_connector.track_connections();
 
-        peer_connector.connect_to(TEST_ENDPOINT_1);
+        peer_connector.connect_to(TEST_ENDPOINT_1).unwrap();
 
         assert_eq!(connect_tracker.output(), vec![TEST_ENDPOINT_1]);
     }

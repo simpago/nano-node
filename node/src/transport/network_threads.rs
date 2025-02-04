@@ -282,7 +282,7 @@ impl ReachoutLoop {
                         continue;
                     }
                     self.stats.inc(StatType::Network, DetailType::ReachoutLive);
-                    self.peer_connector.connect_to(peer);
+                    let _ = self.peer_connector.connect_to(peer);
 
                     // Throttle reachout attempts
                     std::thread::sleep(self.reachout_interval);

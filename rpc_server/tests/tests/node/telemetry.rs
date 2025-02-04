@@ -3,14 +3,13 @@ use std::{
     net::{Ipv6Addr, SocketAddrV6},
     time::Duration,
 };
-use test_helpers::{assert_timely_eq, establish_tcp, setup_rpc_client_and_server, System};
+use test_helpers::{assert_timely_eq, setup_rpc_client_and_server, System};
 
 #[test]
 fn telemetry_single() {
     let mut system = System::new();
     let node = system.build_node().finish();
-    let peer = system.build_node().finish();
-    establish_tcp(&node, &peer);
+    let _peer = system.build_node().finish();
 
     // Wait until peers are stored
     assert_timely_eq(
@@ -59,7 +58,6 @@ fn telemetry_all() {
     let mut system = System::new();
     let node = system.build_node().finish();
     let peer = system.build_node().finish();
-    establish_tcp(&node, &peer);
 
     // Wait until peers are stored
     assert_timely_eq(

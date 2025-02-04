@@ -80,6 +80,7 @@ pub enum NetworkError {
     InvalidIp,
     /// We are already connected to that peer and we tried to connect a second time
     DuplicateConnection,
+    Cancelled,
 }
 
 pub struct Network {
@@ -149,26 +150,23 @@ impl Network {
         self.excluded_peers.is_excluded(peer_addr, now)
     }
 
-    pub fn add_outbound_attempt(&mut self, peer: SocketAddrV6, now: Timestamp) -> bool {
-        let result = self.validate_new_connection(&peer, ChannelDirection::Outbound, now);
-
-        if let Err(e) = result {
-            self.observer.error(e, &peer, ChannelDirection::Outbound);
-            return false;
-        }
-
+    pub fn add_outbound_attempt(
+        &mut self,
+        peer: SocketAddrV6,
+        now: Timestamp,
+    ) -> Result<(), NetworkError> {
         self.attempts.insert(peer, ChannelDirection::Outbound, now);
 
         if let Err(e) = self.validate_new_connection(&peer, ChannelDirection::Outbound, now) {
             self.remove_attempt(&peer);
             self.observer.error(e, &peer, ChannelDirection::Outbound);
-            return false;
+            return Err(e);
         }
 
         self.observer.connection_attempt(&peer);
         self.observer.merge_peer();
 
-        true
+        Ok(())
     }
 
     pub fn remove_attempt(&mut self, remote: &SocketAddrV6) {

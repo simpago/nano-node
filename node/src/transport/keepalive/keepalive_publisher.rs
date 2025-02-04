@@ -74,7 +74,7 @@ impl KeepalivePublisher {
                 self.try_send_keepalive(&channel);
             }
             None => {
-                self.peer_connector.connect_to(peer_v6);
+                let _ = self.peer_connector.connect_to(peer_v6);
             }
         }
     }

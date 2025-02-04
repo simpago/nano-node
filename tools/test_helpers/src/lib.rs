@@ -132,10 +132,10 @@ impl System {
 
         if self.nodes.len() > 1 && !disconnected {
             let other = &self.nodes[0];
-            let added = other
+            other
                 .peer_connector
-                .connect_to(node.tcp_listener.local_address());
-            assert!(added);
+                .connect_to(node.tcp_listener.local_address())
+                .unwrap();
 
             let start = Instant::now();
             loop {
@@ -357,7 +357,8 @@ fn init_tracing() {
 
 pub fn establish_tcp(node: &Node, peer: &Node) -> Arc<Channel> {
     node.peer_connector
-        .connect_to(peer.tcp_listener.local_address());
+        .connect_to(peer.tcp_listener.local_address())
+        .unwrap();
 
     assert_timely_msg(
         Duration::from_secs(2),

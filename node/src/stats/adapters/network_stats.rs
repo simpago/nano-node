@@ -187,6 +187,7 @@ impl NetworkObserver for NetworkStats {
                     ?direction,
                     "Already connected to that peer, unable to open new connection");
             }
+            NetworkError::Cancelled => {}
         }
     }
 

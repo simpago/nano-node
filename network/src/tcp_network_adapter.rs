@@ -1,6 +1,6 @@
 use crate::{
     utils::into_ipv6_socket_address, ChannelDirection, ChannelId, DeadChannelCleanupStep, Network,
-    ReceiveResult, TcpChannelAdapter,
+    NetworkError, ReceiveResult, TcpChannelAdapter,
 };
 use rsnano_core::utils::NULL_ENDPOINT;
 use rsnano_nullable_clock::SteadyClock;
@@ -137,7 +137,7 @@ impl TcpNetworkAdapter {
         Ok(())
     }
 
-    pub fn add_outbound_attempt(&self, peer: SocketAddrV6) -> bool {
+    pub fn add_outbound_attempt(&self, peer: SocketAddrV6) -> Result<(), NetworkError> {
         self.network
             .write()
             .unwrap()

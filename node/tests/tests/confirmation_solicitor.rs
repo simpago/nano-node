@@ -10,7 +10,7 @@ use rsnano_node::{
     representatives::PeeredRepInfo,
     stats::{DetailType, Direction, StatType},
 };
-use test_helpers::{establish_tcp, System};
+use test_helpers::System;
 
 #[test]
 fn batches() {
@@ -20,7 +20,14 @@ fn batches() {
     flags.disable_rep_crawler = true;
     let node1 = system.build_node().flags(flags.clone()).finish();
     let node2 = system.build_node().flags(flags).finish();
-    let channel1 = establish_tcp(&node2, &node1);
+    let channel1 = node2
+        .network
+        .read()
+        .unwrap()
+        .find_node_id(&node1.node_id.public_key().into())
+        .unwrap()
+        .clone();
+
     // Solicitor will only solicit from this representative
     let representative = PeeredRepInfo {
         account: *DEV_GENESIS_PUB_KEY,
@@ -95,7 +102,13 @@ fn different_hashes() {
     flags.disable_rep_crawler = true;
     let node1 = system.build_node().flags(flags.clone()).finish();
     let node2 = system.build_node().flags(flags).finish();
-    let channel1 = establish_tcp(&node2, &node1);
+    let channel1 = node2
+        .network
+        .read()
+        .unwrap()
+        .find_node_id(&node1.node_id.public_key().into())
+        .unwrap()
+        .clone();
     // Solicitor will only solicit from this representative
     let representative = PeeredRepInfo {
         account: *DEV_GENESIS_PUB_KEY,
