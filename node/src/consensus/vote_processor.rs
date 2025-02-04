@@ -90,7 +90,7 @@ impl VoteProcessor {
             let start = Instant::now();
 
             for (_, (vote, source, channel)) in &batch {
-                self.vote_blocking2(vote, channel.clone(), *source);
+                self.vote_blocking(vote, channel.clone(), *source);
             }
 
             self.total_processed
@@ -108,7 +108,7 @@ impl VoteProcessor {
         }
     }
 
-    pub fn vote_blocking2(
+    pub fn vote_blocking(
         &self,
         vote: &Arc<Vote>,
         channel: Option<Arc<Channel>>,
@@ -118,15 +118,6 @@ impl VoteProcessor {
             Some(c) => c.channel_id(),
             None => ChannelId::LOOPBACK,
         };
-        self.vote_blocking(vote, channel_id, source)
-    }
-
-    pub fn vote_blocking(
-        &self,
-        vote: &Arc<Vote>,
-        channel_id: ChannelId,
-        source: VoteSource,
-    ) -> VoteCode {
         let mut result = VoteCode::Invalid;
         if vote.validate().is_ok() {
             let vote_results = self.vote_router.vote(vote, source);

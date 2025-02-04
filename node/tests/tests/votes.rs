@@ -34,7 +34,7 @@ fn check_signature() {
     let channel = make_fake_channel(&node);
     assert_eq!(
         VoteCode::Invalid,
-        node.vote_processor.vote_blocking2(
+        node.vote_processor.vote_blocking(
             &Arc::new(vote1.clone()),
             Some(channel.clone()),
             VoteSource::Live
@@ -44,7 +44,7 @@ fn check_signature() {
     vote1.signature = good_signature;
     assert_eq!(
         VoteCode::Vote,
-        node.vote_processor.vote_blocking2(
+        node.vote_processor.vote_blocking(
             &Arc::new(vote1.clone()),
             Some(channel.clone()),
             VoteSource::Live
@@ -52,7 +52,7 @@ fn check_signature() {
     );
     assert_eq!(
         VoteCode::Replay,
-        node.vote_processor.vote_blocking2(
+        node.vote_processor.vote_blocking(
             &Arc::new(vote1.clone()),
             Some(channel.clone()),
             VoteSource::Live
@@ -83,7 +83,7 @@ fn add_old() {
     ));
     let channel = make_fake_channel(&node);
     node.vote_processor
-        .vote_blocking(&vote1, channel.channel_id(), VoteSource::Live);
+        .vote_blocking(&vote1, Some(channel.clone()), VoteSource::Live);
 
     let key2 = PrivateKey::new();
     let send2 = fork_lattice.genesis().send_max(&key2);
@@ -103,7 +103,7 @@ fn add_old() {
         .unwrap()
         .time = SystemTime::now() - Duration::from_secs(20);
     node.vote_processor
-        .vote_blocking(&vote2, channel.channel_id(), VoteSource::Live);
+        .vote_blocking(&vote2, Some(channel), VoteSource::Live);
     assert_eq!(2, election1.vote_count());
     let votes = election1.mutex.lock().unwrap().last_votes.clone();
     assert!(votes.contains_key(&DEV_GENESIS_PUB_KEY));
@@ -134,7 +134,7 @@ fn add_cooldown() {
     ));
     let channel = make_fake_channel(&node);
     node.vote_processor
-        .vote_blocking(&vote1, channel.channel_id(), VoteSource::Live);
+        .vote_blocking(&vote1, Some(channel.clone()), VoteSource::Live);
 
     let key2 = PrivateKey::new();
     let send2 = fork_lattice.genesis().send_max(&key2);
@@ -146,7 +146,7 @@ fn add_cooldown() {
     ));
 
     node.vote_processor
-        .vote_blocking(&vote2, channel.channel_id(), VoteSource::Live);
+        .vote_blocking(&vote2, Some(channel), VoteSource::Live);
     assert_eq!(2, election1.vote_count());
     let votes = election1.mutex.lock().unwrap().last_votes.clone();
     assert!(votes.contains_key(&DEV_GENESIS_PUB_KEY));
