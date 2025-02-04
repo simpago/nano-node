@@ -146,6 +146,12 @@ impl VoteRebroadcastQueue {
     }
 }
 
+impl Default for VoteRebroadcastQueue {
+    fn default() -> Self {
+        Self::build().finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

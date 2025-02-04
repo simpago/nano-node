@@ -8,6 +8,7 @@ pub use fair_queue::*;
 pub use peer::*;
 use std::{
     net::{Ipv6Addr, SocketAddrV6},
+    sync::{Arc, Condvar, Mutex},
     thread::available_parallelism,
     time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH},
 };
@@ -228,4 +229,23 @@ pub const TEST_ENDPOINT_3: SocketAddrV6 =
 
 pub fn new_test_timestamp() -> SystemTime {
     UNIX_EPOCH + Duration::from_secs(1_000_000)
+}
+
+#[derive(Clone)]
+pub struct OneShotNotification(Arc<(Mutex<bool>, Condvar)>);
+
+impl OneShotNotification {
+    pub fn new() -> Self {
+        Self(Arc::new((Mutex::new(false), Condvar::new())))
+    }
+
+    pub fn notify(&self) {
+        *self.0 .0.lock().unwrap() = true;
+        self.0 .1.notify_one();
+    }
+
+    pub fn wait(&self) {
+        let guard = self.0 .0.lock().unwrap();
+        drop(self.0 .1.wait_while(guard, |i| !*i).unwrap())
+    }
 }
