@@ -61,7 +61,7 @@ fn fork_replacement_tally() {
         let vote = Vote::new_final(&DEV_GENESIS_KEY, vec![send.hash(), open.hash()]);
         node1
             .vote_processor_queue
-            .vote(Arc::new(vote), ChannelId::LOOPBACK, VoteSource::Live);
+            .vote2(Arc::new(vote), None, VoteSource::Live);
     }
 
     assert_timely_eq2(
@@ -101,7 +101,7 @@ fn fork_replacement_tally() {
         let vote = Arc::new(Vote::new(&keys[i], 0, 0, vec![fork.hash()]));
         node1
             .vote_processor_queue
-            .vote(vote, ChannelId::LOOPBACK, VoteSource::Live);
+            .vote2(vote, None, VoteSource::Live);
         assert_timely2(|| node1.vote_cache.lock().unwrap().find(&fork.hash()).len() > 0);
         node1.process_active(fork);
     }
@@ -155,7 +155,7 @@ fn fork_replacement_tally() {
     let vote = Arc::new(Vote::new(&DEV_GENESIS_KEY, 0, 0, vec![send_last.hash()]));
     node1
         .vote_processor_queue
-        .vote(vote, ChannelId::LOOPBACK, VoteSource::Live);
+        .vote2(vote, None, VoteSource::Live);
     // ensure vote arrives before the block
     assert_timely_eq2(
         || {

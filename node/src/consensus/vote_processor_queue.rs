@@ -4,7 +4,7 @@ use rsnano_core::{
     utils::{ContainerInfo, FairQueue, FairQueueInfo},
     Vote, VoteSource,
 };
-use rsnano_network::{ChannelId, DeadChannelCleanupStep};
+use rsnano_network::{Channel, ChannelId, DeadChannelCleanupStep};
 use std::{
     collections::VecDeque,
     mem::size_of,
@@ -52,6 +52,21 @@ impl VoteProcessorQueue {
 
     pub fn is_empty(&self) -> bool {
         self.data.lock().unwrap().queue.is_empty()
+    }
+
+    /// Queue vote for processing. @returns true if the vote was queued
+    pub fn vote2(
+        &self,
+        vote: Arc<Vote>,
+        channel: Option<Arc<Channel>>,
+        source: VoteSource,
+    ) -> bool {
+        let channel_id = match channel {
+            Some(channel) => channel.channel_id(),
+            None => ChannelId::LOOPBACK,
+        };
+
+        self.vote(vote, channel_id, source)
     }
 
     /// Queue vote for processing. @returns true if the vote was queued
