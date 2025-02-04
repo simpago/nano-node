@@ -21,6 +21,12 @@ pub struct ConfirmationQuorumArgs {
     pub peer_details: Option<RpcBool>,
 }
 
+impl ConfirmationQuorumArgs {
+    pub fn include_peer_details(&self) -> bool {
+        self.peer_details.unwrap_or_default().inner()
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct ConfirmationQuorumResponse {
     pub quorum_delta: Amount,

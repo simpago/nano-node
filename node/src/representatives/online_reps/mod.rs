@@ -60,6 +60,23 @@ impl OnlineReps {
         }
     }
 
+    pub fn new_test_instance() -> Self {
+        let rep = PublicKey::from(1);
+
+        let rep_weights = Arc::new(RepWeightCache::new());
+        rep_weights.set(rep, Amount::nano(80_000_000));
+
+        let mut online_reps = Self::new(
+            rep_weights,
+            Duration::from_secs(1),
+            Amount::nano(60_000_000),
+            Amount::nano(1000),
+        );
+        let channel = Arc::new(Channel::new_test_instance());
+        online_reps.vote_observed_directly(rep, channel, Timestamp::new_test_instance());
+        online_reps
+    }
+
     pub fn builder() -> OnlineRepsBuilder {
         OnlineRepsBuilder::new()
     }
@@ -418,5 +435,24 @@ mod tests {
         online_reps.vote_observed(rep_c, now + Duration::from_secs(31));
 
         assert_eq!(online_reps.online_weight(), Amount::nano(600_000));
+    }
+
+    #[test]
+    fn test_instance() {
+        let online_reps = OnlineReps::new_test_instance();
+        assert_ne!(online_reps.quorum_delta(), Amount::zero(), "quorum delta");
+        assert_ne!(online_reps.quorum_percent(), 0, "quorum percent");
+        assert_ne!(
+            online_reps.online_weight_minimum(),
+            Amount::zero(),
+            "online minimum"
+        );
+        assert_ne!(online_reps.online_weight(), Amount::zero(), "online weight");
+        assert_ne!(
+            online_reps.trended_or_minimum_weight(),
+            Amount::zero(),
+            "trended or minimum"
+        );
+        assert_ne!(online_reps.peered_weight(), Amount::zero(), "peered");
     }
 }
