@@ -1,4 +1,4 @@
-use rsnano_core::{utils::ContainerInfo, BlockHash, Root, Vote};
+use rsnano_core::{utils::ContainerInfo, BlockHash, Networks, Root, Vote};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     mem::size_of,
@@ -29,7 +29,18 @@ struct LocalVote {
 }
 
 impl LocalVoteHistory {
-    pub fn new(max_cache: usize) -> Self {
+    pub fn new(network: Networks) -> Self {
+        Self::with_max_cache(Self::max_cache_for(network))
+    }
+
+    fn max_cache_for(network: Networks) -> usize {
+        match network {
+            Networks::NanoDevNetwork => 256,
+            _ => 128 * 1024,
+        }
+    }
+
+    pub fn with_max_cache(max_cache: usize) -> Self {
         Self {
             data: Mutex::new(LocalVoteHistoryData::new()),
             max_cache,
@@ -163,7 +174,7 @@ mod tests {
 
     #[test]
     fn empty_history() {
-        let history = LocalVoteHistory::new(256);
+        let history = LocalVoteHistory::with_max_cache(256);
         assert!(!history.exists(&Root::from(1)));
         assert_eq!(
             history
@@ -176,7 +187,7 @@ mod tests {
 
     #[test]
     fn add_one_vote() {
-        let history = LocalVoteHistory::new(256);
+        let history = LocalVoteHistory::with_max_cache(256);
         let vote = Arc::new(Vote::null());
         let root = Root::from(1);
         let hash = BlockHash::from(2);
@@ -198,7 +209,7 @@ mod tests {
 
     #[test]
     fn add_two_votes() {
-        let history = LocalVoteHistory::new(256);
+        let history = LocalVoteHistory::with_max_cache(256);
         let vote1a = Arc::new(Vote::null());
         let vote1b = Arc::new(Vote::null());
         let root = Root::from(1);
@@ -213,7 +224,7 @@ mod tests {
 
     #[test]
     fn basic() {
-        let history = LocalVoteHistory::new(256);
+        let history = LocalVoteHistory::with_max_cache(256);
         let root = Root::from(1);
         let hash = BlockHash::from(2);
         let vote1a = Arc::new(Vote::null());
@@ -233,7 +244,7 @@ mod tests {
 
     #[test]
     fn basic2() {
-        let history = LocalVoteHistory::new(256);
+        let history = LocalVoteHistory::with_max_cache(256);
         let root = Root::from(1);
         let hash = BlockHash::from(2);
         let vote1a = Arc::new(Vote::null());

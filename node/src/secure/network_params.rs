@@ -1,7 +1,4 @@
-use crate::{
-    config::NetworkConstants, BootstrapConstants, NodeConstants, PortmappingConstants,
-    VotingConstants,
-};
+use crate::{config::NetworkConstants, NodeConstants, PortmappingConstants};
 use once_cell::sync::Lazy;
 use rsnano_core::{work::WorkThresholds, Networks};
 use rsnano_ledger::LedgerConstants;
@@ -15,10 +12,8 @@ pub struct NetworkParams {
     pub work: WorkThresholds,
     pub network: NetworkConstants,
     pub ledger: LedgerConstants,
-    pub voting: VotingConstants,
     pub node: NodeConstants,
     pub portmapping: PortmappingConstants,
-    pub bootstrap: BootstrapConstants,
 }
 
 impl NetworkParams {
@@ -43,10 +38,8 @@ impl NetworkParams {
             },
             work: work.clone(),
             ledger: LedgerConstants::new(work.clone(), network),
-            voting: VotingConstants::new(&network_constants),
             node: NodeConstants::new(&network_constants),
             portmapping: PortmappingConstants::new(&network_constants),
-            bootstrap: BootstrapConstants::new(&network_constants),
             network: network_constants,
         }
     }

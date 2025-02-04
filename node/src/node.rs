@@ -185,6 +185,7 @@ impl Node {
 
     fn new(args: NodeArgs, is_nulled: bool, mut node_id_key_file: NodeIdKeyFile) -> Self {
         let network_params = args.network_params;
+        let current_network = network_params.network.current_network;
         let config = args.config;
         let flags = args.flags;
         let runtime = args.runtime;
@@ -236,7 +237,7 @@ impl Node {
             || network_params.network.is_beta_network())
             && !flags.inactive_node
         {
-            get_bootstrap_weights(network_params.network.current_network)
+            get_bootstrap_weights(current_network)
         } else {
             (0, HashMap::new())
         };
@@ -315,9 +316,7 @@ impl Node {
                 .rep_weights(rep_weights.clone())
                 .online_weight_minimum(config.online_weight_minimum)
                 .representative_weight_minimum(config.representative_vote_weight_minimum)
-                .weight_interval(OnlineReps::default_interval_for(
-                    network_params.network.current_network,
-                ))
+                .weight_interval(OnlineReps::default_interval_for(current_network))
                 .finish(),
         ));
 
@@ -382,7 +381,9 @@ impl Node {
         ));
         dead_channel_cleanup.add_step(VoteProcessorQueueCleanup::new(vote_processor_queue.clone()));
 
-        let history = Arc::new(LocalVoteHistory::new(network_params.voting.max_cache));
+        let history = Arc::new(LocalVoteHistory::new(
+            network_params.network.current_network,
+        ));
 
         let confirming_set = Arc::new(ConfirmingSet::new(
             config.confirming_set.clone(),

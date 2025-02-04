@@ -368,7 +368,7 @@ fn vote_spacing_vote_generator() {
             Direction::In
         )
     );
-    std::thread::sleep(node.network_params.voting.delay);
+    std::thread::sleep(node.vote_generators.voting_delay());
 
     node.vote_generators
         .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send2.hash().into());
@@ -447,7 +447,7 @@ fn vote_spacing_rapid() {
         1,
     );
 
-    std::thread::sleep(node.network_params.voting.delay);
+    std::thread::sleep(node.vote_generators.voting_delay());
 
     node.vote_generators
         .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send2.hash().into());

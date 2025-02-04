@@ -3,12 +3,12 @@ use crate::{
     config::NodeConfig, consensus::VoteBroadcaster, stats::Stats, transport::MessageSender,
     wallets::Wallets, NetworkParams,
 };
-use rsnano_core::{utils::ContainerInfo, BlockHash, Root, SavedBlock};
+use rsnano_core::{utils::ContainerInfo, BlockHash, Networks, Root, SavedBlock};
 use rsnano_ledger::Ledger;
 use rsnano_network::ChannelId;
 use rsnano_nullable_clock::SteadyClock;
 use rsnano_output_tracker::{OutputListenerMt, OutputTrackerMt};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 #[derive(Clone)]
 pub struct VoteGenerationEvent {
@@ -21,9 +21,17 @@ pub struct VoteGenerators {
     non_final_vote_generator: VoteGenerator,
     final_vote_generator: VoteGenerator,
     vote_listener: OutputListenerMt<VoteGenerationEvent>,
+    voting_delay: Duration,
 }
 
 impl VoteGenerators {
+    fn voting_delay_for(network: Networks) -> Duration {
+        match network {
+            Networks::NanoDevNetwork => Duration::from_secs(1),
+            _ => Duration::from_secs(15),
+        }
+    }
+
     pub(crate) fn new(
         ledger: Arc<Ledger>,
         wallets: Arc<Wallets>,
@@ -35,6 +43,8 @@ impl VoteGenerators {
         message_sender: MessageSender,
         clock: Arc<SteadyClock>,
     ) -> Self {
+        let voting_delay = Self::voting_delay_for(network_params.network.current_network);
+
         let non_final_vote_generator = VoteGenerator::new(
             ledger.clone(),
             wallets.clone(),
@@ -42,7 +52,7 @@ impl VoteGenerators {
             false, //none-final
             stats.clone(),
             message_sender.clone(),
-            network_params.voting.delay,
+            voting_delay,
             config.vote_generator_delay,
             vote_broadcaster.clone(),
             clock.clone(),
@@ -55,7 +65,7 @@ impl VoteGenerators {
             true, //final
             stats,
             message_sender.clone(),
-            network_params.voting.delay,
+            voting_delay,
             config.vote_generator_delay,
             vote_broadcaster,
             clock,
@@ -65,7 +75,12 @@ impl VoteGenerators {
             non_final_vote_generator,
             final_vote_generator,
             vote_listener: OutputListenerMt::new(),
+            voting_delay,
         }
+    }
+
+    pub fn voting_delay(&self) -> Duration {
+        self.voting_delay
     }
 
     pub fn start(&self) {

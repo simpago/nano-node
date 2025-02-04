@@ -23,4 +23,10 @@ mod tests {
             Amount::nano(42)
         );
     }
+
+    #[test]
+    fn invalid_amount() {
+        let err = nano_to_raw(AmountRpcMessage::new(Amount::nano(300_000_000))).unwrap_err();
+        assert_eq!("Invalid amount number", err.to_string());
+    }
 }
