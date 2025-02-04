@@ -5,7 +5,6 @@ use tracing::error;
 
 pub(crate) struct WalletBackup {
     pub data_path: PathBuf,
-    pub backup_interval: Duration,
     pub workers: Arc<dyn ThreadPool>,
     pub wallets: Arc<Wallets>,
 }
@@ -14,21 +13,11 @@ impl WalletBackup {
     pub fn start(&self) {
         let mut backup_path = self.data_path.clone();
         backup_path.push("backup");
-        ongoing_backup(
-            backup_path,
-            self.backup_interval.clone(),
-            self.workers.clone(),
-            self.wallets.clone(),
-        );
+        ongoing_backup(backup_path, self.workers.clone(), self.wallets.clone());
     }
 }
 
-fn ongoing_backup(
-    backup_path: PathBuf,
-    backup_interval: Duration,
-    workers: Arc<dyn ThreadPool>,
-    wallets: Arc<Wallets>,
-) {
+fn ongoing_backup(backup_path: PathBuf, workers: Arc<dyn ThreadPool>, wallets: Arc<Wallets>) {
     if let Err(e) = wallets.backup(&backup_path) {
         error!(error = ?e, "Could not create backup of wallets");
     }
@@ -37,7 +26,7 @@ fn ongoing_backup(
     let wallets_w = Arc::downgrade(&wallets);
 
     workers.post_delayed(
-        backup_interval,
+        BACKUP_INTERVAL,
         Box::new(move || {
             let Some(workers) = workers_w.upgrade() else {
                 return;
@@ -45,7 +34,9 @@ fn ongoing_backup(
             let Some(wallets) = wallets_w.upgrade() else {
                 return;
             };
-            ongoing_backup(backup_path, backup_interval, workers, wallets);
+            ongoing_backup(backup_path, workers, wallets);
         }),
     )
 }
+
+const BACKUP_INTERVAL: Duration = Duration::from_secs(60 * 5);

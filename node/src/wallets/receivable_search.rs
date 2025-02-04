@@ -1,14 +1,35 @@
+use rsnano_core::Networks;
+
 use super::{Wallets, WalletsExt};
 use crate::utils::ThreadPool;
 use std::{sync::Arc, time::Duration};
 
 pub(crate) struct ReceivableSearch {
-    pub wallets: Arc<Wallets>,
-    pub workers: Arc<dyn ThreadPool>,
-    pub interval: Duration,
+    wallets: Arc<Wallets>,
+    workers: Arc<dyn ThreadPool>,
+    interval: Duration,
 }
 
 impl ReceivableSearch {
+    pub(crate) fn new(
+        wallets: Arc<Wallets>,
+        workers: Arc<dyn ThreadPool>,
+        network: Networks,
+    ) -> Self {
+        Self {
+            wallets,
+            workers,
+            interval: Self::interval_for(network),
+        }
+    }
+
+    fn interval_for(network: Networks) -> Duration {
+        match network {
+            Networks::NanoDevNetwork => Duration::from_secs(1),
+            _ => Duration::from_secs(60 * 5),
+        }
+    }
+
     pub fn start(&self) {
         search_receivables(
             self.wallets.clone(),

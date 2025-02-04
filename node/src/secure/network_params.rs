@@ -1,4 +1,4 @@
-use crate::{config::NetworkConstants, NodeConstants};
+use crate::config::NetworkConstants;
 use once_cell::sync::Lazy;
 use rsnano_core::{work::WorkThresholds, Networks};
 use rsnano_ledger::LedgerConstants;
@@ -12,7 +12,6 @@ pub struct NetworkParams {
     pub work: WorkThresholds,
     pub network: NetworkConstants,
     pub ledger: LedgerConstants,
-    pub node: NodeConstants,
 }
 
 impl NetworkParams {
@@ -37,7 +36,6 @@ impl NetworkParams {
             },
             work: work.clone(),
             ledger: LedgerConstants::new(work.clone(), network),
-            node: NodeConstants::new(&network_constants),
             network: network_constants,
         }
     }

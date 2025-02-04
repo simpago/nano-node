@@ -1164,16 +1164,12 @@ impl Node {
 
         let wallet_backup = WalletBackup {
             data_path: application_path.clone(),
-            backup_interval: Duration::from_secs(network_params.node.backup_interval_m as u64 * 60),
             workers: workers.clone(),
             wallets: wallets.clone(),
         };
 
-        let receivable_search = ReceivableSearch {
-            wallets: wallets.clone(),
-            workers: workers.clone(),
-            interval: Duration::from_secs(network_params.node.search_pending_interval_s as u64),
-        };
+        let receivable_search =
+            ReceivableSearch::new(wallets.clone(), workers.clone(), current_network);
 
         let message_flooder = Arc::new(Mutex::new(message_flooder.clone()));
 
