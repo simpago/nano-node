@@ -34,7 +34,6 @@ impl VoteBroadcaster {
             .unwrap()
             .flood_prs_and_some_non_prs(&ack, TrafficType::Vote, 2.0);
 
-        self.vote_processor_queue
-            .vote2(vote, None, VoteSource::Live);
+        self.vote_processor_queue.vote(vote, None, VoteSource::Live);
     }
 }

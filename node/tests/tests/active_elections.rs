@@ -61,7 +61,7 @@ fn fork_replacement_tally() {
         let vote = Vote::new_final(&DEV_GENESIS_KEY, vec![send.hash(), open.hash()]);
         node1
             .vote_processor_queue
-            .vote2(Arc::new(vote), None, VoteSource::Live);
+            .vote(Arc::new(vote), None, VoteSource::Live);
     }
 
     assert_timely_eq2(
@@ -101,7 +101,7 @@ fn fork_replacement_tally() {
         let vote = Arc::new(Vote::new(&keys[i], 0, 0, vec![fork.hash()]));
         node1
             .vote_processor_queue
-            .vote2(vote, None, VoteSource::Live);
+            .vote(vote, None, VoteSource::Live);
         assert_timely2(|| node1.vote_cache.lock().unwrap().find(&fork.hash()).len() > 0);
         node1.process_active(fork);
     }
@@ -155,7 +155,7 @@ fn fork_replacement_tally() {
     let vote = Arc::new(Vote::new(&DEV_GENESIS_KEY, 0, 0, vec![send_last.hash()]));
     node1
         .vote_processor_queue
-        .vote2(vote, None, VoteSource::Live);
+        .vote(vote, None, VoteSource::Live);
     // ensure vote arrives before the block
     assert_timely_eq2(
         || {
@@ -201,8 +201,7 @@ fn inactive_votes_cache_basic() {
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let send = lattice.genesis().send(&key, Amount::raw(100));
     let vote = Arc::new(Vote::new_final(&DEV_GENESIS_KEY, vec![send.hash()]));
-    node.vote_processor_queue
-        .vote2(vote, None, VoteSource::Live);
+    node.vote_processor_queue.vote(vote, None, VoteSource::Live);
     assert_timely_eq(
         Duration::from_secs(5),
         || node.vote_cache.lock().unwrap().size(),
@@ -232,8 +231,7 @@ fn non_final() {
 
     // Non-final vote
     let vote = Arc::new(Vote::new(&DEV_GENESIS_KEY, 0, 0, vec![send.hash()]));
-    node.vote_processor_queue
-        .vote2(vote, None, VoteSource::Live);
+    node.vote_processor_queue.vote(vote, None, VoteSource::Live);
     assert_timely_eq(
         Duration::from_secs(5),
         || node.vote_cache.lock().unwrap().size(),
@@ -286,8 +284,7 @@ fn inactive_votes_cache_fork() {
     let send2 = lattice2.genesis().send(&key, 200);
 
     let vote = Arc::new(Vote::new_final(&DEV_GENESIS_KEY, vec![send1.hash()]));
-    node.vote_processor_queue
-        .vote2(vote, None, VoteSource::Live);
+    node.vote_processor_queue.vote(vote, None, VoteSource::Live);
 
     assert_timely_eq(
         Duration::from_secs(5),
@@ -349,7 +346,7 @@ fn inactive_votes_cache_existing_vote() {
     // Insert vote
     let vote1 = Arc::new(Vote::new(&key, 0, 0, vec![send.hash()]));
     node.vote_processor_queue
-        .vote2(vote1.clone(), None, VoteSource::Live);
+        .vote(vote1.clone(), None, VoteSource::Live);
 
     assert_timely_eq(Duration::from_secs(5), || election.vote_count(), 2);
 
@@ -418,11 +415,11 @@ fn inactive_votes_cache_multiple_votes() {
     // Process votes
     let vote1 = Arc::new(Vote::new(&key, 0, 0, vec![send1.hash()]));
     node.vote_processor_queue
-        .vote2(vote1, None, VoteSource::Live);
+        .vote(vote1, None, VoteSource::Live);
 
     let vote2 = Arc::new(Vote::new(&DEV_GENESIS_KEY, 0, 0, vec![send1.hash()]));
     node.vote_processor_queue
-        .vote2(vote2, None, VoteSource::Live);
+        .vote(vote2, None, VoteSource::Live);
 
     assert_timely_eq(
         Duration::from_secs(5),
@@ -477,9 +474,8 @@ fn inactive_votes_cache_election_start() {
         0,
         vec![open1.hash(), open2.hash(), send4.hash()],
     ));
-    let channel = ChannelId::from(111);
     node.vote_processor_queue
-        .vote(vote1, channel, VoteSource::Live);
+        .vote(vote1, None, VoteSource::Live);
     assert_timely_eq2(|| node.vote_cache.lock().unwrap().size(), 3);
     assert_eq!(node.active.len(), 0);
     assert_eq!(1, node.ledger.cemented_count());
@@ -492,7 +488,7 @@ fn inactive_votes_cache_election_start() {
         vec![open1.hash(), open2.hash(), send4.hash()],
     ));
     node.vote_processor_queue
-        .vote(vote2, channel, VoteSource::Live);
+        .vote(vote2, None, VoteSource::Live);
     // Only election for send1 should start, other blocks are missing dependencies and don't have enough final weight
     assert_timely_eq2(|| node.active.len(), 1);
     assert!(node.vote_router.active(&send1.hash()));
@@ -503,7 +499,7 @@ fn inactive_votes_cache_election_start() {
         vec![open1.hash(), open2.hash(), send4.hash()],
     ));
     node.vote_processor_queue
-        .vote(vote0, channel, VoteSource::Live);
+        .vote(vote0, None, VoteSource::Live);
     assert_timely_eq2(|| node.active.len(), 0);
     assert_timely_eq2(|| node.ledger.cemented_count(), 5);
     // Confirmation on disk may lag behind cemented_count cache
@@ -581,7 +577,7 @@ fn republish_winner() {
     let vote = Arc::new(Vote::new_final(&DEV_GENESIS_KEY, vec![fork.hash()]));
     node1
         .vote_processor_queue
-        .vote(vote, ChannelId::from(111), VoteSource::Live);
+        .vote(vote, None, VoteSource::Live);
     assert_timely(Duration::from_secs(5), || node1.active.confirmed(&election));
 
     assert_eq!(fork.hash(), election.winner_hash().unwrap());
@@ -1076,7 +1072,7 @@ fn conflicting_block_vote_existing_election() {
 
     // Vote for conflicting block, but the block does not yet exist in the ledger
     node.vote_processor_queue
-        .vote(vote_fork, ChannelId::from(111), VoteSource::Live);
+        .vote(vote_fork, None, VoteSource::Live);
 
     // Block now gets processed
     assert_eq!(node.process_local(fork.clone()).unwrap(), BlockStatus::Fork);

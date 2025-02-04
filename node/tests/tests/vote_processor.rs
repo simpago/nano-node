@@ -102,15 +102,13 @@ fn invalid_signature() {
     let vote_invalid = Arc::new(vote_invalid);
     let election = start_election(&node, &chain[0].hash());
     assert_eq!(1, election.vote_count());
-    let channel_id = ChannelId::from(42);
 
     node.vote_processor_queue
-        .vote(vote_invalid, channel_id, VoteSource::Live);
+        .vote(vote_invalid, None, VoteSource::Live);
 
     assert_timely_eq(Duration::from_secs(5), || election.vote_count(), 1);
 
-    node.vote_processor_queue
-        .vote(vote, channel_id, VoteSource::Live);
+    node.vote_processor_queue.vote(vote, None, VoteSource::Live);
 
     assert_timely_eq(Duration::from_secs(5), || election.vote_count(), 2);
 }
@@ -137,7 +135,7 @@ fn overflow() {
     for _ in 0..TOTAL {
         if !node
             .vote_processor_queue
-            .vote(vote.clone(), ChannelId::from(42), VoteSource::Live)
+            .vote(vote.clone(), None, VoteSource::Live)
         {
             not_processed += 1;
         }

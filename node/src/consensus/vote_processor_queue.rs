@@ -55,22 +55,12 @@ impl VoteProcessorQueue {
     }
 
     /// Queue vote for processing. @returns true if the vote was queued
-    pub fn vote2(
-        &self,
-        vote: Arc<Vote>,
-        channel: Option<Arc<Channel>>,
-        source: VoteSource,
-    ) -> bool {
+    pub fn vote(&self, vote: Arc<Vote>, channel: Option<Arc<Channel>>, source: VoteSource) -> bool {
         let channel_id = match channel {
             Some(channel) => channel.channel_id(),
             None => ChannelId::LOOPBACK,
         };
 
-        self.vote(vote, channel_id, source)
-    }
-
-    /// Queue vote for processing. @returns true if the vote was queued
-    pub fn vote(&self, vote: Arc<Vote>, channel_id: ChannelId, source: VoteSource) -> bool {
         let tier = self.rep_tiers.tier(&vote.voting_account);
 
         let added = {

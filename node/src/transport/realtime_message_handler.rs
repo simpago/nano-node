@@ -126,7 +126,7 @@ impl RealtimeMessageHandler {
                     false => VoteSource::Live,
                 };
 
-                let added = self.vote_processor_queue.vote2(
+                let added = self.vote_processor_queue.vote(
                     Arc::new(ack.vote().clone()),
                     Some(channel.clone()),
                     source,
