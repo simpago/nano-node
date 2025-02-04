@@ -7,20 +7,20 @@ impl RpcCommandHandler {
         &self,
         args: ConfirmationQuorumArgs,
     ) -> ConfirmationQuorumResponse {
-        let quorum = self.node.online_reps.lock().unwrap();
+        let online_reps = self.node.online_reps.lock().unwrap();
 
         let mut result = ConfirmationQuorumResponse {
-            quorum_delta: quorum.quorum_delta(),
-            online_weight_quorum_percent: quorum.quorum_percent().into(),
-            online_weight_minimum: quorum.online_weight_minimum(),
-            online_stake_total: quorum.online_weight(),
-            trended_stake_total: quorum.trended_or_minimum_weight(),
-            peers_stake_total: quorum.peered_weight(),
+            quorum_delta: online_reps.quorum_delta(),
+            online_weight_quorum_percent: online_reps.quorum_percent().into(),
+            online_weight_minimum: online_reps.online_weight_minimum(),
+            online_stake_total: online_reps.online_weight(),
+            trended_stake_total: online_reps.trended_or_minimum_weight(),
+            peers_stake_total: online_reps.peered_weight(),
             peers: None,
         };
 
         if args.peer_details.unwrap_or_default().inner() {
-            let peers = quorum
+            let peers = online_reps
                 .peered_reps()
                 .iter()
                 .map(|rep| {
@@ -45,5 +45,19 @@ impl RpcCommandHandler {
         }
 
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::command_handler::test_rpc_command;
+    use rsnano_core::Amount;
+    use rsnano_rpc_messages::{ConfirmationQuorumResponse, RpcCommand};
+
+    #[tokio::test]
+    async fn confirmation_quorum() {
+        let result: ConfirmationQuorumResponse =
+            test_rpc_command(RpcCommand::confirmation_quorum());
+        assert!(result.quorum_delta > Amount::zero());
     }
 }

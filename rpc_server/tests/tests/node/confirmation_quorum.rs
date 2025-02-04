@@ -11,7 +11,7 @@ fn confirmation_quorum() {
 
     let result = node
         .runtime
-        .block_on(async { server.client.confirmation_quorum(None).await.unwrap() });
+        .block_on(async { server.client.confirmation_quorum().await.unwrap() });
 
     let reps = node.online_reps.lock().unwrap();
 
@@ -58,9 +58,13 @@ fn confirmation_quorum_peer_details() {
 
     let server = setup_rpc_client_and_server(node1.clone(), false);
 
-    let result = node0
-        .runtime
-        .block_on(async { server.client.confirmation_quorum(Some(true)).await.unwrap() });
+    let result = node0.runtime.block_on(async {
+        server
+            .client
+            .confirmation_quorum_with_details()
+            .await
+            .unwrap()
+    });
 
     let reps = node0.online_reps.lock().unwrap();
 

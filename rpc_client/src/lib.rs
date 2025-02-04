@@ -602,11 +602,12 @@ impl NanoRpcClient {
             .await
     }
 
-    pub async fn confirmation_quorum(
-        &self,
-        peer_details: Option<bool>,
-    ) -> Result<ConfirmationQuorumResponse> {
-        self.request(&RpcCommand::confirmation_quorum(peer_details))
+    pub async fn confirmation_quorum(&self) -> Result<ConfirmationQuorumResponse> {
+        self.request(&RpcCommand::confirmation_quorum()).await
+    }
+
+    pub async fn confirmation_quorum_with_details(&self) -> Result<ConfirmationQuorumResponse> {
+        self.request(&RpcCommand::confirmation_quorum_with_details())
             .await
     }
 

@@ -4,8 +4,14 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddrV6;
 
 impl RpcCommand {
-    pub fn confirmation_quorum(peer_details: Option<bool>) -> Self {
-        Self::ConfirmationQuorum(ConfirmationQuorumArgs::new(peer_details))
+    pub fn confirmation_quorum() -> Self {
+        Self::ConfirmationQuorum(ConfirmationQuorumArgs { peer_details: None })
+    }
+
+    pub fn confirmation_quorum_with_details() -> Self {
+        Self::ConfirmationQuorum(ConfirmationQuorumArgs {
+            peer_details: Some(true.into()),
+        })
     }
 }
 
@@ -13,14 +19,6 @@ impl RpcCommand {
 pub struct ConfirmationQuorumArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_details: Option<RpcBool>,
-}
-
-impl ConfirmationQuorumArgs {
-    pub fn new(peer_details: Option<bool>) -> Self {
-        Self {
-            peer_details: peer_details.map(|i| i.into()),
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
