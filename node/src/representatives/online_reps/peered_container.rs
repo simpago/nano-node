@@ -1,8 +1,8 @@
 use super::PeeredRep;
 use rsnano_core::{Account, PublicKey};
-use rsnano_network::ChannelId;
+use rsnano_network::{Channel, ChannelId};
 use rsnano_nullable_clock::Timestamp;
-use std::{collections::HashMap, mem::size_of};
+use std::{collections::HashMap, mem::size_of, sync::Arc};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum InsertResult {
@@ -27,6 +27,15 @@ impl PeeredContainer {
             by_account: HashMap::new(),
             by_channel_id: HashMap::new(),
         }
+    }
+
+    pub fn update_or_insert2(
+        &mut self,
+        account: PublicKey,
+        channel: Arc<Channel>,
+        now: Timestamp,
+    ) -> InsertResult {
+        self.update_or_insert(account, channel.channel_id(), now)
     }
 
     pub fn update_or_insert(
@@ -134,10 +143,11 @@ mod tests {
     fn insert_one() {
         let mut container = PeeredContainer::new();
         let account = PublicKey::from(1);
-        let channel_id = ChannelId::from(2);
+        let channel = Arc::new(Channel::new_test_instance());
+        let channel_id = channel.channel_id();
         let now = Timestamp::new_test_instance();
         assert_eq!(
-            container.update_or_insert(account, channel_id, now),
+            container.update_or_insert2(account, channel, now),
             InsertResult::Inserted
         );
         assert_eq!(container.len(), 1);
@@ -170,14 +180,16 @@ mod tests {
     fn insert_two() {
         let mut container = PeeredContainer::new();
         let now = Timestamp::new_test_instance();
+        let channel1 = Arc::new(Channel::new_test_instance_with_id(101));
+        let channel2 = Arc::new(Channel::new_test_instance_with_id(102));
         assert_eq!(
-            container.update_or_insert(PublicKey::from(100), ChannelId::from(101), now,),
+            container.update_or_insert2(PublicKey::from(100), channel1, now,),
             InsertResult::Inserted
         );
         assert_eq!(
-            container.update_or_insert(
+            container.update_or_insert2(
                 PublicKey::from(200),
-                ChannelId::from(201),
+                channel2,
                 now + Duration::from_secs(1),
             ),
             InsertResult::Inserted
@@ -191,9 +203,10 @@ mod tests {
     fn remove_one() {
         let mut container = PeeredContainer::new();
 
-        let channel_id = ChannelId::from(101);
+        let channel = Arc::new(Channel::new_test_instance());
+        let channel_id = channel.channel_id();
         let now = Timestamp::new_test_instance();
-        container.update_or_insert(PublicKey::from(100), channel_id, now);
+        container.update_or_insert2(PublicKey::from(100), channel, now);
 
         container.remove(channel_id);
         assert_eq!(container.len(), 0);
@@ -205,18 +218,13 @@ mod tests {
         let mut container = PeeredContainer::new();
 
         let now = Timestamp::new_test_instance();
-        let channel_id = ChannelId::from(1);
-        container.update_or_insert(PublicKey::from(100), ChannelId::from(100), now);
-        container.update_or_insert(
-            PublicKey::from(200),
-            channel_id,
-            now + Duration::from_secs(1),
-        );
-        container.update_or_insert(
-            PublicKey::from(300),
-            ChannelId::from(101),
-            now + Duration::from_secs(2),
-        );
+        let channel1 = Arc::new(Channel::new_test_instance_with_id(1));
+        let channel2 = Arc::new(Channel::new_test_instance_with_id(2));
+        let channel3 = Arc::new(Channel::new_test_instance_with_id(3));
+        let channel_id = channel2.channel_id();
+        container.update_or_insert2(PublicKey::from(100), channel1, now);
+        container.update_or_insert2(PublicKey::from(200), channel2, now + Duration::from_secs(1));
+        container.update_or_insert2(PublicKey::from(300), channel3, now + Duration::from_secs(2));
 
         container.remove(channel_id);
         assert_eq!(container.len(), 2);
@@ -228,13 +236,11 @@ mod tests {
         let mut container = PeeredContainer::new();
         let now = Timestamp::new_test_instance();
 
-        let channel_id = ChannelId::from(1);
-        container.update_or_insert(PublicKey::from(100), ChannelId::from(100), now);
-        container.update_or_insert(
-            PublicKey::from(200),
-            channel_id,
-            now + Duration::from_secs(1),
-        );
+        let channel1 = Arc::new(Channel::new_test_instance_with_id(1));
+        let channel2 = Arc::new(Channel::new_test_instance_with_id(2));
+        let channel_id = channel2.channel_id();
+        container.update_or_insert2(PublicKey::from(100), channel1, now);
+        container.update_or_insert2(PublicKey::from(200), channel2, now + Duration::from_secs(1));
 
         let new_value = now + Duration::from_secs(1234);
         container.modify_by_channel(channel_id, |rep| {
@@ -256,10 +262,10 @@ mod tests {
         let now = Timestamp::new_test_instance();
 
         let account = PublicKey::from(1);
-        let channel_id = ChannelId::from(2);
-        container.update_or_insert(account, channel_id, now);
+        let channel = Arc::new(Channel::new_test_instance());
+        container.update_or_insert2(account, channel.clone(), now);
         assert_eq!(
-            container.update_or_insert(account, channel_id, now + Duration::from_secs(2)),
+            container.update_or_insert2(account, channel, now + Duration::from_secs(2)),
             InsertResult::Updated
         );
         assert_eq!(container.len(), 1);
@@ -271,16 +277,16 @@ mod tests {
         let now = Timestamp::new_test_instance();
 
         let account = PublicKey::from(1);
-        let channel_a = ChannelId::from(2);
-        let channel_b = ChannelId::from(3);
-        container.update_or_insert(account, channel_a, now);
+        let channel_a = Arc::new(Channel::new_test_instance_with_id(2));
+        let channel_b = Arc::new(Channel::new_test_instance_with_id(3));
+        container.update_or_insert2(account, channel_a.clone(), now);
         assert_eq!(
-            container.update_or_insert(account, channel_b, now + Duration::from_secs(2)),
-            InsertResult::ChannelChanged(channel_a)
+            container.update_or_insert2(account, channel_b.clone(), now + Duration::from_secs(2)),
+            InsertResult::ChannelChanged(channel_a.channel_id())
         );
         assert_eq!(container.len(), 1);
-        assert_eq!(container.iter_by_channel(channel_a).count(), 0);
-        assert_eq!(container.iter_by_channel(channel_b).count(), 1);
+        assert_eq!(container.iter_by_channel(channel_a.channel_id()).count(), 0);
+        assert_eq!(container.iter_by_channel(channel_b.channel_id()).count(), 1);
     }
 
     #[test]
@@ -290,17 +296,17 @@ mod tests {
 
         let account_a = PublicKey::from(1);
         let account_b = PublicKey::from(2);
-        let channel = ChannelId::from(100);
+        let channel = Arc::new(Channel::new_test_instance());
         assert_eq!(
-            container.update_or_insert(account_a, channel, now),
+            container.update_or_insert2(account_a, channel.clone(), now),
             InsertResult::Inserted,
         );
         assert_eq!(
-            container.update_or_insert(account_b, channel, now),
+            container.update_or_insert2(account_b, channel.clone(), now),
             InsertResult::Inserted,
         );
 
         assert_eq!(container.len(), 2);
-        assert_eq!(container.iter_by_channel(channel).count(), 2);
+        assert_eq!(container.iter_by_channel(channel.channel_id()).count(), 2);
     }
 }

@@ -97,8 +97,12 @@ impl Channel {
     }
 
     pub fn new_test_instance() -> Self {
+        Self::new_test_instance_with_id(42)
+    }
+
+    pub fn new_test_instance_with_id(id: impl Into<ChannelId>) -> Self {
         Self::new(
-            ChannelId::from(42),
+            id.into(),
             TEST_ENDPOINT_1,
             TEST_ENDPOINT_2,
             ChannelDirection::Outbound,

@@ -11,7 +11,7 @@ pub use peered_rep::PeeredRep;
 use primitive_types::U256;
 use rsnano_core::{utils::ContainerInfo, Amount, Networks, PublicKey};
 use rsnano_ledger::RepWeightCache;
-use rsnano_network::ChannelId;
+use rsnano_network::{Channel, ChannelId};
 use rsnano_nullable_clock::Timestamp;
 use std::{cmp::max, sync::Arc, time::Duration};
 use {online_container::OnlineContainer, peered_container::PeeredContainer};
@@ -207,6 +207,16 @@ impl OnlineReps {
     }
 
     /// Add rep_account to the set of peered representatives
+    pub fn vote_observed_directly2(
+        &mut self,
+        rep_account: PublicKey,
+        channel: Arc<Channel>,
+        now: Timestamp,
+    ) -> InsertResult {
+        self.vote_observed_directly(rep_account, channel.channel_id(), now)
+    }
+
+    /// Add rep_account to the set of peered representatives
     pub fn vote_observed_directly(
         &mut self,
         rep_account: PublicKey,
@@ -305,7 +315,8 @@ mod tests {
         weights.set(account, weight);
         let mut online_reps = OnlineReps::builder().rep_weights(weights).finish();
 
-        online_reps.vote_observed_directly(account, ChannelId::from(1), clock.now());
+        let channel = Arc::new(Channel::new_test_instance());
+        online_reps.vote_observed_directly2(account, channel, clock.now());
 
         assert_eq!(online_reps.online_weight(), weight, "online");
         assert_eq!(online_reps.peered_weight(), weight, "peered");
@@ -348,14 +359,15 @@ mod tests {
         let weights = Arc::new(RepWeightCache::new());
         let mut online_reps = OnlineReps::builder().rep_weights(weights.clone()).finish();
         let rep_account = PublicKey::from(42);
-        let channel_id = ChannelId::from(1);
+        let channel = Arc::new(Channel::new_test_instance());
+        let channel_id = channel.channel_id();
         weights.set(rep_account, Amount::nano(50_000));
 
         // unknown channel
         assert_eq!(online_reps.is_pr(channel_id), false);
 
         // below PR limit
-        online_reps.vote_observed_directly(rep_account, channel_id, clock.now());
+        online_reps.vote_observed_directly2(rep_account, channel, clock.now());
         assert_eq!(online_reps.is_pr(channel_id), false);
 
         // above PR limit
