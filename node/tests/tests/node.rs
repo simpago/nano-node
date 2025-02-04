@@ -2275,7 +2275,7 @@ fn rep_crawler_rep_remove() {
     let vote_rep1 = Arc::new(Vote::new(&key_rep1, 0, 0, vec![*DEV_GENESIS_HASH]));
     searching_node
         .rep_crawler
-        .force_process(vote_rep1, channel_rep1.channel_id());
+        .force_process2(vote_rep1, channel_rep1.clone());
     assert_timely_eq(
         Duration::from_secs(5),
         || {
@@ -2327,7 +2327,7 @@ fn rep_crawler_rep_remove() {
     let vote_genesis_rep = Arc::new(Vote::new(&DEV_GENESIS_KEY, 0, 0, vec![*DEV_GENESIS_HASH]));
     searching_node
         .rep_crawler
-        .force_process(vote_genesis_rep, channel_genesis_rep.channel_id());
+        .force_process2(vote_genesis_rep, channel_genesis_rep);
 
     assert_timely_eq(
         Duration::from_secs(10),
@@ -2371,7 +2371,7 @@ fn rep_crawler_rep_remove() {
     let vote_rep2 = Arc::new(Vote::new(&key_rep2, 0, 0, vec![*DEV_GENESIS_HASH]));
     searching_node
         .rep_crawler
-        .force_process(vote_rep2, channel_rep2.channel_id());
+        .force_process2(vote_rep2, channel_rep2);
 
     assert_timely_eq(
         Duration::from_secs(10),

@@ -76,9 +76,7 @@ fn quorum_minimum_update_weight_before_quorum_checks() {
         .clone();
 
     let vote2 = Arc::new(Vote::new_final(&key1, vec![send1.hash()]));
-    node1
-        .rep_crawler
-        .force_process(vote2.clone(), channel.channel_id());
+    node1.rep_crawler.force_process2(vote2.clone(), channel);
 
     assert_eq!(node1.active.confirmed(&election), false);
     // Modify online_m for online_reps to more than is available, this checks that voting below updates it to current online reps.

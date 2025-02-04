@@ -661,9 +661,9 @@ fn confirm_election_by_request() {
     assert_eq!(peers.is_empty(), false);
 
     // Add representative (node1) to disabled rep crawler of node2
-    node2.online_reps.lock().unwrap().vote_observed_directly(
+    node2.online_reps.lock().unwrap().vote_observed_directly2(
         *DEV_GENESIS_PUB_KEY,
-        peers[0].channel_id(),
+        peers[0].clone(),
         node2.steady_clock.now(),
     );
 
@@ -742,9 +742,9 @@ fn confirm_frontier() {
     // Add representative to disabled rep crawler
     let peers = node2.network.read().unwrap().sorted_channels();
     assert!(!peers.is_empty());
-    node2.online_reps.lock().unwrap().vote_observed_directly(
+    node2.online_reps.lock().unwrap().vote_observed_directly2(
         *DEV_GENESIS_PUB_KEY,
-        peers[0].channel_id(),
+        peers[0].clone(),
         node2.steady_clock.now(),
     );
 

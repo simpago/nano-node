@@ -186,10 +186,10 @@ impl RepCrawler {
     }
 
     // Only for tests
-    pub fn force_process(&self, vote: Arc<Vote>, channel_id: ChannelId) {
+    pub fn force_process2(&self, vote: Arc<Vote>, channel: Arc<Channel>) {
         assert!(self.network_params.network.is_dev_network());
         let mut guard = self.rep_crawler_impl.lock().unwrap();
-        guard.responses.push_back((channel_id, vote));
+        guard.responses.push_back((channel.channel_id(), vote));
     }
 
     // Only for tests

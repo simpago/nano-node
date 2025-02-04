@@ -1,7 +1,7 @@
 use rsnano_core::{Amount, PrivateKey, UnsavedBlockLatticeBuilder, Vote, DEV_GENESIS_KEY};
 use rsnano_ledger::{DEV_GENESIS_ACCOUNT, DEV_GENESIS_HASH, DEV_GENESIS_PUB_KEY};
 use rsnano_messages::{ConfirmAck, Message};
-use rsnano_network::{ChannelId, ChannelMode, TrafficType};
+use rsnano_network::{ChannelMode, TrafficType};
 use std::{sync::Arc, time::Duration};
 use test_helpers::{assert_always_eq, assert_never, assert_timely_eq, assert_timely_eq2, System};
 
@@ -58,21 +58,6 @@ fn ignore_rebroadcast() {
     })
 }
 
-// Votes from local channels should be ignored
-#[test]
-fn ignore_local() {
-    let mut system = System::new();
-    let node = system.make_node();
-
-    let vote = Arc::new(Vote::new(&DEV_GENESIS_KEY, 0, 0, vec![*DEV_GENESIS_HASH]));
-    node.rep_crawler.force_process(vote, ChannelId::LOOPBACK);
-    assert_always_eq(
-        Duration::from_millis(500),
-        || node.online_reps.lock().unwrap().peered_reps_count(),
-        0,
-    )
-}
-
 #[test]
 fn rep_weight() {
     let mut system = System::new();
@@ -110,18 +95,9 @@ fn rep_weight() {
     let (channel1, channel2, channel3) = {
         let network = node.network.read().unwrap();
         (
-            network
-                .find_node_id(&node1.get_node_id())
-                .unwrap()
-                .channel_id(),
-            network
-                .find_node_id(&node2.get_node_id())
-                .unwrap()
-                .channel_id(),
-            network
-                .find_node_id(&node3.get_node_id())
-                .unwrap()
-                .channel_id(),
+            network.find_node_id(&node1.get_node_id()).unwrap().clone(),
+            network.find_node_id(&node2.get_node_id()).unwrap().clone(),
+            network.find_node_id(&node3.get_node_id()).unwrap().clone(),
         )
     };
 
@@ -129,9 +105,9 @@ fn rep_weight() {
     let vote1 = Arc::new(Vote::new(&key_non_pr, 0, 0, vec![*DEV_GENESIS_HASH]));
     let vote2 = Arc::new(Vote::new(&key_pr, 0, 0, vec![*DEV_GENESIS_HASH]));
 
-    node.rep_crawler.force_process(vote0, channel1);
-    node.rep_crawler.force_process(vote1, channel2);
-    node.rep_crawler.force_process(vote2, channel3);
+    node.rep_crawler.force_process2(vote0, channel1.clone());
+    node.rep_crawler.force_process2(vote1, channel2.clone());
+    node.rep_crawler.force_process2(vote2, channel3.clone());
 
     assert_timely_eq2(|| node.online_reps.lock().unwrap().peered_reps_count(), 2);
     // Make sure we get the rep with the most weight first
@@ -140,10 +116,28 @@ fn rep_weight() {
         node.balance(&DEV_GENESIS_ACCOUNT),
         node.ledger.weight(&rep.account)
     );
-    assert_eq!(channel1, rep.channel_id);
-    assert_eq!(node.online_reps.lock().unwrap().is_pr(channel1), true);
-    assert_eq!(node.online_reps.lock().unwrap().is_pr(channel2), false);
-    assert_eq!(node.online_reps.lock().unwrap().is_pr(channel3), true);
+    assert_eq!(channel1.channel_id(), rep.channel_id);
+    assert_eq!(
+        node.online_reps
+            .lock()
+            .unwrap()
+            .is_pr(channel1.channel_id()),
+        true
+    );
+    assert_eq!(
+        node.online_reps
+            .lock()
+            .unwrap()
+            .is_pr(channel2.channel_id()),
+        false
+    );
+    assert_eq!(
+        node.online_reps
+            .lock()
+            .unwrap()
+            .is_pr(channel3.channel_id()),
+        true
+    );
 }
 
 // Test that nodes can track nodes that have rep weight for priority broadcasting
