@@ -8,7 +8,7 @@ use crate::{
 };
 use rsnano_core::{utils::ContainerInfo, BlockHash, Networks, Root, SavedBlock};
 use rsnano_ledger::Ledger;
-use rsnano_network::ChannelId;
+use rsnano_network::{Channel, ChannelId};
 use rsnano_nullable_clock::SteadyClock;
 use rsnano_output_tracker::{OutputListenerMt, OutputTrackerMt};
 use std::{sync::Arc, time::Duration};
@@ -107,31 +107,31 @@ impl VoteGenerators {
     pub(crate) fn generate_final_votes(
         &self,
         blocks: &[SavedBlock],
-        channel_id: ChannelId,
+        channel: &Arc<Channel>,
     ) -> usize {
         if self.vote_listener.is_tracked() {
             self.vote_listener.emit(VoteGenerationEvent {
-                channel_id,
+                channel_id: channel.channel_id(),
                 blocks: blocks.to_vec(),
                 final_vote: true,
             });
         }
-        self.final_vote_generator.generate(blocks, channel_id)
+        self.final_vote_generator.generate(blocks, channel)
     }
 
     pub fn generate_non_final_vote(&self, root: &Root, hash: &BlockHash) {
         self.non_final_vote_generator.add(root, hash);
     }
 
-    pub fn generate_non_final_votes(&self, blocks: &[SavedBlock], channel_id: ChannelId) -> usize {
+    pub fn generate_non_final_votes(&self, blocks: &[SavedBlock], channel: &Arc<Channel>) -> usize {
         if self.vote_listener.is_tracked() {
             self.vote_listener.emit(VoteGenerationEvent {
-                channel_id,
+                channel_id: channel.channel_id(),
                 blocks: blocks.to_vec(),
                 final_vote: false,
             });
         }
-        self.non_final_vote_generator.generate(blocks, channel_id)
+        self.non_final_vote_generator.generate(blocks, channel)
     }
 
     pub(crate) fn container_info(&self) -> ContainerInfo {

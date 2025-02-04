@@ -12,7 +12,7 @@ use rsnano_core::{
 };
 use rsnano_ledger::{Ledger, Writer};
 use rsnano_messages::{ConfirmAck, Message};
-use rsnano_network::{ChannelId, TrafficType};
+use rsnano_network::{Channel, ChannelId, TrafficType};
 use rsnano_nullable_clock::SteadyClock;
 use rsnano_store_lmdb::{LmdbReadTransaction, LmdbWriteTransaction, Transaction};
 use std::{
@@ -28,7 +28,7 @@ use std::{
 
 pub struct VoteGeneratorRequest {
     pub candidates: Vec<(Root, BlockHash)>,
-    pub channel: ChannelId,
+    pub channel: Arc<Channel>,
 }
 
 pub(crate) struct VoteGenerator {
@@ -125,7 +125,7 @@ impl VoteGenerator {
     }
 
     /// Queue blocks for vote generation, returning the number of successful candidates.
-    pub(crate) fn generate(&self, blocks: &[SavedBlock], channel_id: ChannelId) -> usize {
+    pub(crate) fn generate(&self, blocks: &[SavedBlock], channel: &Arc<Channel>) -> usize {
         let req_candidates = {
             let txn = self.ledger.read_txn();
             blocks
@@ -144,7 +144,7 @@ impl VoteGenerator {
         let mut guard = self.shared_state.queues.lock().unwrap();
         let vote_req = VoteGeneratorRequest {
             candidates: req_candidates,
-            channel: channel_id,
+            channel: channel.clone(),
         };
         guard.requests.push_back(vote_req);
         while guard.requests.len() > Self::MAX_REQUESTS {
@@ -349,11 +349,10 @@ impl SharedState {
                     hashes.len() as u64,
                 );
                 self.vote(&hashes, &roots, |vote| {
-                    let channel_id = &request.channel;
                     let confirm =
                         Message::ConfirmAck(ConfirmAck::new_with_own_vote((*vote).clone()));
-                    self.message_sender.lock().unwrap().try_send(
-                        *channel_id,
+                    self.message_sender.lock().unwrap().try_send_channel(
+                        &request.channel,
                         &confirm,
                         TrafficType::Vote,
                     );

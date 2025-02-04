@@ -226,17 +226,17 @@ impl RequestAggregatorLoop {
 
         let mut tx = self.ledger.read_txn();
 
-        for (channel_id, request) in &batch {
+        for (_, request) in &batch {
             tx.refresh_if_needed();
 
             let should_drop = self
                 .network
                 .read()
                 .unwrap()
-                .should_drop(*channel_id, TrafficType::VoteReply);
+                .should_drop(request.channel.channel_id(), TrafficType::VoteReply);
 
             if !should_drop {
-                self.process(&tx, request, *channel_id);
+                self.process(&tx, request);
             } else {
                 self.stats.inc_dir(
                     StatType::RequestAggregator,
@@ -249,12 +249,7 @@ impl RequestAggregatorLoop {
         self.mutex.lock().unwrap()
     }
 
-    fn process(
-        &self,
-        tx: &LmdbReadTransaction,
-        request: &AggregatorRequest,
-        channel_id: ChannelId,
-    ) {
+    fn process(&self, tx: &LmdbReadTransaction, request: &AggregatorRequest) {
         let remaining = self.aggregate(tx, request);
 
         if !remaining.remaining_normal.is_empty() {
@@ -264,7 +259,7 @@ impl RequestAggregatorLoop {
             // Generate votes for the remaining hashes
             let generated = self
                 .vote_generators
-                .generate_non_final_votes(&remaining.remaining_normal, channel_id);
+                .generate_non_final_votes(&remaining.remaining_normal, &request.channel);
             self.stats.add_dir(
                 StatType::Requests,
                 DetailType::RequestsCannotVote,
@@ -280,7 +275,7 @@ impl RequestAggregatorLoop {
             // Generate final votes for the remaining hashes
             let generated = self
                 .vote_generators
-                .generate_final_votes(&remaining.remaining_final, channel_id);
+                .generate_final_votes(&remaining.remaining_final, &request.channel);
             self.stats.add_dir(
                 StatType::Requests,
                 DetailType::RequestsCannotVote,
