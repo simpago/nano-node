@@ -443,7 +443,6 @@ impl Node {
             wallets_env,
             ledger.clone(),
             &config,
-            network_params.kdf_work,
             network_params.work.clone(),
             distributed_work.clone(),
             network_params.clone(),
@@ -452,6 +451,7 @@ impl Node {
             online_reps.clone(),
             confirming_set.clone(),
             message_flooder.clone(),
+            current_network,
         );
         if !is_nulled {
             wallets.initialize().expect("Could not create wallet");

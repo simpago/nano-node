@@ -8,7 +8,6 @@ pub static DEV_NETWORK_PARAMS: Lazy<NetworkParams> =
 
 #[derive(Clone)]
 pub struct NetworkParams {
-    pub kdf_work: u32,
     pub work: WorkThresholds,
     pub network: NetworkConstants,
     pub ledger: LedgerConstants,
@@ -26,14 +25,7 @@ impl NetworkParams {
             WorkThresholds::publish_dev()
         };
         let network_constants = NetworkConstants::new(work.clone(), network);
-        let kdf_full_work = 64 * 1024;
-        let kdf_dev_work = 8;
         Self {
-            kdf_work: if network_constants.is_dev_network() {
-                kdf_dev_work
-            } else {
-                kdf_full_work
-            },
             work: work.clone(),
             ledger: LedgerConstants::new(work.clone(), network),
             network: network_constants,

@@ -14,7 +14,7 @@ use rand::{thread_rng, Rng};
 use rsnano_core::{
     utils::{get_env_or_default_string, ContainerInfo},
     work::{WorkPoolImpl, WorkThresholds},
-    Account, Amount, Block, BlockDetails, BlockHash, Epoch, KeyDerivationFunction, Link,
+    Account, Amount, Block, BlockDetails, BlockHash, Epoch, KeyDerivationFunction, Link, Networks,
     PendingKey, PrivateKey, PublicKey, RawKey, Root, SavedBlock, StateBlockArgs, WalletId,
 };
 use rsnano_ledger::{Ledger, RepWeightCache};
@@ -104,7 +104,6 @@ impl Wallets {
             env,
             Arc::new(Ledger::new_null()),
             &NodeConfig::new_test_instance(),
-            8,
             WorkThresholds::new(0, 0, 0),
             Arc::new(DistributedWorkFactory::new(
                 Arc::new(WorkPoolImpl::disabled()),
@@ -125,6 +124,7 @@ impl Wallets {
                 Arc::new(Stats::default()),
             )),
             MessageFlooder::new_null(),
+            Networks::NanoDevNetwork,
         )
     }
 
@@ -132,7 +132,6 @@ impl Wallets {
         env: Arc<LmdbEnv>,
         ledger: Arc<Ledger>,
         node_config: &NodeConfig,
-        kdf_work: u32,
         work: WorkThresholds,
         distributed_work: Arc<DistributedWorkFactory>,
         network_params: NetworkParams,
@@ -141,8 +140,10 @@ impl Wallets {
         online_reps: Arc<Mutex<OnlineReps>>,
         confirming_set: Arc<ConfirmingSet>,
         message_flooder: MessageFlooder,
+        current_network: Networks,
     ) -> Self {
-        let kdf = KeyDerivationFunction::new(kdf_work);
+        let kdf = KeyDerivationFunction::new(Self::kdf_work_for(current_network));
+
         Self {
             db: None,
             send_action_ids_handle: None,
@@ -167,6 +168,13 @@ impl Wallets {
             start_election: Mutex::new(None),
             confirming_set,
             message_flooder: Mutex::new(message_flooder),
+        }
+    }
+
+    fn kdf_work_for(network: Networks) -> u32 {
+        match network {
+            Networks::NanoDevNetwork => 8,
+            _ => 1024 * 64,
         }
     }
 
