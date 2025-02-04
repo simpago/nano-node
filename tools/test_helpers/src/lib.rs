@@ -132,9 +132,10 @@ impl System {
 
         if self.nodes.len() > 1 && !disconnected {
             let other = &self.nodes[0];
-            other
+            let added = other
                 .peer_connector
                 .connect_to(node.tcp_listener.local_address());
+            assert!(added);
 
             let start = Instant::now();
             loop {
