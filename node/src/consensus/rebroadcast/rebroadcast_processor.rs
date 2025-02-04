@@ -79,23 +79,21 @@ impl RebroadcastProcessor {
 mod tests {
     use super::*;
     use crate::{transport::FloodEvent, wallets::WalletRepresentatives};
-    use rsnano_core::Vote;
+    use rsnano_core::{PublicKey, Vote};
     use std::sync::Mutex;
 
     #[test]
     fn rebroadcast_vote() {
-        let wallet_reps = Arc::new(Mutex::new(WalletRepresentatives::default()));
-        let message_flooder = MessageFlooder::new_null();
-        let flood_tracker = message_flooder.track_floods();
-        let stats = Arc::new(Stats::default());
-
-        let mut processor = RebroadcastProcessor::new(wallet_reps, message_flooder, stats);
-
         let vote = Vote::new_test_instance();
-        processor.process_vote(&vote);
+
+        let floods = run_processor(TestInput {
+            have_half_rep: false,
+            wallet_rep: None,
+            vote: vote.clone(),
+        });
 
         assert_eq!(
-            flood_tracker.output(),
+            floods,
             vec![FloodEvent {
                 message: Message::ConfirmAck(ConfirmAck::new_with_rebroadcasted_vote(vote)),
                 traffic_type: TrafficType::VoteRebroadcast,
@@ -106,18 +104,50 @@ mod tests {
 
     #[test]
     fn dont_rebroadcast_when_node_has_half_rep() {
+        let floods = run_processor(TestInput {
+            have_half_rep: true,
+            wallet_rep: None,
+            vote: Vote::new_test_instance(),
+        });
+        assert_eq!(floods, vec![]);
+    }
+
+    #[test]
+    fn dont_rebroadcast_own_votes() {
+        let vote = Vote::new_test_instance();
+        let floods = run_processor(TestInput {
+            have_half_rep: false,
+            wallet_rep: Some(vote.voting_account),
+            vote,
+        });
+        assert_eq!(floods, vec![]);
+    }
+
+    fn run_processor(input: TestInput) -> Vec<FloodEvent> {
         let wallet_reps = Arc::new(Mutex::new(WalletRepresentatives::default()));
         let message_flooder = MessageFlooder::new_null();
         let flood_tracker = message_flooder.track_floods();
         let stats = Arc::new(Stats::default());
-
         let mut processor = RebroadcastProcessor::new(wallet_reps.clone(), message_flooder, stats);
 
-        wallet_reps.lock().unwrap().set_have_half_rep(true);
+        {
+            let mut guard = wallet_reps.lock().unwrap();
+            if input.have_half_rep {
+                guard.set_have_half_rep(true);
+            }
+            if let Some(key) = input.wallet_rep {
+                guard.insert(key);
+            }
+        }
 
-        let vote = Vote::new_test_instance();
-        processor.process_vote(&vote);
+        processor.process_vote(&input.vote);
 
-        assert_eq!(flood_tracker.output(), vec![]);
+        flood_tracker.output()
+    }
+
+    struct TestInput {
+        pub have_half_rep: bool,
+        pub wallet_rep: Option<PublicKey>,
+        pub vote: Vote,
     }
 }
