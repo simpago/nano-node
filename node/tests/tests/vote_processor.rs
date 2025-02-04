@@ -1,6 +1,5 @@
 use rsnano_core::{Amount, PrivateKey, Signature, Vote, VoteCode, VoteSource, DEV_GENESIS_KEY};
 use rsnano_ledger::{DEV_GENESIS_ACCOUNT, DEV_GENESIS_HASH, DEV_GENESIS_PUB_KEY};
-use rsnano_network::ChannelId;
 use rsnano_node::{
     config::NodeFlags,
     consensus::RepTier,
@@ -34,7 +33,6 @@ fn codes() {
 
     let vote = Arc::new(vote);
     let vote_invalid = Arc::new(vote_invalid);
-    let channel_id = ChannelId::from(42);
 
     // Invalid signature
     assert_eq!(

@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use rsnano_core::{Account, PublicKey, UnsavedBlockLatticeBuilder};
 use rsnano_ledger::DEV_GENESIS_PUB_KEY;
 use rsnano_messages::ConfirmReq;
-use rsnano_network::ChannelId;
+use rsnano_network::Channel;
 use rsnano_node::{
     config::NodeFlags,
     consensus::{ConfirmationSolicitor, Election, ElectionBehavior, VoteInfo},
@@ -21,11 +23,7 @@ fn batches() {
     let node2 = system.build_node().flags(flags).finish();
     let channel1 = establish_tcp(&node2, &node1);
     // Solicitor will only solicit from this representative
-    let representative = PeeredRep::new(
-        *DEV_GENESIS_PUB_KEY,
-        channel1.channel_id(),
-        node2.steady_clock.now(),
-    );
+    let representative = PeeredRep::new(*DEV_GENESIS_PUB_KEY, channel1, node2.steady_clock.now());
     let representatives = vec![representative];
 
     let mut solicitor = ConfirmationSolicitor::new(
@@ -96,11 +94,7 @@ fn different_hashes() {
     let node2 = system.build_node().flags(flags).finish();
     let channel1 = establish_tcp(&node2, &node1);
     // Solicitor will only solicit from this representative
-    let representative = PeeredRep::new(
-        *DEV_GENESIS_PUB_KEY,
-        channel1.channel_id(),
-        node2.steady_clock.now(),
-    );
+    let representative = PeeredRep::new(*DEV_GENESIS_PUB_KEY, channel1, node2.steady_clock.now());
     let representatives = vec![representative];
 
     let mut solicitor = ConfirmationSolicitor::new(
@@ -166,7 +160,7 @@ fn bypass_max_requests_cap() {
         // Make a temporary channel associated with node2
         let rep = PeeredRep::new(
             PublicKey::from(i as u64),
-            ChannelId::from(i),
+            Arc::new(Channel::new_test_instance_with_id(i)),
             node2.steady_clock.now(),
         );
         representatives.push(rep);

@@ -215,8 +215,7 @@ impl OnlineReps {
     ) -> InsertResult {
         let is_rep = self.vote_observed(rep_account, now);
         if is_rep {
-            self.peered_reps
-                .update_or_insert(rep_account, channel.channel_id(), now)
+            self.peered_reps.update_or_insert(rep_account, channel, now)
         } else {
             InsertResult::Updated
         }

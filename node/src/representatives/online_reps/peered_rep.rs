@@ -12,15 +12,7 @@ pub struct PeeredRep {
 }
 
 impl PeeredRep {
-    pub fn new(account: PublicKey, channel_id: ChannelId, last_request: Timestamp) -> Self {
-        Self {
-            account,
-            channel_id,
-            last_request,
-        }
-    }
-
-    pub fn new2(account: PublicKey, channel: Arc<Channel>, last_request: Timestamp) -> Self {
+    pub fn new(account: PublicKey, channel: Arc<Channel>, last_request: Timestamp) -> Self {
         Self {
             account,
             channel_id: channel.channel_id(),
