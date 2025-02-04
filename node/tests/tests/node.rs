@@ -1757,11 +1757,11 @@ fn fork_no_vote_quorum() {
         .find_node_id(&node3.node_id())
         .unwrap()
         .clone();
-    node2.message_sender.lock().unwrap().try_send(
-        channel.channel_id(),
-        &confirm,
-        TrafficType::Generic,
-    );
+    node2
+        .message_sender
+        .lock()
+        .unwrap()
+        .try_send_channel(&channel, &confirm, TrafficType::Generic);
 
     assert_timely_msg(
         Duration::from_secs(10),

@@ -1013,8 +1013,8 @@ impl Node {
                     return;
                 };
                 let keepalive = factory.create_keepalive_self();
-                publisher.lock().unwrap().try_send(
-                    channel.channel_id(),
+                publisher.lock().unwrap().try_send_channel(
+                    &channel,
                     &keepalive,
                     TrafficType::Keepalive,
                 );

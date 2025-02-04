@@ -77,9 +77,9 @@ fn last_contacted() {
     // it is possible that there could be multiple keepalives in flight but we assume here that there will be no more than one in flight for the purposes of this test
     let keepalive = Message::Keepalive(Keepalive::default());
     let mut publisher = node0.message_sender.lock().unwrap();
-    publisher.try_send(channel1.channel_id(), &keepalive, TrafficType::Generic);
-    publisher.try_send(channel1.channel_id(), &keepalive, TrafficType::Generic);
-    publisher.try_send(channel1.channel_id(), &keepalive, TrafficType::Generic);
+    publisher.try_send_channel(&channel1, &keepalive, TrafficType::Generic);
+    publisher.try_send_channel(&channel1, &keepalive, TrafficType::Generic);
+    publisher.try_send_channel(&channel1, &keepalive, TrafficType::Generic);
 
     assert_timely_msg(
         Duration::from_secs(3),
@@ -310,19 +310,19 @@ fn duplicate_vote_detection() {
     let message = Message::ConfirmAck(ConfirmAck::new_with_own_vote(vote));
 
     // Publish duplicate detection through TCP
-    let channel_id = node0
+    let channel = node0
         .network
         .read()
         .unwrap()
         .find_node_id(&node1.node_id())
-        .unwrap()
-        .channel_id();
+        .cloned()
+        .unwrap();
 
     node0
         .message_sender
         .lock()
         .unwrap()
-        .try_send(channel_id, &message, TrafficType::Generic);
+        .try_send_channel(&channel, &message, TrafficType::Generic);
     assert_always_eq(
         Duration::from_millis(100),
         || {
@@ -338,7 +338,7 @@ fn duplicate_vote_detection() {
         .message_sender
         .lock()
         .unwrap()
-        .try_send(channel_id, &message, TrafficType::Generic);
+        .try_send_channel(&channel, &message, TrafficType::Generic);
     assert_timely_eq(
         Duration::from_secs(2),
         || {
@@ -388,20 +388,20 @@ fn duplicate_revert_vote() {
     let message2 = Message::ConfirmAck(ConfirmAck::new_with_own_vote(vote2));
 
     // Publish duplicate detection through TCP
-    let channel_id = node0
+    let channel = node0
         .network
         .read()
         .unwrap()
         .find_node_id(&node1.node_id())
-        .unwrap()
-        .channel_id();
+        .cloned()
+        .unwrap();
 
     // First vote should be processed
     node0
         .message_sender
         .lock()
         .unwrap()
-        .try_send(channel_id, &message1, TrafficType::Vote);
+        .try_send_channel(&channel, &message1, TrafficType::Vote);
     assert_always_eq(
         Duration::from_millis(100),
         || {
@@ -419,7 +419,7 @@ fn duplicate_revert_vote() {
         .message_sender
         .lock()
         .unwrap()
-        .try_send(channel_id, &message2, TrafficType::Vote);
+        .try_send_channel(&channel, &message2, TrafficType::Vote);
     assert_always_eq(
         Duration::from_millis(100),
         || {
@@ -463,20 +463,20 @@ fn expire_duplicate_filter() {
     let message = Message::ConfirmAck(ConfirmAck::new_with_own_vote(vote));
 
     // Publish duplicate detection through TCP
-    let channel_id = node0
+    let channel = node0
         .network
         .read()
         .unwrap()
         .find_node_id(&node1.node_id())
-        .unwrap()
-        .channel_id();
+        .cloned()
+        .unwrap();
 
     // Send a vote
     node0
         .message_sender
         .lock()
         .unwrap()
-        .try_send(channel_id, &message, TrafficType::Generic);
+        .try_send_channel(&channel, &message, TrafficType::Generic);
 
     assert_always_eq(
         Duration::from_millis(100),
@@ -494,7 +494,7 @@ fn expire_duplicate_filter() {
         .message_sender
         .lock()
         .unwrap()
-        .try_send(channel_id, &message, TrafficType::Generic);
+        .try_send_channel(&channel, &message, TrafficType::Generic);
 
     assert_timely_eq(
         Duration::from_secs(2),

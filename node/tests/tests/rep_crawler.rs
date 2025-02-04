@@ -24,8 +24,8 @@ fn ignore_rebroadcast() {
         .read()
         .unwrap()
         .find_node_id(&node1.node_id())
-        .expect("channel not found 2 to 1")
-        .channel_id();
+        .cloned()
+        .expect("channel not found 2 to 1");
 
     node1
         .rep_crawler
@@ -45,11 +45,11 @@ fn ignore_rebroadcast() {
 
     let tick = || {
         let msg = Message::ConfirmAck(ConfirmAck::new_with_rebroadcasted_vote(vote.clone()));
-        node2
-            .message_sender
-            .lock()
-            .unwrap()
-            .try_send(channel2to1, &msg, TrafficType::RepCrawler);
+        node2.message_sender.lock().unwrap().try_send_channel(
+            &channel2to1,
+            &msg,
+            TrafficType::RepCrawler,
+        );
         false
     };
 

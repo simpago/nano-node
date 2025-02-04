@@ -66,8 +66,7 @@ impl MessageFlooder {
 
         self.remove_no_pr(&mut channels, fanout);
         for peer in channels {
-            self.sender
-                .try_send(peer.channel_id(), &message, traffic_type);
+            self.sender.try_send_channel(&peer, &message, traffic_type);
         }
     }
 
