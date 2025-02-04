@@ -40,14 +40,14 @@ fn codes() {
     assert_eq!(
         VoteCode::Invalid,
         node.vote_processor
-            .vote_blocking(&vote_invalid, channel_id, VoteSource::Live)
+            .vote_blocking2(&vote_invalid, None, VoteSource::Live)
     );
 
     // No ongoing election (vote goes to vote cache)
     assert_eq!(
         VoteCode::Indeterminate,
         node.vote_processor
-            .vote_blocking(&vote, channel_id, VoteSource::Live)
+            .vote_blocking2(&vote, None, VoteSource::Live)
     );
 
     // Clear vote cache before starting election
@@ -62,21 +62,21 @@ fn codes() {
     assert_eq!(
         VoteCode::Vote,
         node.vote_processor
-            .vote_blocking(&vote, channel_id, VoteSource::Live)
+            .vote_blocking2(&vote, None, VoteSource::Live)
     );
 
     // Processing the same vote is a replay
     assert_eq!(
         VoteCode::Replay,
         node.vote_processor
-            .vote_blocking(&vote, channel_id, VoteSource::Live)
+            .vote_blocking2(&vote, None, VoteSource::Live)
     );
 
     // Invalid takes precedence
     assert_eq!(
         VoteCode::Invalid,
         node.vote_processor
-            .vote_blocking(&vote_invalid, channel_id, VoteSource::Live)
+            .vote_blocking2(&vote_invalid, None, VoteSource::Live)
     );
 
     // Once the election is removed (confirmed / dropped) the vote is again indeterminate
@@ -84,7 +84,7 @@ fn codes() {
     assert_eq!(
         VoteCode::Indeterminate,
         node.vote_processor
-            .vote_blocking(&vote, channel_id, VoteSource::Live)
+            .vote_blocking2(&vote, None, VoteSource::Live)
     );
 }
 

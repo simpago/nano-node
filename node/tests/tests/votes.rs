@@ -34,9 +34,9 @@ fn check_signature() {
     let channel = make_fake_channel(&node);
     assert_eq!(
         VoteCode::Invalid,
-        node.vote_processor.vote_blocking(
+        node.vote_processor.vote_blocking2(
             &Arc::new(vote1.clone()),
-            channel.channel_id(),
+            Some(channel.clone()),
             VoteSource::Live
         )
     );
@@ -44,17 +44,17 @@ fn check_signature() {
     vote1.signature = good_signature;
     assert_eq!(
         VoteCode::Vote,
-        node.vote_processor.vote_blocking(
+        node.vote_processor.vote_blocking2(
             &Arc::new(vote1.clone()),
-            channel.channel_id(),
+            Some(channel.clone()),
             VoteSource::Live
         )
     );
     assert_eq!(
         VoteCode::Replay,
-        node.vote_processor.vote_blocking(
+        node.vote_processor.vote_blocking2(
             &Arc::new(vote1.clone()),
-            channel.channel_id(),
+            Some(channel.clone()),
             VoteSource::Live
         )
     );
