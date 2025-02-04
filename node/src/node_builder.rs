@@ -9,7 +9,7 @@ use rsnano_core::{
     VoteCode, VoteSource, VoteWithWeightInfo,
 };
 use rsnano_messages::Message;
-use rsnano_network::ChannelId;
+use rsnano_network::{Channel, ChannelId};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 #[derive(Default)]
@@ -47,7 +47,10 @@ impl NodeCallbacksBuilder {
 
     pub fn on_vote(
         mut self,
-        callback: impl Fn(&Arc<Vote>, ChannelId, VoteSource, VoteCode) + Send + Sync + 'static,
+        callback: impl Fn(&Arc<Vote>, Option<&Arc<Channel>>, VoteSource, VoteCode)
+            + Send
+            + Sync
+            + 'static,
     ) -> Self {
         self.0.on_vote = Some(Box::new(callback));
         self

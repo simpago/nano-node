@@ -1,7 +1,7 @@
 use super::{VoteProcessorQueue, VoteRouter};
 use crate::stats::{DetailType, StatType, Stats};
 use rsnano_core::{Vote, VoteCode, VoteSource};
-use rsnano_network::{Channel, ChannelId};
+use rsnano_network::Channel;
 use std::{
     cmp::{max, min},
     sync::{
@@ -37,7 +37,7 @@ impl VoteProcessorConfig {
 }
 
 pub type VoteProcessedCallback2 =
-    Box<dyn Fn(&Arc<Vote>, ChannelId, VoteSource, VoteCode) + Send + Sync>;
+    Box<dyn Fn(&Arc<Vote>, Option<&Arc<Channel>>, VoteSource, VoteCode) + Send + Sync>;
 
 pub struct VoteProcessor {
     threads: Mutex<Vec<JoinHandle<()>>>,
@@ -114,10 +114,6 @@ impl VoteProcessor {
         channel: Option<Arc<Channel>>,
         source: VoteSource,
     ) -> VoteCode {
-        let channel_id = match channel {
-            Some(c) => c.channel_id(),
-            None => ChannelId::LOOPBACK,
-        };
         let mut result = VoteCode::Invalid;
         if vote.validate().is_ok() {
             let vote_results = self.vote_router.vote(vote, source);
@@ -139,7 +135,7 @@ impl VoteProcessor {
 
             let callbacks = self.vote_processed.lock().unwrap();
             for callback in callbacks.iter() {
-                (callback)(vote, channel_id, source, result);
+                (callback)(vote, channel.as_ref(), source, result);
             }
         }
 
@@ -151,7 +147,9 @@ impl VoteProcessor {
 
     pub fn on_vote_processed(
         &self,
-        callback: Box<dyn Fn(&Arc<Vote>, ChannelId, VoteSource, VoteCode) + Send + Sync>,
+        callback: Box<
+            dyn Fn(&Arc<Vote>, Option<&Arc<Channel>>, VoteSource, VoteCode) + Send + Sync,
+        >,
     ) {
         self.vote_processed.lock().unwrap().push(callback);
     }

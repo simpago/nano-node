@@ -107,7 +107,11 @@ impl RepCrawler {
 
     /// Called when a non-replay vote arrives that might be of interest to rep crawler.
     /// @return true, if the vote was of interest and was processed, this indicates that the rep is likely online and voting
-    pub fn process(&self, vote: Arc<Vote>, channel_id: ChannelId) -> bool {
+    pub fn process(&self, vote: &Arc<Vote>, channel: Option<&Arc<Channel>>) -> bool {
+        let channel_id = match channel {
+            Some(c) => c.channel_id(),
+            None => ChannelId::LOOPBACK,
+        };
         let mut guard = self.rep_crawler_impl.lock().unwrap();
         let mut processed = false;
 
