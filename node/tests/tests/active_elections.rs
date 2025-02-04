@@ -202,7 +202,7 @@ fn inactive_votes_cache_basic() {
     let send = lattice.genesis().send(&key, Amount::raw(100));
     let vote = Arc::new(Vote::new_final(&DEV_GENESIS_KEY, vec![send.hash()]));
     node.vote_processor_queue
-        .vote(vote, ChannelId::from(111), VoteSource::Live);
+        .vote2(vote, None, VoteSource::Live);
     assert_timely_eq(
         Duration::from_secs(5),
         || node.vote_cache.lock().unwrap().size(),
@@ -233,7 +233,7 @@ fn non_final() {
     // Non-final vote
     let vote = Arc::new(Vote::new(&DEV_GENESIS_KEY, 0, 0, vec![send.hash()]));
     node.vote_processor_queue
-        .vote(vote, ChannelId::from(111), VoteSource::Live);
+        .vote2(vote, None, VoteSource::Live);
     assert_timely_eq(
         Duration::from_secs(5),
         || node.vote_cache.lock().unwrap().size(),
@@ -287,7 +287,7 @@ fn inactive_votes_cache_fork() {
 
     let vote = Arc::new(Vote::new_final(&DEV_GENESIS_KEY, vec![send1.hash()]));
     node.vote_processor_queue
-        .vote(vote, ChannelId::from(111), VoteSource::Live);
+        .vote2(vote, None, VoteSource::Live);
 
     assert_timely_eq(
         Duration::from_secs(5),
@@ -349,7 +349,7 @@ fn inactive_votes_cache_existing_vote() {
     // Insert vote
     let vote1 = Arc::new(Vote::new(&key, 0, 0, vec![send.hash()]));
     node.vote_processor_queue
-        .vote(vote1.clone(), ChannelId::from(111), VoteSource::Live);
+        .vote2(vote1.clone(), None, VoteSource::Live);
 
     assert_timely_eq(Duration::from_secs(5), || election.vote_count(), 2);
 
@@ -418,11 +418,11 @@ fn inactive_votes_cache_multiple_votes() {
     // Process votes
     let vote1 = Arc::new(Vote::new(&key, 0, 0, vec![send1.hash()]));
     node.vote_processor_queue
-        .vote(vote1, ChannelId::from(111), VoteSource::Live);
+        .vote2(vote1, None, VoteSource::Live);
 
     let vote2 = Arc::new(Vote::new(&DEV_GENESIS_KEY, 0, 0, vec![send1.hash()]));
     node.vote_processor_queue
-        .vote(vote2, ChannelId::from(222), VoteSource::Live);
+        .vote2(vote2, None, VoteSource::Live);
 
     assert_timely_eq(
         Duration::from_secs(5),
