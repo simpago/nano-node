@@ -1,5 +1,5 @@
 use super::{Election, ElectionData};
-use crate::{representatives::PeeredRepInfo, transport::MessageFlooder, NetworkParams};
+use crate::{config::NetworkParams, representatives::PeeredRepInfo, transport::MessageFlooder};
 use rsnano_core::{BlockHash, Root};
 use rsnano_messages::{ConfirmReq, Message, Publish};
 use rsnano_network::{ChannelId, Network, TrafficType};

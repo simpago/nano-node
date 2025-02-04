@@ -6,7 +6,7 @@ use crate::{
     },
     bootstrap::{BootstrapExt, BootstrapResponder, BootstrapResponderCleanup, Bootstrapper},
     cementation::ConfirmingSet,
-    config::{GlobalConfig, NodeConfig, NodeFlags},
+    config::{GlobalConfig, NetworkParams, NodeConfig, NodeFlags},
     consensus::{
         election_schedulers::ElectionSchedulers, get_bootstrap_weights, log_bootstrap_weights,
         ActiveElections, ActiveElectionsExt, LocalVoteHistory, RecentlyConfirmedCache, RepTiers,
@@ -37,8 +37,8 @@ use crate::{
     },
     wallets::{ReceivableSearch, WalletBackup, Wallets, WalletsExt},
     work::DistributedWorkFactory,
-    NetworkParams, NodeCallbacks, OnlineWeightSampler, TelementryConfig, TelementryExt, Telemetry,
-    BUILD_INFO, VERSION_STRING,
+    NodeCallbacks, OnlineWeightSampler, TelementryConfig, TelementryExt, Telemetry, BUILD_INFO,
+    VERSION_STRING,
 };
 use rsnano_core::{
     utils::{ContainerInfo, Peer},

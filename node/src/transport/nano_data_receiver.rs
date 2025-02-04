@@ -1,7 +1,7 @@
 use super::{HandshakeProcess, HandshakeStatus, InboundMessageQueue, LatestKeepalives};
 use crate::{
+    config::NetworkParams,
     stats::{DetailType, Direction, StatType, Stats},
-    NetworkParams,
 };
 use rsnano_core::NodeId;
 use rsnano_messages::*;

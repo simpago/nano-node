@@ -2,13 +2,12 @@ use super::{Wallet, WalletActionThread, WalletRepresentatives};
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
     cementation::{ConfirmingSet, ConfirmingSetConfig},
-    config::{NetworkConstants, NodeConfig},
+    config::{NetworkConstants, NetworkParams, NodeConfig},
     representatives::OnlineReps,
     stats::Stats,
     transport::MessageFlooder,
     utils::{ThreadPool, ThreadPoolImpl},
     work::DistributedWorkFactory,
-    NetworkParams,
 };
 use rand::{thread_rng, Rng};
 use rsnano_core::{

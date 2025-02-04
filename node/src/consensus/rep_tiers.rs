@@ -1,7 +1,7 @@
 use crate::{
+    config::NetworkParams,
     representatives::OnlineReps,
     stats::{DetailType, Direction, StatType, Stats},
-    NetworkParams,
 };
 use rsnano_core::{utils::ContainerInfo, Account, PublicKey};
 use rsnano_ledger::RepWeightCache;

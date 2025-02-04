@@ -1,13 +1,12 @@
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
     cementation::ConfirmingSet,
-    config::NodeConfig,
+    config::{NetworkParams, NodeConfig},
     consensus::{ElectionState, VoteInfo},
     representatives::OnlineReps,
     stats::{DetailType, StatType, Stats},
     utils::ThreadPool,
     wallets::Wallets,
-    NetworkParams,
 };
 
 use super::{

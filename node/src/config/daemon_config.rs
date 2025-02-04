@@ -1,7 +1,7 @@
 use super::{
-    get_node_toml_config_path, read_toml_file, DaemonToml, NodeConfig, NodeRpcConfig, OpenclConfig,
+    get_node_toml_config_path, read_toml_file, DaemonToml, NetworkParams, NodeConfig,
+    NodeRpcConfig, OpenclConfig,
 };
-use crate::NetworkParams;
 use rsnano_core::Networks;
 use std::path::Path;
 

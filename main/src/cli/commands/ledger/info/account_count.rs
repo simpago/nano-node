@@ -3,7 +3,7 @@ use anyhow::Result;
 use clap::{ArgGroup, Parser};
 use rsnano_core::Amount;
 use rsnano_ledger::{Ledger, RepWeightCache};
-use rsnano_node::{config::NetworkConstants, NetworkParams};
+use rsnano_node::config::{NetworkConstants, NetworkParams};
 use rsnano_store_lmdb::LmdbStore;
 use std::sync::Arc;
 

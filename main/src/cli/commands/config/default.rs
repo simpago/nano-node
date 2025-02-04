@@ -1,10 +1,7 @@
 use anyhow::Result;
 use clap::{ArgGroup, Parser};
 use rsnano_core::{utils::get_cpu_count, Networks};
-use rsnano_node::{
-    config::{DaemonConfig, DaemonToml, NetworkConstants},
-    NetworkParams,
-};
+use rsnano_node::config::{DaemonConfig, DaemonToml, NetworkConstants, NetworkParams};
 use rsnano_rpc_server::{RpcServerConfig, RpcServerToml};
 use std::io::BufRead;
 

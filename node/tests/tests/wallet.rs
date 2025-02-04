@@ -5,11 +5,11 @@ use rsnano_core::{
 };
 use rsnano_ledger::{DEV_GENESIS_ACCOUNT, DEV_GENESIS_HASH, DEV_GENESIS_PUB_KEY};
 use rsnano_node::{
-    config::{NodeConfig, NodeFlags},
+    config::{NodeConfig, NodeFlags, DEV_NETWORK_PARAMS},
     consensus::ActiveElectionsExt,
     unique_path,
     wallets::{WalletsError, WalletsExt},
-    Node, DEV_NETWORK_PARAMS,
+    Node,
 };
 use rsnano_store_lmdb::{LmdbEnv, LmdbWalletStore};
 use std::{

@@ -1,13 +1,12 @@
 use super::{InsertResult, OnlineReps};
 use crate::{
-    config::NodeConfig,
+    config::{NetworkParams, NodeConfig},
     consensus::ActiveElections,
     stats::{DetailType, Direction, Sample, StatType, Stats},
     transport::{
         keepalive::{KeepalivePublisher, PreconfiguredPeersKeepalive},
         MessageSender,
     },
-    NetworkParams,
 };
 use bounded_vec_deque::BoundedVecDeque;
 use rsnano_core::{utils::ContainerInfo, Account, BlockHash, Root, Vote};

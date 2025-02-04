@@ -1,7 +1,10 @@
 use super::{vote_generator::VoteGenerator, LocalVoteHistory};
 use crate::{
-    config::NodeConfig, consensus::VoteBroadcaster, stats::Stats, transport::MessageSender,
-    wallets::Wallets, NetworkParams,
+    config::{NetworkParams, NodeConfig},
+    consensus::VoteBroadcaster,
+    stats::Stats,
+    transport::MessageSender,
+    wallets::Wallets,
 };
 use rsnano_core::{utils::ContainerInfo, BlockHash, Networks, Root, SavedBlock};
 use rsnano_ledger::Ledger;

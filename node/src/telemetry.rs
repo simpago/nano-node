@@ -14,10 +14,9 @@ use std::{
 
 use crate::{
     block_processing::UncheckedMap,
-    config::NodeConfig,
+    config::{NetworkParams, NodeConfig},
     stats::{DetailType, StatType, Stats},
     transport::MessageSender,
-    NetworkParams,
 };
 use rsnano_network::{
     Channel, ChannelId, ChannelMode, DeadChannelCleanupStep, Network, TrafficType,

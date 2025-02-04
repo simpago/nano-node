@@ -6,14 +6,13 @@ use super::{
 use crate::{
     block_processing::LedgerNotifications,
     cementation::ConfirmingSet,
-    config::{NodeConfig, NodeFlags},
+    config::{NetworkParams, NodeConfig, NodeFlags},
     consensus::VoteApplierExt,
     representatives::OnlineReps,
     stats::{DetailType, Direction, Sample, StatType, Stats},
     transport::MessageFlooder,
     utils::HardenedConstants,
     wallets::Wallets,
-    NetworkParams,
 };
 use bounded_vec_deque::BoundedVecDeque;
 use rsnano_core::{

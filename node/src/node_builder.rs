@@ -1,8 +1,10 @@
 use crate::{
-    config::{get_node_toml_config_path, DaemonConfig, DaemonToml, NodeConfig, NodeFlags},
+    config::{
+        get_node_toml_config_path, DaemonConfig, DaemonToml, NetworkParams, NodeConfig, NodeFlags,
+    },
     consensus::{ElectionEndCallback, ElectionStatus, VoteProcessedCallback2},
     transport::MessageCallback,
-    working_path_for, NetworkParams, Node, NodeArgs,
+    working_path_for, Node, NodeArgs,
 };
 use rsnano_core::{
     utils::get_cpu_count, work::WorkPoolImpl, Account, Amount, Networks, SavedBlock, Vote,

@@ -1,8 +1,7 @@
 use super::{keepalive::KeepaliveMessageFactory, LatestKeepalives, MessageFlooder, SynCookies};
 use crate::{
-    config::NodeFlags,
+    config::{NetworkParams, NodeFlags},
     stats::{DetailType, StatType, Stats},
-    NetworkParams,
 };
 use rsnano_messages::{Keepalive, Message, NetworkFilter};
 use rsnano_network::{DeadChannelCleanup, Network, PeerConnector, TrafficType};

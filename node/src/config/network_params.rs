@@ -15,15 +15,7 @@ pub struct NetworkParams {
 
 impl NetworkParams {
     pub fn new(network: Networks) -> Self {
-        let work = if network == Networks::NanoLiveNetwork {
-            WorkThresholds::publish_full()
-        } else if network == Networks::NanoBetaNetwork {
-            WorkThresholds::publish_beta()
-        } else if network == Networks::NanoTestNetwork {
-            WorkThresholds::publish_test()
-        } else {
-            WorkThresholds::publish_dev()
-        };
+        let work = WorkThresholds::default_for(network);
         let network_constants = NetworkConstants::new(work.clone(), network);
         Self {
             work: work.clone(),

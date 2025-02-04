@@ -1,4 +1,7 @@
-use super::{websocket_config::WebsocketConfig, DiagnosticsConfig, Networks};
+use super::{
+    websocket_config::WebsocketConfig, DiagnosticsConfig, NetworkParams, Networks,
+    DEV_NETWORK_PARAMS,
+};
 use crate::{
     block_processing::{
         BacklogScanConfig, BlockProcessorConfig, BoundedBacklogConfig, LocalBlockBroadcasterConfig,
@@ -11,7 +14,6 @@ use crate::{
     },
     stats::StatsConfig,
     transport::MessageProcessorConfig,
-    NetworkParams, DEV_NETWORK_PARAMS,
 };
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng};

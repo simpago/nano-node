@@ -5,11 +5,10 @@ use rsnano_ledger::DEV_GENESIS_PUB_KEY;
 use rsnano_messages::ConfirmReq;
 use rsnano_network::Channel;
 use rsnano_node::{
-    config::NodeFlags,
+    config::{NodeFlags, DEV_NETWORK_PARAMS},
     consensus::{ConfirmationSolicitor, Election, ElectionBehavior, VoteInfo},
     representatives::PeeredRepInfo,
     stats::{DetailType, Direction, StatType},
-    DEV_NETWORK_PARAMS,
 };
 use test_helpers::{establish_tcp, System};
 

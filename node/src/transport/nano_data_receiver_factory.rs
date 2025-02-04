@@ -2,7 +2,7 @@ use super::{
     nano_data_receiver::NanoDataReceiver, HandshakeProcess, InboundMessageQueue, LatestKeepalives,
     SynCookies,
 };
-use crate::{stats::Stats, NetworkParams};
+use crate::{config::NetworkParams, stats::Stats};
 use rsnano_core::PrivateKey;
 use rsnano_messages::*;
 use rsnano_network::{Channel, DataReceiver, DataReceiverFactory, Network};

@@ -8,11 +8,11 @@ use rsnano_ledger::{BlockStatus, DEV_GENESIS_ACCOUNT, DEV_GENESIS_HASH, DEV_GENE
 use rsnano_network::{Channel, ChannelDirection};
 use rsnano_node::{
     block_processing::BacklogScanConfig,
-    config::{NodeConfig, NodeFlags},
+    config::{NetworkParams, NodeConfig, NodeFlags},
     consensus::{ActiveElectionsExt, Election},
     unique_path,
     wallets::WalletsExt,
-    NetworkParams, Node, NodeBuilder,
+    Node, NodeBuilder,
 };
 use rsnano_rpc_client::{NanoRpcClient, Url};
 use rsnano_rpc_server::run_rpc_server;
