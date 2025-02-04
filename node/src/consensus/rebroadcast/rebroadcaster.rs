@@ -1,4 +1,6 @@
-use super::{rebroadcaster_loop::RebroadcastLoop, VoteRebroadcastQueue};
+use super::{
+    rebroadcaster_loop::RebroadcastLoop, wallet_reps_cache::WalletRepsCache, VoteRebroadcastQueue,
+};
 use crate::{stats::Stats, transport::MessageFlooder, wallets::WalletRepresentatives};
 use rsnano_core::utils::ContainerInfo;
 use rsnano_nullable_clock::SteadyClock;
@@ -35,12 +37,12 @@ impl VoteRebroadcaster {
     }
 
     pub fn start(&mut self) {
+        let wallet_reps_cache = WalletRepsCache::new(self.wallet_reps.clone());
         let mut rebroadcast_loop = RebroadcastLoop::new(
             self.queue.clone(),
-            self.wallet_reps.clone(),
             self.message_flooder.clone(),
+            wallet_reps_cache,
             self.stats.clone(),
-            self.clock.clone(),
         );
 
         let handle = std::thread::Builder::new()

@@ -1,6 +1,7 @@
 use std::{
+    collections::VecDeque,
     ops::{Add, Sub},
-    sync::atomic::{AtomicI64, Ordering},
+    sync::Mutex,
     time::{Duration, Instant},
 };
 
@@ -10,17 +11,29 @@ pub struct SteadyClock {
 
 impl SteadyClock {
     pub fn new_null() -> Self {
+        let mut offsets = VecDeque::new();
+        offsets.push_back(DEFAULT_STUB_DURATION);
         Self {
-            time_source: TimeSource::Stub(AtomicI64::new(DEFAULT_STUB_DURATION)),
+            time_source: TimeSource::Stub(Mutex::new(offsets)),
+        }
+    }
+
+    pub fn new_null_with(offsets: impl IntoIterator<Item = Duration>) -> Self {
+        let mut last = DEFAULT_STUB_DURATION;
+        let mut nows = VecDeque::new();
+        nows.push_back(last);
+        for offset in offsets.into_iter() {
+            let now = last + offset.as_millis() as i64;
+            nows.push_back(now);
+            last = now;
+        }
+        Self {
+            time_source: TimeSource::Stub(Mutex::new(nows)),
         }
     }
 
     pub fn now(&self) -> Timestamp {
         Timestamp(self.time_source.now())
-    }
-
-    pub fn advance(&self, duration: Duration) {
-        self.time_source.advance(duration)
     }
 }
 
@@ -34,24 +47,20 @@ impl Default for SteadyClock {
 
 enum TimeSource {
     System(Instant),
-    Stub(AtomicI64),
+    Stub(Mutex<VecDeque<i64>>),
 }
 
 impl TimeSource {
     fn now(&self) -> i64 {
         match self {
             TimeSource::System(instant) => instant.elapsed().as_millis() as i64,
-            TimeSource::Stub(value) => value.load(Ordering::SeqCst),
-        }
-    }
-
-    pub fn advance(&self, duration: Duration) {
-        match self {
-            TimeSource::System(_) => {
-                panic!("Advancing the clock is not supported for a real clock")
-            }
-            TimeSource::Stub(i) => {
-                i.fetch_add(duration.as_millis() as i64, Ordering::SeqCst);
+            TimeSource::Stub(nows) => {
+                let mut guard = nows.lock().unwrap();
+                if guard.len() == 1 {
+                    *guard.front().unwrap()
+                } else {
+                    guard.pop_front().unwrap()
+                }
             }
         }
     }
@@ -157,6 +166,26 @@ mod tests {
             let now1 = clock.now();
             let now2 = clock.now();
             assert_eq!(now1, now2);
+        }
+
+        #[test]
+        fn configure_multiple_responses() {
+            let clock = SteadyClock::new_null_with([
+                Duration::from_secs(1),
+                Duration::from_secs(10),
+                Duration::from_secs(3),
+            ]);
+            let now1 = clock.now();
+            let now2 = clock.now();
+            let now3 = clock.now();
+            let now4 = clock.now();
+            let now5 = clock.now();
+            let now6 = clock.now();
+            assert_eq!(now2, now1 + Duration::from_secs(1));
+            assert_eq!(now3, now2 + Duration::from_secs(10));
+            assert_eq!(now4, now3 + Duration::from_secs(3));
+            assert_eq!(now5, now4);
+            assert_eq!(now6, now4);
         }
     }
 }

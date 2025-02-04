@@ -53,17 +53,21 @@ impl WalletRepresentatives {
             self.half_principal = true;
         }
 
-        if !self.accounts.insert(pub_key.into()) {
-            return false; // account already exists
-        }
-
-        self.voting += 1;
-        true
+        self.insert(pub_key)
     }
 
     #[cfg(test)]
     pub fn set_have_half_rep(&mut self, value: bool) {
         self.half_principal = value;
+    }
+
+    pub fn insert(&mut self, pub_key: impl Into<PublicKey>) -> bool {
+        if !self.accounts.insert(pub_key.into().into()) {
+            return false; // account already exists
+        }
+
+        self.voting += 1;
+        true
     }
 }
 

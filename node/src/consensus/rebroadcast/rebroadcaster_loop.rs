@@ -1,102 +1,93 @@
-use super::VoteRebroadcastQueue;
+use super::{wallet_reps_cache::WalletRepsCache, VoteRebroadcastQueue};
 use crate::{
     stats::{DetailType, StatType, Stats},
     transport::MessageFlooder,
-    wallets::WalletRepresentatives,
 };
+use rsnano_core::Vote;
 use rsnano_messages::{ConfirmAck, Message};
 use rsnano_network::TrafficType;
-use rsnano_nullable_clock::SteadyClock;
-use std::{
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
+use std::sync::Arc;
 
 pub(super) struct RebroadcastLoop {
     queue: Arc<VoteRebroadcastQueue>,
-    wallet_reps: Arc<Mutex<WalletRepresentatives>>,
     message_flooder: MessageFlooder,
     stats: Arc<Stats>,
-    wallet_reps_copy: WalletRepresentatives,
-    last_refresh: Instant,
-    paused: bool,
-    clock: Arc<SteadyClock>,
+    wallet_reps: WalletRepsCache,
 }
 
 impl RebroadcastLoop {
-    const REFRESH_INTERVAL: Duration = Duration::from_secs(15);
-
     pub(super) fn new(
         queue: Arc<VoteRebroadcastQueue>,
-        wallet_reps: Arc<Mutex<WalletRepresentatives>>,
         message_flooder: MessageFlooder,
+        wallet_reps: WalletRepsCache,
         stats: Arc<Stats>,
-        clock: Arc<SteadyClock>,
     ) -> Self {
         Self {
             queue,
-            wallet_reps,
             message_flooder,
             stats,
-            wallet_reps_copy: Default::default(),
-            last_refresh: Instant::now(),
-            paused: false,
-            clock,
+            wallet_reps,
         }
     }
 
     pub fn run(&mut self) {
-        self.refresh();
-
         while let Some(vote) = self.queue.dequeue() {
-            self.refresh_if_needed();
-
-            if self.paused {
-                continue;
-            }
-
-            if self.wallet_reps_copy.exists(&vote.voting_account.into()) {
-                // Don't republish votes created by this node
-                continue;
-            }
-
-            self.stats
-                .inc(StatType::VoteRebroadcaster, DetailType::Rebroadcast);
-
-            self.stats.add(
-                StatType::VoteRebroadcaster,
-                DetailType::RebroadcastHashes,
-                vote.hashes.len() as u64,
-            );
-
-            let ack = Message::ConfirmAck(ConfirmAck::new_with_rebroadcasted_vote(
-                vote.as_ref().clone(),
-            ));
-
-            self.message_flooder
-                .flood(&ack, TrafficType::VoteRebroadcast, 0.5);
+            self.process_vote(&vote);
         }
     }
 
-    fn refresh_if_needed(&mut self) {
-        if self.last_refresh.elapsed() >= Self::REFRESH_INTERVAL {
-            self.refresh();
+    fn process_vote(&mut self, vote: &Vote) {
+        self.wallet_reps.refresh_if_needed();
+
+        if self.should_republish(vote) {
+            self.republish(vote);
         }
     }
 
-    fn refresh(&mut self) {
-        self.wallet_reps_copy = self.wallet_reps.lock().unwrap().clone();
+    fn should_republish(&self, vote: &Vote) -> bool {
         // Disable vote rebroadcasting if the node has a principal representative (or close to)
-        self.paused = self.wallet_reps_copy.have_half_rep();
-        self.last_refresh = Instant::now();
+        if self.wallet_reps.have_half_rep() {
+            return false;
+        }
+
+        // Don't republish votes created by this node
+        if self.wallet_reps.exists(vote.voting_account) {
+            return false;
+        }
+
+        true
+    }
+
+    fn republish(&mut self, vote: &Vote) {
+        self.update_stats(vote);
+        let message = self.create_ack_message(vote);
+
+        self.message_flooder
+            .flood(&message, TrafficType::VoteRebroadcast, 0.5);
+    }
+
+    fn create_ack_message(&self, vote: &Vote) -> Message {
+        Message::ConfirmAck(ConfirmAck::new_with_rebroadcasted_vote(vote.clone()))
+    }
+
+    fn update_stats(&self, vote: &Vote) {
+        self.stats
+            .inc(StatType::VoteRebroadcaster, DetailType::Rebroadcast);
+
+        self.stats.add(
+            StatType::VoteRebroadcaster,
+            DetailType::RebroadcastHashes,
+            vote.hashes.len() as u64,
+        );
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transport::FloodEvent;
+    use crate::{transport::FloodEvent, wallets::WalletRepresentatives};
     use rsnano_core::Vote;
+    use std::sync::Mutex;
 
     #[test]
     fn empty_queue() {
@@ -106,11 +97,11 @@ mod tests {
                 .finish(),
         );
         let wallet_reps = Arc::new(Mutex::new(WalletRepresentatives::default()));
+        let wallet_reps_cache = WalletRepsCache::new(wallet_reps);
         let message_flooder = MessageFlooder::new_null();
         let stats = Arc::new(Stats::default());
-        let clock = Arc::new(SteadyClock::new_null());
         let mut rebroadcast_loop =
-            RebroadcastLoop::new(queue, wallet_reps, message_flooder, stats, clock);
+            RebroadcastLoop::new(queue, message_flooder, wallet_reps_cache, stats);
 
         rebroadcast_loop.run();
     }
@@ -123,12 +114,12 @@ mod tests {
                 .finish(),
         );
         let wallet_reps = Arc::new(Mutex::new(WalletRepresentatives::default()));
+        let wallet_reps_cache = WalletRepsCache::new(wallet_reps);
         let message_flooder = MessageFlooder::new_null();
         let stats = Arc::new(Stats::default());
         let flood_tracker = message_flooder.track_floods();
-        let clock = Arc::new(SteadyClock::new_null());
         let mut rebroadcast_loop =
-            RebroadcastLoop::new(queue.clone(), wallet_reps, message_flooder, stats, clock);
+            RebroadcastLoop::new(queue.clone(), message_flooder, wallet_reps_cache, stats);
 
         let vote = Vote::new_test_instance();
         queue.enqueue(Arc::new(vote.clone()));
@@ -153,13 +144,13 @@ mod tests {
                 .finish(),
         );
         let wallet_reps = Arc::new(Mutex::new(WalletRepresentatives::default()));
+        let wallet_reps_cache = WalletRepsCache::new(wallet_reps.clone());
         let message_flooder = MessageFlooder::new_null();
         let stats = Arc::new(Stats::default());
         let flood_tracker = message_flooder.track_floods();
-        let clock = Arc::new(SteadyClock::new_null());
         wallet_reps.lock().unwrap().set_have_half_rep(true);
         let mut rebroadcast_loop =
-            RebroadcastLoop::new(queue.clone(), wallet_reps, message_flooder, stats, clock);
+            RebroadcastLoop::new(queue.clone(), message_flooder, wallet_reps_cache, stats);
 
         let vote = Vote::new_test_instance();
         queue.enqueue(Arc::new(vote.clone()));
@@ -178,30 +169,26 @@ mod tests {
                 .finish(),
         );
         let wallet_reps = Arc::new(Mutex::new(WalletRepresentatives::default()));
+        let wallet_reps_cache = WalletRepsCache::new(wallet_reps.clone());
         let message_flooder = MessageFlooder::new_null();
         let stats = Arc::new(Stats::default());
         let flood_tracker = message_flooder.track_floods();
-        let clock = Arc::new(SteadyClock::new_null());
-        let mut rebroadcast_loop = RebroadcastLoop::new(
-            queue.clone(),
-            wallet_reps.clone(),
-            message_flooder,
-            stats,
-            clock.clone(),
-        );
+        let mut rebroadcast_loop =
+            RebroadcastLoop::new(queue.clone(), message_flooder, wallet_reps_cache, stats);
 
         let vote = Vote::new_test_instance();
         queue.enqueue(Arc::new(vote.clone()));
+        let vote = Vote::new_test_instance();
+        queue.enqueue(Arc::new(vote.clone()));
+
         rebroadcast_loop.run();
         assert_eq!(flood_tracker.output().len(), 1);
 
         wallet_reps.lock().unwrap().set_have_half_rep(true);
-        let vote = Vote::new_test_instance();
-        queue.enqueue(Arc::new(vote.clone()));
         rebroadcast_loop.run();
         assert_eq!(flood_tracker.output().len(), 2);
 
-        clock.advance(RebroadcastLoop::REFRESH_INTERVAL);
+        //        clock.advance(RebroadcastLoop::REFRESH_INTERVAL);
         queue.enqueue(Arc::new(vote.clone()));
         rebroadcast_loop.run();
         assert_eq!(flood_tracker.output().len(), 2);
