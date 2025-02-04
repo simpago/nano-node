@@ -2,11 +2,11 @@ use super::{Election, ElectionData};
 use crate::{config::NetworkParams, representatives::PeeredRepInfo, transport::MessageFlooder};
 use rsnano_core::{BlockHash, Root};
 use rsnano_messages::{ConfirmReq, Message, Publish};
-use rsnano_network::{ChannelId, Network, TrafficType};
+use rsnano_network::{Channel, ChannelId, Network, TrafficType};
 use std::{
     cmp::max,
     collections::HashMap,
-    sync::{atomic::Ordering, MutexGuard, RwLock},
+    sync::{atomic::Ordering, Arc, MutexGuard, RwLock},
 };
 
 /// This struct accepts elections that need further votes before they can be confirmed and bundles them in to single confirm_req packets
@@ -20,7 +20,7 @@ pub struct ConfirmationSolicitor<'a> {
     max_election_broadcasts: usize,
     representative_requests: Vec<PeeredRepInfo>,
     representative_broadcasts: Vec<PeeredRepInfo>,
-    requests: HashMap<ChannelId, Vec<(BlockHash, Root)>>,
+    requests: HashMap<ChannelId, (Arc<Channel>, Vec<(BlockHash, Root)>)>,
     prepared: bool,
     rebroadcasted: usize,
     message_flooder: MessageFlooder,
@@ -132,7 +132,11 @@ impl<'a> ConfirmationSolicitor<'a> {
                     .should_drop(rep.channel_id(), TrafficType::ConfirmationRequests);
 
                 if !should_drop {
-                    let request_queue = self.requests.entry(rep.channel_id()).or_default();
+                    let rep_channel = rep.channel.clone();
+                    let (_, request_queue) = self
+                        .requests
+                        .entry(rep_channel.channel_id())
+                        .or_insert_with(|| (rep_channel, Vec::new()));
                     request_queue.push((winner.hash(), winner.root()));
                     if !different {
                         count += 1;
@@ -158,14 +162,14 @@ impl<'a> ConfirmationSolicitor<'a> {
     /// Dispatch bundled requests to each channel
     pub fn flush(&mut self) {
         debug_assert!(self.prepared);
-        for (channel_id, requests) in &self.requests {
+        for (channel, requests) in self.requests.values() {
             let mut roots_hashes = Vec::new();
             for root_hash in requests {
                 roots_hashes.push(root_hash.clone());
                 if roots_hashes.len() == ConfirmReq::HASHES_MAX {
                     let req = Message::ConfirmReq(ConfirmReq::new(roots_hashes));
-                    self.message_flooder.try_send(
-                        *channel_id,
+                    self.message_flooder.try_send_channel(
+                        &channel,
                         &req,
                         TrafficType::ConfirmationRequests,
                     );
@@ -174,8 +178,11 @@ impl<'a> ConfirmationSolicitor<'a> {
             }
             if !roots_hashes.is_empty() {
                 let req = Message::ConfirmReq(ConfirmReq::new(roots_hashes));
-                self.message_flooder
-                    .try_send(*channel_id, &req, TrafficType::ConfirmationRequests);
+                self.message_flooder.try_send_channel(
+                    channel,
+                    &req,
+                    TrafficType::ConfirmationRequests,
+                );
             }
         }
         self.prepared = false;
