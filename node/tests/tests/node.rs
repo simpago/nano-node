@@ -1761,7 +1761,7 @@ fn fork_no_vote_quorum() {
         .message_sender
         .lock()
         .unwrap()
-        .try_send_channel(&channel, &confirm, TrafficType::Generic);
+        .try_send(&channel, &confirm, TrafficType::Generic);
 
     assert_timely_msg(
         Duration::from_secs(10),

@@ -650,13 +650,13 @@ impl Network {
         Some((channel, observers))
     }
 
-    pub fn idle_channels(&self, min_idle_time: Duration, now: Timestamp) -> Vec<ChannelId> {
+    pub fn idle_channels(&self, min_idle_time: Duration, now: Timestamp) -> Vec<Arc<Channel>> {
         let mut result = Vec::new();
         for channel in self.channels.values() {
             if channel.mode() == ChannelMode::Realtime
                 && now - channel.last_activity() >= min_idle_time
             {
-                result.push(channel.channel_id());
+                result.push(channel.clone());
             }
         }
 

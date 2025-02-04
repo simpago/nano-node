@@ -85,11 +85,8 @@ impl<'a> ConfirmationSolicitor<'a> {
                 true
             };
             if should_broadcast {
-                self.message_flooder.try_send_channel(
-                    &i.channel,
-                    &winner,
-                    TrafficType::BlockBroadcast,
-                );
+                self.message_flooder
+                    .try_send(&i.channel, &winner, TrafficType::BlockBroadcast);
             }
         }
         // Random flood for block propagation
@@ -168,7 +165,7 @@ impl<'a> ConfirmationSolicitor<'a> {
                 roots_hashes.push(root_hash.clone());
                 if roots_hashes.len() == ConfirmReq::HASHES_MAX {
                     let req = Message::ConfirmReq(ConfirmReq::new(roots_hashes));
-                    self.message_flooder.try_send_channel(
+                    self.message_flooder.try_send(
                         &channel,
                         &req,
                         TrafficType::ConfirmationRequests,
@@ -178,11 +175,8 @@ impl<'a> ConfirmationSolicitor<'a> {
             }
             if !roots_hashes.is_empty() {
                 let req = Message::ConfirmReq(ConfirmReq::new(roots_hashes));
-                self.message_flooder.try_send_channel(
-                    channel,
-                    &req,
-                    TrafficType::ConfirmationRequests,
-                );
+                self.message_flooder
+                    .try_send(channel, &req, TrafficType::ConfirmationRequests);
             }
         }
         self.prepared = false;

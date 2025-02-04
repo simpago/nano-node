@@ -327,11 +327,8 @@ impl Node {
             OnlineWeightCalculation::new(online_weight_sampler, online_reps.clone());
         dead_channel_cleanup.add_step(OnlineRepsCleanup::new(online_reps.clone()));
 
-        let mut message_sender = MessageSender::new(
-            network.clone(),
-            stats.clone(),
-            network_params.network.protocol_info(),
-        );
+        let mut message_sender =
+            MessageSender::new(stats.clone(), network_params.network.protocol_info());
 
         if let Some(callback) = &args.callbacks.on_publish {
             message_sender.set_published_callback(callback.clone());
@@ -602,7 +599,6 @@ impl Node {
         vote_applier.set_election_schedulers(&election_schedulers);
 
         let mut bootstrap_sender = MessageSender::new_with_buffer_size(
-            network.clone(),
             stats.clone(),
             network_params.network.protocol_info(),
             512,
@@ -1013,11 +1009,10 @@ impl Node {
                     return;
                 };
                 let keepalive = factory.create_keepalive_self();
-                publisher.lock().unwrap().try_send_channel(
-                    &channel,
-                    &keepalive,
-                    TrafficType::Keepalive,
-                );
+                publisher
+                    .lock()
+                    .unwrap()
+                    .try_send(&channel, &keepalive, TrafficType::Keepalive);
             }));
 
         let rep_crawler_w = Arc::downgrade(&rep_crawler);

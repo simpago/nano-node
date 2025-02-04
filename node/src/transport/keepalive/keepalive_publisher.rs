@@ -82,10 +82,9 @@ impl KeepalivePublisher {
     fn try_send_keepalive(&self, channel: &Channel) {
         let keepalive = self.message_factory.create_keepalive();
 
-        self.message_sender.lock().unwrap().try_send_channel(
-            channel,
-            &keepalive,
-            TrafficType::Keepalive,
-        );
+        self.message_sender
+            .lock()
+            .unwrap()
+            .try_send(channel, &keepalive, TrafficType::Keepalive);
     }
 }

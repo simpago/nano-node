@@ -171,11 +171,10 @@ impl RepCrawler {
 
             let req = Message::ConfirmReq(ConfirmReq::new(vec![hash_root]));
 
-            self.message_sender.lock().unwrap().try_send_channel(
-                &channel,
-                &req,
-                TrafficType::RepCrawler,
-            );
+            self.message_sender
+                .lock()
+                .unwrap()
+                .try_send(&channel, &req, TrafficType::RepCrawler);
         }
     }
 

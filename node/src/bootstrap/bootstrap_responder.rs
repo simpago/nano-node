@@ -411,11 +411,10 @@ impl BootstrapResponderImpl {
         }
 
         let msg = Message::AscPullAck(response);
-        self.message_sender.lock().unwrap().try_send_channel(
-            channel,
-            &msg,
-            TrafficType::BootstrapServer,
-        );
+        self.message_sender
+            .lock()
+            .unwrap()
+            .try_send(channel, &msg, TrafficType::BootstrapServer);
     }
 }
 

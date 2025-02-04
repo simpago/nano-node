@@ -97,11 +97,7 @@ impl RequesterRunner {
         let mut guard = self.state.lock().unwrap();
         guard.running_queries.insert(query);
         let message = Message::AscPullReq(request);
-        let sent = message_sender.try_send_channel(
-            &spec.channel,
-            &message,
-            TrafficType::BootstrapRequests,
-        );
+        let sent = message_sender.try_send(&spec.channel, &message, TrafficType::BootstrapRequests);
 
         if sent {
             self.stats.inc(StatType::Bootstrap, DetailType::Request);

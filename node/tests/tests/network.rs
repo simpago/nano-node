@@ -77,9 +77,9 @@ fn last_contacted() {
     // it is possible that there could be multiple keepalives in flight but we assume here that there will be no more than one in flight for the purposes of this test
     let keepalive = Message::Keepalive(Keepalive::default());
     let mut publisher = node0.message_sender.lock().unwrap();
-    publisher.try_send_channel(&channel1, &keepalive, TrafficType::Generic);
-    publisher.try_send_channel(&channel1, &keepalive, TrafficType::Generic);
-    publisher.try_send_channel(&channel1, &keepalive, TrafficType::Generic);
+    publisher.try_send(&channel1, &keepalive, TrafficType::Generic);
+    publisher.try_send(&channel1, &keepalive, TrafficType::Generic);
+    publisher.try_send(&channel1, &keepalive, TrafficType::Generic);
 
     assert_timely_msg(
         Duration::from_secs(3),
@@ -322,7 +322,7 @@ fn duplicate_vote_detection() {
         .message_sender
         .lock()
         .unwrap()
-        .try_send_channel(&channel, &message, TrafficType::Generic);
+        .try_send(&channel, &message, TrafficType::Generic);
     assert_always_eq(
         Duration::from_millis(100),
         || {
@@ -338,7 +338,7 @@ fn duplicate_vote_detection() {
         .message_sender
         .lock()
         .unwrap()
-        .try_send_channel(&channel, &message, TrafficType::Generic);
+        .try_send(&channel, &message, TrafficType::Generic);
     assert_timely_eq(
         Duration::from_secs(2),
         || {
@@ -401,7 +401,7 @@ fn duplicate_revert_vote() {
         .message_sender
         .lock()
         .unwrap()
-        .try_send_channel(&channel, &message1, TrafficType::Vote);
+        .try_send(&channel, &message1, TrafficType::Vote);
     assert_always_eq(
         Duration::from_millis(100),
         || {
@@ -419,7 +419,7 @@ fn duplicate_revert_vote() {
         .message_sender
         .lock()
         .unwrap()
-        .try_send_channel(&channel, &message2, TrafficType::Vote);
+        .try_send(&channel, &message2, TrafficType::Vote);
     assert_always_eq(
         Duration::from_millis(100),
         || {
@@ -476,7 +476,7 @@ fn expire_duplicate_filter() {
         .message_sender
         .lock()
         .unwrap()
-        .try_send_channel(&channel, &message, TrafficType::Generic);
+        .try_send(&channel, &message, TrafficType::Generic);
 
     assert_always_eq(
         Duration::from_millis(100),
@@ -494,7 +494,7 @@ fn expire_duplicate_filter() {
         .message_sender
         .lock()
         .unwrap()
-        .try_send_channel(&channel, &message, TrafficType::Generic);
+        .try_send(&channel, &message, TrafficType::Generic);
 
     assert_timely_eq(
         Duration::from_secs(2),

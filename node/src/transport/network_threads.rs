@@ -221,13 +221,13 @@ impl KeepaliveLoop {
             let message = self.keepalive_factory.create_keepalive();
 
             let network = self.network.read().unwrap();
-            let list = network.idle_channels(self.keepalive_period, self.clock.now());
-            (message, list)
+            let channels = network.idle_channels(self.keepalive_period, self.clock.now());
+            (message, channels)
         };
 
-        for channel_id in keepalive_list {
+        for channel in keepalive_list {
             self.message_flooder
-                .try_send(channel_id, &message, TrafficType::Keepalive);
+                .try_send(&channel, &message, TrafficType::Keepalive);
         }
     }
 

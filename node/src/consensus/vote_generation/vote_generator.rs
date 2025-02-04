@@ -351,7 +351,7 @@ impl SharedState {
                 self.vote(&hashes, &roots, |vote| {
                     let confirm =
                         Message::ConfirmAck(ConfirmAck::new_with_own_vote((*vote).clone()));
-                    self.message_sender.lock().unwrap().try_send_channel(
+                    self.message_sender.lock().unwrap().try_send(
                         &request.channel,
                         &confirm,
                         TrafficType::Vote,

@@ -264,7 +264,7 @@ impl Telemetry {
 
     fn request(&self, channel: &Channel) {
         self.stats.inc(StatType::Telemetry, DetailType::Request);
-        self.message_sender.lock().unwrap().try_send_channel(
+        self.message_sender.lock().unwrap().try_send(
             channel,
             &Message::TelemetryReq,
             TrafficType::Telemetry,
@@ -282,11 +282,10 @@ impl Telemetry {
 
     fn broadcast(&self, channel: &Channel, message: &Message) {
         self.stats.inc(StatType::Telemetry, DetailType::Broadcast);
-        self.message_sender.lock().unwrap().try_send_channel(
-            channel,
-            message,
-            TrafficType::Telemetry,
-        );
+        self.message_sender
+            .lock()
+            .unwrap()
+            .try_send(channel, message, TrafficType::Telemetry);
     }
 
     fn cleanup(&self, data: &mut TelemetryImpl) {

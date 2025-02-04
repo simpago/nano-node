@@ -45,11 +45,11 @@ fn ignore_rebroadcast() {
 
     let tick = || {
         let msg = Message::ConfirmAck(ConfirmAck::new_with_rebroadcasted_vote(vote.clone()));
-        node2.message_sender.lock().unwrap().try_send_channel(
-            &channel2to1,
-            &msg,
-            TrafficType::RepCrawler,
-        );
+        node2
+            .message_sender
+            .lock()
+            .unwrap()
+            .try_send(&channel2to1, &msg, TrafficType::RepCrawler);
         false
     };
 
