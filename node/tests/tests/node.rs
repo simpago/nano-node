@@ -12,7 +12,7 @@ use rsnano_network::{ChannelId, TrafficType};
 use rsnano_node::{
     block_processing::{BacklogScanConfig, BlockSource, BoundedBacklogConfig},
     config::{NodeConfig, NodeFlags},
-    consensus::{ActiveElectionsExt, VoteApplierExt},
+    consensus::{ActiveElectionsExt, AggregatorRequest, VoteApplierExt},
     stats::{DetailType, Direction, StatType},
     wallets::WalletsExt,
 };
@@ -2205,8 +2205,11 @@ fn rollback_vote_self() {
         // Without the rollback being finished, the aggregator should not reply with any vote
         let channel = make_fake_channel(&node);
 
+        let aggregator_req = AggregatorRequest {
+            roots_hashes: vec![(send2.hash(), send2.root())],
+        };
         node.request_aggregator
-            .request(vec![(send2.hash(), send2.root())], channel.channel_id());
+            .request(aggregator_req, channel.channel_id());
 
         assert_always_eq(
             Duration::from_secs(1),

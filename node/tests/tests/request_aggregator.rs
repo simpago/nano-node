@@ -2,7 +2,7 @@ use rsnano_core::{Amount, PrivateKey, UnsavedBlockLatticeBuilder, DEV_GENESIS_KE
 use rsnano_messages::ConfirmAck;
 use rsnano_node::{
     config::NodeFlags,
-    consensus::VoteGenerationEvent,
+    consensus::{AggregatorRequest, VoteGenerationEvent},
     stats::{DetailType, Direction, StatType},
     wallets::WalletsExt,
 };
@@ -33,7 +33,9 @@ fn one() {
         .genesis()
         .send(&*DEV_GENESIS_KEY, Amount::nano(1000));
 
-    let request = vec![(send1.hash(), send1.root())];
+    let request = AggregatorRequest {
+        roots_hashes: vec![(send1.hash(), send1.root())],
+    };
 
     let channel = make_fake_channel(&node);
 
@@ -182,12 +184,16 @@ fn one_update() {
 
     let dummy_channel = make_fake_channel(&node);
 
-    let request1 = vec![(send2.hash(), send2.root())];
+    let request1 = AggregatorRequest {
+        roots_hashes: vec![(send2.hash(), send2.root())],
+    };
     node.request_aggregator
         .request(request1, dummy_channel.channel_id());
 
     // Update the pool of requests with another hash
-    let request2 = vec![(receive1.hash(), receive1.root())];
+    let request2 = AggregatorRequest {
+        roots_hashes: vec![(receive1.hash(), receive1.root())],
+    };
     node.request_aggregator
         .request(request2, dummy_channel.channel_id());
 
@@ -293,10 +299,12 @@ fn two() {
 
     node.process_and_confirm_multi(&[send1, send2.clone(), receive1.clone()]);
 
-    let request = vec![
-        (send2.hash(), send2.root()),
-        (receive1.hash(), receive1.root()),
-    ];
+    let request = AggregatorRequest {
+        roots_hashes: vec![
+            (send2.hash(), send2.root()),
+            (receive1.hash(), receive1.root()),
+        ],
+    };
     let dummy_channel = make_fake_channel(&node);
 
     // Process both blocks
@@ -411,20 +419,22 @@ fn split() {
         )
         .unwrap();
 
-    let mut request = Vec::new();
+    let mut request = AggregatorRequest {
+        roots_hashes: Vec::new(),
+    };
     let mut blocks = Vec::new();
     let mut lattice = UnsavedBlockLatticeBuilder::new();
 
     for _ in 0..=MAX_VBH {
         let block = lattice.genesis().send(&*DEV_GENESIS_KEY, 1);
         node.process(block.clone()).unwrap();
-        request.push((block.hash(), block.root()));
+        request.roots_hashes.push((block.hash(), block.root()));
         blocks.push(block);
     }
     // Confirm all blocks
     node.confirm(blocks.last().unwrap().hash());
     assert_eq!(node.ledger.cemented_count(), MAX_VBH as u64 + 2);
-    assert_eq!(MAX_VBH + 1, request.len());
+    assert_eq!(MAX_VBH + 1, request.roots_hashes.len());
     let dummy_channel = make_fake_channel(&node);
     node.request_aggregator
         .request(request, dummy_channel.channel_id());
@@ -502,7 +512,9 @@ fn channel_max_queue() {
         .send(&*DEV_GENESIS_KEY, Amount::nano(1000));
     node.process(send1.clone()).unwrap();
 
-    let request = vec![(send1.hash(), send1.root())];
+    let request = AggregatorRequest {
+        roots_hashes: vec![(send1.hash(), send1.root())],
+    };
     let channel = make_fake_channel(&node);
     node.request_aggregator
         .request(request.clone(), channel.channel_id());
@@ -546,7 +558,9 @@ fn cannot_vote() {
     );
 
     // correct + incorrect
-    let request = vec![(send2.hash(), send2.root()), (1.into(), send2.root())];
+    let request = AggregatorRequest {
+        roots_hashes: vec![(send2.hash(), send2.root()), (1.into(), send2.root())],
+    };
     let dummy_channel = make_fake_channel(&node);
     node.request_aggregator
         .request(request.clone(), dummy_channel.channel_id());
@@ -723,7 +737,9 @@ fn forked_open() {
     let channel = make_fake_channel(&node);
 
     // Request vote for the wrong fork
-    let request = vec![(open1.hash(), open1.root())];
+    let request = AggregatorRequest {
+        roots_hashes: vec![(open1.hash(), open1.root())],
+    };
     node.request_aggregator
         .request(request, channel.channel_id());
 
@@ -768,7 +784,9 @@ fn epoch_conflict() {
     let channel = make_fake_channel(&node);
 
     // Request vote for conflicting epoch block
-    let request = vec![(epoch_open.hash(), epoch_open.root())];
+    let request = AggregatorRequest {
+        roots_hashes: vec![(epoch_open.hash(), epoch_open.root())],
+    };
     node.request_aggregator
         .request(request.clone(), channel.channel_id());
 
@@ -821,11 +839,13 @@ fn cemented_no_spacing() {
     let channel = make_fake_channel(&node);
 
     // Request votes for blocks at different positions in the chain
-    let request = vec![
-        (send1.hash(), send1.root()),
-        (send2.hash(), send2.root()),
-        (send3.hash(), send3.root()),
-    ];
+    let request = AggregatorRequest {
+        roots_hashes: vec![
+            (send1.hash(), send1.root()),
+            (send2.hash(), send2.root()),
+            (send3.hash(), send3.root()),
+        ],
+    };
 
     // Request votes for all blocks
     node.request_aggregator

@@ -98,12 +98,12 @@ impl RequestAggregator {
         }
     }
 
-    pub fn request(&self, request: RequestType, channel_id: ChannelId) -> bool {
-        if request.is_empty() {
+    pub fn request(&self, request: AggregatorRequest, channel_id: ChannelId) -> bool {
+        if request.roots_hashes.is_empty() {
             return false;
         }
 
-        let request_len = request.len();
+        let request_len = request.roots_hashes.len();
 
         let added = { self.state.lock().unwrap().queue.push(channel_id, request) };
 
@@ -175,10 +175,13 @@ impl Drop for RequestAggregator {
     }
 }
 
-type RequestType = Vec<(BlockHash, Root)>;
+#[derive(Clone)]
+pub struct AggregatorRequest {
+    pub roots_hashes: Vec<(BlockHash, Root)>,
+}
 
 pub(crate) struct RequestAggregatorState {
-    queue: FairQueue<ChannelId, RequestType>,
+    queue: FairQueue<ChannelId, AggregatorRequest>,
     stopped: bool,
 }
 
@@ -239,7 +242,12 @@ impl RequestAggregatorLoop {
         self.mutex.lock().unwrap()
     }
 
-    fn process(&self, tx: &LmdbReadTransaction, request: &RequestType, channel_id: ChannelId) {
+    fn process(
+        &self,
+        tx: &LmdbReadTransaction,
+        request: &AggregatorRequest,
+        channel_id: ChannelId,
+    ) {
         let remaining = self.aggregate(tx, request);
 
         if !remaining.remaining_normal.is_empty() {
@@ -277,9 +285,9 @@ impl RequestAggregatorLoop {
 
     /// Aggregate requests and send cached votes to channel.
     /// Return the remaining hashes that need vote generation for each block for regular & final vote generators
-    fn aggregate(&self, tx: &LmdbReadTransaction, requests: &RequestType) -> AggregateResult {
+    fn aggregate(&self, tx: &LmdbReadTransaction, requests: &AggregatorRequest) -> AggregateResult {
         let mut aggregator = RequestAggregatorImpl::new(&self.ledger, &self.stats, tx);
-        aggregator.add_votes(requests);
+        aggregator.add_votes(&requests.roots_hashes);
         aggregator.get_result()
     }
 }

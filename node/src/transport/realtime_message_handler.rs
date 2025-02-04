@@ -2,7 +2,7 @@ use crate::{
     block_processing::{BlockProcessor, BlockSource},
     bootstrap::{BootstrapResponder, Bootstrapper},
     config::NodeConfig,
-    consensus::{RequestAggregator, VoteProcessorQueue},
+    consensus::{AggregatorRequest, RequestAggregator, VoteProcessorQueue},
     stats::{DetailType, Direction, StatType, Stats},
     wallets::Wallets,
     Telemetry,
@@ -107,8 +107,11 @@ impl RealtimeMessageHandler {
                 // Don't load nodes with disabled voting
                 // TODO: This check should be cached somewhere
                 if self.config.enable_voting && self.wallets.voting_reps_count() > 0 {
+                    let aggregator_req = AggregatorRequest {
+                        roots_hashes: req.roots_hashes,
+                    };
                     self.request_aggregator
-                        .request(req.roots_hashes, channel.channel_id());
+                        .request(aggregator_req, channel.channel_id());
                 }
             }
             Message::ConfirmAck(ack) => {
