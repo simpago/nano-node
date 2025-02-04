@@ -8,6 +8,7 @@ use std::sync::Arc;
 pub struct PeeredRep {
     pub account: PublicKey,
     pub channel_id: ChannelId,
+    pub channel: Arc<Channel>,
     pub last_request: Timestamp,
 }
 
@@ -16,7 +17,12 @@ impl PeeredRep {
         Self {
             account,
             channel_id: channel.channel_id(),
+            channel,
             last_request,
         }
+    }
+
+    pub fn channel_id(&self) -> ChannelId {
+        self.channel.channel_id()
     }
 }

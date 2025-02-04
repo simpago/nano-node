@@ -85,8 +85,11 @@ impl<'a> ConfirmationSolicitor<'a> {
                 true
             };
             if should_broadcast {
-                self.message_flooder
-                    .try_send(i.channel_id, &winner, TrafficType::BlockBroadcast);
+                self.message_flooder.try_send_channel(
+                    &i.channel,
+                    &winner,
+                    TrafficType::BlockBroadcast,
+                );
             }
         }
         // Random flood for block propagation
@@ -126,10 +129,10 @@ impl<'a> ConfirmationSolicitor<'a> {
                     .network
                     .read()
                     .unwrap()
-                    .should_drop(rep.channel_id, TrafficType::ConfirmationRequests);
+                    .should_drop(rep.channel_id(), TrafficType::ConfirmationRequests);
 
                 if !should_drop {
-                    let request_queue = self.requests.entry(rep.channel_id).or_default();
+                    let request_queue = self.requests.entry(rep.channel_id()).or_default();
                     request_queue.push((winner.hash(), winner.root()));
                     if !different {
                         count += 1;

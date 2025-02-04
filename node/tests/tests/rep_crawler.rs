@@ -116,7 +116,7 @@ fn rep_weight() {
         node.balance(&DEV_GENESIS_ACCOUNT),
         node.ledger.weight(&rep.account)
     );
-    assert_eq!(channel1.channel_id(), rep.channel_id);
+    assert_eq!(channel1, rep.channel);
     assert_eq!(
         node.online_reps
             .lock()

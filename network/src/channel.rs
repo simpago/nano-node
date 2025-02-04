@@ -297,7 +297,36 @@ impl Channel {
     }
 }
 
+impl PartialEq for Channel {
+    fn eq(&self, other: &Self) -> bool {
+        self.channel_id() == other.channel_id()
+    }
+}
+
+impl Eq for Channel {}
+
+impl std::fmt::Debug for Channel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Channel")
+            .field("id", &self.channel_id.as_usize())
+            .field("peer", &self.peer_addr())
+            .finish()
+    }
+}
+
 struct PeerInfo {
     node_id: Option<NodeId>,
     peering_addr: Option<SocketAddrV6>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn debug() {
+        let channel = Channel::new_test_instance();
+        let output = format!("{:?}", channel);
+        assert_eq!("Channel { id: 42, peer: [::ffff:10:0:0:2]:2222 }", output);
+    }
 }

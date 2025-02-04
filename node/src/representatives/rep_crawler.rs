@@ -337,12 +337,12 @@ impl RepCrawler {
                         channel.peer_addr()
                     );
                 }
-                InsertResult::ChannelChanged(previous) => {
+                InsertResult::ChannelChanged(previous_peer) => {
                     warn!(
                         "Updated representative: {} at : {} (was at: {})",
                         Account::from(vote.voting_account).encode_account(),
                         channel.peer_addr(),
-                        previous
+                        previous_peer
                     )
                 }
                 InsertResult::Updated => {}

@@ -2,15 +2,14 @@ use super::PeeredRep;
 use rsnano_core::{Account, PublicKey};
 use rsnano_network::{Channel, ChannelId};
 use rsnano_nullable_clock::Timestamp;
-use std::{collections::HashMap, mem::size_of, sync::Arc};
+use std::{collections::HashMap, mem::size_of, net::SocketAddrV6, sync::Arc};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum InsertResult {
     Inserted,
     Updated,
-    /// Returns the old channel id
-    // TODO return old peer address
-    ChannelChanged(ChannelId),
+    /// Returns the old peer addr
+    ChannelChanged(SocketAddrV6),
 }
 
 /// Collection of all representatives that we have a direct connection to
@@ -39,16 +38,17 @@ impl PeeredContainer {
         let channel_id = channel.channel_id();
         if let Some(rep) = self.by_account.get_mut(&account) {
             // Update if representative channel was changed
-            if rep.channel_id != channel_id {
-                let old_channel_id = rep.channel_id;
+            if rep.channel_id() != channel_id {
+                let old_channel_id = rep.channel_id();
+                let old_peer_addr = rep.channel.peer_addr();
                 let new_channel_id = channel_id;
-                rep.channel_id = new_channel_id;
+                rep.channel = channel;
                 self.remove_channel_id(&account, old_channel_id);
                 self.by_channel_id
                     .entry(new_channel_id)
                     .or_default()
                     .push(account);
-                InsertResult::ChannelChanged(old_channel_id)
+                InsertResult::ChannelChanged(old_peer_addr)
             } else {
                 InsertResult::Updated
             }
@@ -274,7 +274,7 @@ mod tests {
         container.update_or_insert(account, channel_a.clone(), now);
         assert_eq!(
             container.update_or_insert(account, channel_b.clone(), now + Duration::from_secs(2)),
-            InsertResult::ChannelChanged(channel_a.channel_id())
+            InsertResult::ChannelChanged(channel_a.peer_addr())
         );
         assert_eq!(container.len(), 1);
         assert_eq!(container.iter_by_channel(channel_a.channel_id()).count(), 0);

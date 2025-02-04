@@ -93,7 +93,7 @@ impl Channels {
 
         let weights = rep_weights.read();
         for rep in reps {
-            if let Some(channel) = self.channel_map.get_mut(&rep.channel_id) {
+            if let Some(channel) = self.channel_map.get_mut(&rep.channel_id()) {
                 channel.rep_weight = weights.get(&rep.account).cloned().unwrap_or_default();
                 channel.rep_state = if channel.rep_weight > min_rep_weight {
                     RepState::PrincipalRep

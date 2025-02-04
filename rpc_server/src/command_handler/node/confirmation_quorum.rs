@@ -1,5 +1,4 @@
 use crate::command_handler::RpcCommandHandler;
-use rsnano_core::utils::NULL_ENDPOINT;
 use rsnano_rpc_messages::{ConfirmationQuorumArgs, ConfirmationQuorumResponse, PeerDetailsDto};
 
 impl RpcCommandHandler {
@@ -23,21 +22,10 @@ impl RpcCommandHandler {
             let peers = online_reps
                 .peered_reps()
                 .iter()
-                .map(|rep| {
-                    let endpoint = self
-                        .node
-                        .network
-                        .read()
-                        .unwrap()
-                        .get(rep.channel_id)
-                        .map(|c| c.peer_addr())
-                        .unwrap_or(NULL_ENDPOINT);
-
-                    PeerDetailsDto {
-                        account: rep.account.into(),
-                        ip: endpoint,
-                        weight: self.node.ledger.weight(&rep.account),
-                    }
+                .map(|rep| PeerDetailsDto {
+                    account: rep.account.into(),
+                    ip: rep.channel.peer_addr(),
+                    weight: self.node.ledger.weight(&rep.account),
                 })
                 .collect();
 

@@ -52,7 +52,8 @@ impl MessageFlooder {
     ) {
         let peered_prs = self.online_reps.lock().unwrap().peered_principal_reps();
         for rep in peered_prs {
-            self.sender.try_send(rep.channel_id, &message, traffic_type);
+            self.sender
+                .try_send_channel(&rep.channel, &message, traffic_type);
         }
 
         let mut channels;
