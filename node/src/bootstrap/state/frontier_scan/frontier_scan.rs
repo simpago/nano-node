@@ -1,12 +1,10 @@
 use super::{heads_container::HeadsContainer, FrontierHeadsConfig};
 use rsnano_core::{utils::ContainerInfo, Account, Frontier};
 use rsnano_nullable_clock::Timestamp;
-use std::time::Duration;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FrontierScanConfig {
     pub heads: FrontierHeadsConfig,
-    pub cooldown: Duration,
     pub max_pending: usize,
 }
 
@@ -14,7 +12,6 @@ impl Default for FrontierScanConfig {
     fn default() -> Self {
         Self {
             heads: Default::default(),
-            cooldown: Duration::from_secs(5),
             max_pending: 16,
         }
     }
@@ -24,7 +21,6 @@ impl Default for FrontierScanConfig {
 /// outdated frontiers in parallel.
 /// This class is used to track the progress of each range.
 pub struct FrontierScan {
-    config: FrontierScanConfig,
     heads: HeadsContainer,
 }
 
@@ -33,7 +29,6 @@ impl FrontierScan {
         assert!(!config.heads.parallelism > 0);
         Self {
             heads: HeadsContainer::with_heads(config.heads.clone()),
-            config,
         }
     }
 
@@ -41,27 +36,23 @@ impl FrontierScan {
         let (next_account, head_start) = self.next_account(now);
 
         if !next_account.is_zero() {
-            self.inc_requests(head_start, now);
+            self.request_sent(head_start, now);
         }
 
         next_account
     }
 
     fn next_account(&self, now: Timestamp) -> (Account, Account) {
-        let cutoff = now - self.config.cooldown;
         for head in self.heads.ordered_by_timestamp() {
-            if head.requests < self.config.heads.consideration_count || head.timestamp < cutoff {
+            if head.can_send_request(now) {
                 return (head.next, head.start);
             }
         }
         (Account::zero(), Account::zero())
     }
 
-    fn inc_requests(&mut self, head_start: Account, now: Timestamp) {
-        self.heads.modify(head_start, |head| {
-            head.requests += 1;
-            head.timestamp = now
-        });
+    fn request_sent(&mut self, head_start: Account, now: Timestamp) {
+        self.heads.modify(head_start, |head| head.request_sent(now));
     }
 
     pub fn process(&mut self, start: Account, response: &[Frontier]) -> bool {
@@ -80,23 +71,25 @@ impl FrontierScan {
         done
     }
 
-    pub fn total_processed(&self) -> usize {
-        self.heads.iter().map(|i| i.processed).sum()
+    pub fn total_accounts_processed(&self) -> usize {
+        self.heads.iter().map(|i| i.accounts_processed).sum()
     }
 
     #[allow(dead_code)]
-    pub fn total_completed(&self) -> usize {
-        self.heads.iter().map(|i| i.completed).sum()
+    pub fn total_requests_completed(&self) -> usize {
+        self.heads.iter().map(|i| i.requests_completed).sum()
     }
 
     pub fn container_info(&self) -> ContainerInfo {
         // TODO port the detailed container info from nano_node
-        [("total_processed", self.total_processed(), 0)].into()
+        [("total_processed", self.total_accounts_processed(), 0)].into()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
     use rsnano_core::BlockHash;
 
@@ -137,6 +130,7 @@ mod tests {
                 parallelism: 1,
                 consideration_count: 3,
                 candidates: 5,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -174,6 +168,7 @@ mod tests {
                 parallelism: 1,
                 consideration_count: 1,
                 candidates: 1,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -199,9 +194,9 @@ mod tests {
             heads: FrontierHeadsConfig {
                 parallelism: 1,
                 consideration_count: 1,
+                cooldown: Duration::from_millis(250),
                 ..Default::default()
             },
-            cooldown: Duration::from_millis(250),
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
@@ -227,6 +222,7 @@ mod tests {
                 parallelism: 1,
                 consideration_count: 2,
                 candidates: 3, // Only keep the lowest candidates
+                ..Default::default()
             },
             ..Default::default()
         };

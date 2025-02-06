@@ -51,7 +51,7 @@ impl HeadsContainer {
 
     fn push_back(&mut self, head: FrontierHead) {
         let start = head.start;
-        let timestamp = head.timestamp;
+        let timestamp = head.last_request_sent;
         let mut inserted = true;
         self.by_start
             .entry(start)
@@ -78,9 +78,9 @@ impl HeadsContainer {
     {
         let start = start.into();
         if let Some(head) = self.by_start.get_mut(&start) {
-            let old_timestamp = head.timestamp;
+            let old_timestamp = head.last_request_sent;
             f(head);
-            if head.timestamp != old_timestamp {
+            if head.last_request_sent != old_timestamp {
                 let accounts = self.by_timestamp.get_mut(&old_timestamp).unwrap();
                 if accounts.len() == 1 {
                     self.by_timestamp.remove(&old_timestamp);
@@ -88,7 +88,7 @@ impl HeadsContainer {
                     accounts.retain(|a| *a != start);
                 }
                 self.by_timestamp
-                    .entry(head.timestamp)
+                    .entry(head.last_request_sent)
                     .or_default()
                     .push(start);
             }
@@ -150,9 +150,9 @@ mod tests {
     fn order_by_timestamp() {
         let mut heads = container_with_heads([(1, 10), (10, 20), (20, 30)]);
         let now = Timestamp::new_test_instance();
-        heads.modify(1, |h| h.timestamp = now + Duration::from_secs(100));
-        heads.modify(10, |h| h.timestamp = now + Duration::from_secs(99));
-        heads.modify(20, |h| h.timestamp = now + Duration::from_secs(101));
+        heads.modify(1, |h| h.last_request_sent = now + Duration::from_secs(100));
+        heads.modify(10, |h| h.last_request_sent = now + Duration::from_secs(99));
+        heads.modify(20, |h| h.last_request_sent = now + Duration::from_secs(101));
 
         let ordered: Vec<_> = heads.ordered_by_timestamp().collect();
         assert_eq!(ordered[0].start, 10.into());
@@ -173,7 +173,10 @@ mod tests {
 
         heads.modify(1, |_| {});
 
-        assert_eq!(heads.iter().next().unwrap().timestamp, Default::default());
+        assert_eq!(
+            heads.iter().next().unwrap().last_request_sent,
+            Default::default()
+        );
         assert_eq!(heads.sequenced.len(), 1);
         assert_eq!(heads.by_timestamp.len(), 1);
         assert_eq!(heads.by_start.len(), 1);
@@ -184,9 +187,9 @@ mod tests {
         let mut heads = container_with_heads([(1, 10)]);
 
         let now = Timestamp::new_test_instance();
-        heads.modify(1, |head| head.timestamp = now);
+        heads.modify(1, |head| head.last_request_sent = now);
 
-        assert_eq!(heads.iter().next().unwrap().timestamp, now);
+        assert_eq!(heads.iter().next().unwrap().last_request_sent, now);
         assert_eq!(heads.sequenced.len(), 1);
         assert_eq!(heads.by_start.len(), 1);
         assert_eq!(heads.by_timestamp.len(), 1);
@@ -198,7 +201,7 @@ mod tests {
         let mut heads = container_with_heads([(1, 10), (10, 20)]);
 
         let now = Timestamp::new_test_instance();
-        heads.modify(1, |head| head.timestamp = now);
+        heads.modify(1, |head| head.last_request_sent = now);
 
         assert_eq!(heads.by_timestamp.len(), 2);
         assert_eq!(

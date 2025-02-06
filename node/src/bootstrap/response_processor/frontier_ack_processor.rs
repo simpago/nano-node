@@ -139,6 +139,13 @@ mod tests {
 
         let success = processor.process(&query, vec![Frontier::new_test_instance()]);
         assert!(success);
-        assert_eq!(state.lock().unwrap().frontier_scan.total_completed(), 1);
+        assert_eq!(
+            state
+                .lock()
+                .unwrap()
+                .frontier_scan
+                .total_requests_completed(),
+            1
+        );
     }
 }

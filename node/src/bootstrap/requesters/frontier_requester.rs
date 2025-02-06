@@ -10,6 +10,7 @@ use rsnano_network::{bandwidth_limiter::RateLimiter, Channel};
 use rsnano_nullable_clock::SteadyClock;
 use std::sync::Arc;
 
+/// Creates frontier requests as specified by the frontier scanner
 pub(crate) struct FrontierRequester {
     state: FrontierState,
     stats: Arc<Stats>,
@@ -124,15 +125,13 @@ impl BootstrapPromise<AscPullQuerySpec> for FrontierRequester {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::RwLock;
-
-    use rsnano_network::Network;
-
     use super::*;
     use crate::{
         bootstrap::{progress, state::CandidateAccountsConfig, BootstrapConfig},
         utils::ThreadPoolImpl,
     };
+    use rsnano_network::Network;
+    use std::sync::RwLock;
 
     #[test]
     fn happy_path() {
