@@ -87,7 +87,7 @@ impl RequesterRunner {
     fn send_request(&self, spec: AscPullQuerySpec, message_sender: &mut MessageSender) {
         let id = thread_rng().next_u64();
         let now = self.clock.now();
-        let query = RunningQuery::from_request(id, &spec, now, self.config.request_timeout);
+        let query = RunningQuery::from_spec(id, &spec, now, self.config.request_timeout);
 
         let request = AscPullReq {
             id,

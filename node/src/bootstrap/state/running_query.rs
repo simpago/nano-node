@@ -65,31 +65,26 @@ impl RunningQuery {
         }
     }
 
-    pub fn from_request(
-        id: u64,
-        spec: &AscPullQuerySpec,
-        now: Timestamp,
-        timeout: Duration,
-    ) -> Self {
+    pub fn from_spec(id: u64, spec: &AscPullQuerySpec, now: Timestamp, timeout: Duration) -> Self {
         let (source, query_type, start, count) = match &spec.req_type {
             AscPullReqType::Frontiers(f) => (
                 QuerySource::Frontiers,
                 QueryType::Frontiers,
                 HashOrAccount::from(f.start),
-                0,
+                f.count as usize,
             ),
             AscPullReqType::Blocks(b) => match b.start_type {
                 HashType::Account => (
                     QuerySource::Priority,
                     QueryType::BlocksByAccount,
                     b.start,
-                    b.count,
+                    b.count as usize,
                 ),
                 HashType::Block => (
                     QuerySource::Priority,
                     QueryType::BlocksByHash,
                     b.start,
-                    b.count,
+                    b.count as usize,
                 ),
             },
             AscPullReqType::AccountInfo(i) => (
@@ -106,11 +101,15 @@ impl RunningQuery {
             start,
             account: spec.account,
             hash: spec.hash,
-            count: count.into(),
+            count,
             id,
             sent: now,
-            response_cutoff: now + timeout * 4,
+            response_cutoff: Self::initial_response_cutoff(now, timeout),
         }
+    }
+
+    fn initial_response_cutoff(now: Timestamp, timeout: Duration) -> Timestamp {
+        now + timeout * 4
     }
 
     pub fn is_valid_response_type(&self, response: &AscPullAck) -> bool {
@@ -217,6 +216,137 @@ impl RunningQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rsnano_messages::{AccountInfoReqPayload, BlocksReqPayload, FrontiersReqPayload};
+
+    #[test]
+    fn query_from_frontiers_spec() {
+        let id = 123;
+        let start = Account::from(42);
+        let count = 1000;
+
+        let spec = AscPullQuerySpec {
+            req_type: AscPullReqType::Frontiers(FrontiersReqPayload { start, count }),
+            ..AscPullQuerySpec::new_test_instance()
+        };
+
+        let now = Timestamp::new_test_instance();
+        let timeout = Duration::from_secs(3);
+
+        let query = RunningQuery::from_spec(id, &spec, now, timeout);
+
+        assert_eq!(query.id, id);
+        assert_eq!(query.source, QuerySource::Frontiers);
+        assert_eq!(query.query_type, QueryType::Frontiers);
+        assert_eq!(query.start, start.into());
+        assert_eq!(query.count, count as usize);
+        assert_eq!(query.account, spec.account);
+        assert_eq!(query.hash, spec.hash);
+        assert_eq!(query.sent, now);
+        assert_eq!(
+            query.response_cutoff,
+            RunningQuery::initial_response_cutoff(now, timeout)
+        );
+    }
+
+    #[test]
+    fn query_from_blocks_by_account_spec() {
+        let id = 123;
+        let start = Account::from(42);
+        let count = 16;
+
+        let spec = AscPullQuerySpec {
+            req_type: AscPullReqType::Blocks(BlocksReqPayload {
+                start_type: HashType::Account,
+                start: start.into(),
+                count,
+            }),
+            ..AscPullQuerySpec::new_test_instance()
+        };
+
+        let now = Timestamp::new_test_instance();
+        let timeout = Duration::from_secs(3);
+
+        let query = RunningQuery::from_spec(id, &spec, now, timeout);
+
+        assert_eq!(query.id, id);
+        assert_eq!(query.source, QuerySource::Priority);
+        assert_eq!(query.query_type, QueryType::BlocksByAccount);
+        assert_eq!(query.start, start.into());
+        assert_eq!(query.count, count as usize);
+        assert_eq!(query.account, spec.account);
+        assert_eq!(query.hash, spec.hash);
+        assert_eq!(query.sent, now);
+        assert_eq!(
+            query.response_cutoff,
+            RunningQuery::initial_response_cutoff(now, timeout)
+        );
+    }
+
+    #[test]
+    fn query_from_blocks_by_hash_spec() {
+        let id = 123;
+        let start = BlockHash::from(42);
+        let count = 16;
+
+        let spec = AscPullQuerySpec {
+            req_type: AscPullReqType::Blocks(BlocksReqPayload {
+                start_type: HashType::Block,
+                start: start.into(),
+                count,
+            }),
+            ..AscPullQuerySpec::new_test_instance()
+        };
+
+        let now = Timestamp::new_test_instance();
+        let timeout = Duration::from_secs(3);
+
+        let query = RunningQuery::from_spec(id, &spec, now, timeout);
+
+        assert_eq!(query.id, id);
+        assert_eq!(query.source, QuerySource::Priority);
+        assert_eq!(query.query_type, QueryType::BlocksByHash);
+        assert_eq!(query.start, start.into());
+        assert_eq!(query.count, count as usize);
+        assert_eq!(query.account, spec.account);
+        assert_eq!(query.hash, spec.hash);
+        assert_eq!(query.sent, now);
+        assert_eq!(
+            query.response_cutoff,
+            RunningQuery::initial_response_cutoff(now, timeout)
+        );
+    }
+
+    #[test]
+    fn query_from_account_info_spec() {
+        let id = 123;
+        let target = BlockHash::from(42);
+
+        let spec = AscPullQuerySpec {
+            req_type: AscPullReqType::AccountInfo(AccountInfoReqPayload {
+                target: target.into(),
+                target_type: HashType::Block,
+            }),
+            ..AscPullQuerySpec::new_test_instance()
+        };
+
+        let now = Timestamp::new_test_instance();
+        let timeout = Duration::from_secs(3);
+
+        let query = RunningQuery::from_spec(id, &spec, now, timeout);
+
+        assert_eq!(query.id, id);
+        assert_eq!(query.source, QuerySource::Dependencies);
+        assert_eq!(query.query_type, QueryType::AccountInfoByHash);
+        assert_eq!(query.start, target.into());
+        assert_eq!(query.count, 0);
+        assert_eq!(query.account, spec.account);
+        assert_eq!(query.hash, spec.hash);
+        assert_eq!(query.sent, now);
+        assert_eq!(
+            query.response_cutoff,
+            RunningQuery::initial_response_cutoff(now, timeout)
+        );
+    }
 
     mod verify_frontiers {
         use super::*;

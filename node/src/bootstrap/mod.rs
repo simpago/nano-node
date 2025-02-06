@@ -11,7 +11,7 @@ use std::sync::Arc;
 pub use bootstrap_responder::*;
 pub use bootstrapper::*;
 use rsnano_core::{Account, BlockHash};
-use rsnano_messages::AscPullReqType;
+use rsnano_messages::{AscPullReqType, FrontiersReqPayload};
 use rsnano_network::Channel;
 
 pub(self) trait BootstrapPromise<T> {
@@ -30,6 +30,21 @@ pub(crate) struct AscPullQuerySpec {
     pub account: Account,
     pub hash: BlockHash,
     pub cooldown_account: bool,
+}
+
+impl AscPullQuerySpec {
+    pub fn new_test_instance() -> Self {
+        Self {
+            req_type: AscPullReqType::Frontiers(FrontiersReqPayload {
+                start: 100.into(),
+                count: 1000,
+            }),
+            channel: Arc::new(Channel::new_test_instance()),
+            account: Account::from(100),
+            hash: BlockHash::from(200),
+            cooldown_account: false,
+        }
+    }
 }
 
 #[cfg(test)]
