@@ -33,6 +33,7 @@ pub(crate) struct AscPullQuerySpec {
 }
 
 impl AscPullQuerySpec {
+    #[allow(dead_code)]
     pub fn new_test_instance() -> Self {
         Self {
             req_type: AscPullReqType::Frontiers(FrontiersReqPayload {

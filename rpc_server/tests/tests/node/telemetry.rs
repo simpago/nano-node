@@ -57,7 +57,7 @@ fn telemetry_single() {
 fn telemetry_all() {
     let mut system = System::new();
     let node = system.build_node().finish();
-    let peer = system.build_node().finish();
+    let _peer = system.build_node().finish();
 
     // Wait until peers are stored
     assert_timely_eq(

@@ -29,7 +29,7 @@ mod tests {
         let cancel_tracker = node.distributed_work.track_cancellations();
         let root = Root::from(42);
 
-        let result: SuccessResponse = test_rpc_command_with_node(
+        let _result: SuccessResponse = test_rpc_command_with_node(
             RpcCommand::WorkCancel(HashRpcMessage { hash: root.into() }),
             node,
         );
