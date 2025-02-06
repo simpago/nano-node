@@ -20,7 +20,7 @@ pub struct TcpListener {
     network_observer: Arc<dyn NetworkObserver>,
     tokio: tokio::runtime::Handle,
     data: Mutex<TcpListenerData>,
-    condition: Condvar,
+    started: Condvar,
     cancel_token: CancellationToken,
 }
 
@@ -31,6 +31,7 @@ impl Drop for TcpListener {
 }
 
 struct TcpListenerData {
+    started: bool,
     stopped: bool,
     local_addr: SocketAddrV6,
 }
@@ -47,11 +48,12 @@ impl TcpListener {
             network_adapter,
             network_observer,
             data: Mutex::new(TcpListenerData {
+                started: false,
                 stopped: true,
                 local_addr: SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0, 0, 0),
             }),
             tokio,
-            condition: Condvar::new(),
+            started: Condvar::new(),
             cancel_token: CancellationToken::new(),
         }
     }
@@ -59,7 +61,7 @@ impl TcpListener {
     pub fn stop(&self) {
         self.data.lock().unwrap().stopped = true;
         self.cancel_token.cancel();
-        self.condition.notify_all();
+        self.started.notify_all();
     }
 
     pub fn local_address(&self) -> SocketAddrV6 {
@@ -68,6 +70,19 @@ impl TcpListener {
             guard.local_addr
         } else {
             SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0, 0, 0)
+        }
+    }
+
+    fn wait_until_listener_started(&self) {
+        let guard = self.data.lock().unwrap();
+        let timed_out = self
+            .started
+            .wait_timeout_while(guard, Duration::from_secs(5), |i| !i.started)
+            .unwrap()
+            .1
+            .timed_out();
+        if timed_out {
+            panic!("Timeout while starting tcp listener");
         }
     }
 }
@@ -91,6 +106,8 @@ impl TcpListenerExt for Arc<TcpListener> {
             ))
             .await
             else {
+                self_l.data.lock().unwrap().started = true;
+                self_l.started.notify_all();
                 error!("Error while binding for incoming connections on: {}", port);
                 return;
             };
@@ -106,11 +123,17 @@ impl TcpListenerExt for Arc<TcpListener> {
             debug!("Listening for incoming connections on: {}", addr);
             self_l.network_adapter.set_listening_port(addr.port());
 
-            self_l.data.lock().unwrap().local_addr =
-                SocketAddrV6::new(Ipv6Addr::LOCALHOST, addr.port(), 0, 0);
+            {
+                let mut data = self_l.data.lock().unwrap();
+                data.local_addr = SocketAddrV6::new(Ipv6Addr::LOCALHOST, addr.port(), 0, 0);
+                data.started = true;
+            }
+            self_l.started.notify_all();
 
             self_l.run(listener).await
         });
+
+        self.wait_until_listener_started();
     }
 
     async fn run(&self, listener: tokio::net::TcpListener) {

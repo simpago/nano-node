@@ -339,7 +339,7 @@ where
 
 static TRACING_INITIALIZED: OnceLock<()> = OnceLock::new();
 
-fn init_tracing() {
+pub fn init_tracing() {
     TRACING_INITIALIZED.get_or_init(|| {
         let dirs = std::env::var(EnvFilter::DEFAULT_ENV).unwrap_or(String::from("off"));
         let filter = EnvFilter::builder().parse_lossy(dirs);

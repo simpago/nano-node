@@ -1445,6 +1445,7 @@ impl Node {
         self.block_flooder.flood_block_many(blocks, callback, delay);
     }
 
+    /// Note: Start must not be called from an async thread, because it blocks!
     pub fn start(&mut self) {
         self.start_stop_listener.emit("start");
         if self.is_nulled {
@@ -1639,6 +1640,7 @@ mod tests {
     };
     use rsnano_core::Networks;
     use std::ops::{Deref, DerefMut};
+    use tokio::task::spawn_blocking;
     use uuid::Uuid;
 
     #[tokio::test]
@@ -1646,7 +1648,7 @@ mod tests {
         let mut node = TestNode::new().await;
         let start_tracker = node.peer_cache_updater.track_start();
 
-        node.start();
+        spawn_blocking(move || node.start()).await.unwrap();
 
         assert_eq!(
             start_tracker.output(),
@@ -1661,15 +1663,16 @@ mod tests {
     #[tokio::test]
     async fn start_peer_cache_connector() {
         let mut node = TestNode::new().await;
+        let merge_period = node.network_params.network.merge_period;
         let start_tracker = node.peer_cache_connector.track_start();
 
-        node.start();
+        spawn_blocking(move || node.start()).await.unwrap();
 
         assert_eq!(
             start_tracker.output(),
             vec![TimerStartEvent {
                 thread_name: "Net reachout".to_string(),
-                interval: node.network_params.network.merge_period,
+                interval: merge_period,
                 start_type: TimerStartType::Start
             }]
         );
@@ -1678,20 +1681,23 @@ mod tests {
     #[tokio::test]
     async fn stop_node() {
         let mut node = TestNode::new().await;
-        node.start();
+        spawn_blocking(move || {
+            node.start();
+            node.stop();
 
-        node.stop();
-
-        assert_eq!(
-            node.peer_cache_updater.is_running(),
-            false,
-            "peer_cache_updater running"
-        );
-        assert_eq!(
-            node.peer_cache_connector.is_running(),
-            false,
-            "peer_cache_connector running"
-        );
+            assert_eq!(
+                node.peer_cache_updater.is_running(),
+                false,
+                "peer_cache_updater running"
+            );
+            assert_eq!(
+                node.peer_cache_connector.is_running(),
+                false,
+                "peer_cache_connector running"
+            );
+        })
+        .await
+        .unwrap();
     }
 
     struct TestNode {
