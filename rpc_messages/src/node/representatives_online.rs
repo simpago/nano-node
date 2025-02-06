@@ -1,13 +1,7 @@
-use crate::{RpcBool, RpcCommand};
+use crate::RpcBool;
 use rsnano_core::{Account, Amount};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-impl RpcCommand {
-    pub fn representatives_online(args: RepresentativesOnlineArgs) -> Self {
-        Self::RepresentativesOnline(args)
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct RepresentativesOnlineArgs {
@@ -70,11 +64,12 @@ pub struct RepWeightDto {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::RpcCommand;
     use serde_json::json;
 
     #[test]
     fn serialize_representatives_online_command_options_none() {
-        let command = RpcCommand::representatives_online(RepresentativesOnlineArgs::default());
+        let command = RpcCommand::RepresentativesOnline(RepresentativesOnlineArgs::default());
         let serialized = serde_json::to_value(command).unwrap();
         let expected = json!({"action": "representatives_online"});
         assert_eq!(serialized, expected);
@@ -84,7 +79,7 @@ mod tests {
     fn deserialize_representatives_online_command_options_none() {
         let json = r#"{"action": "representatives_online"}"#;
         let deserialized: RpcCommand = serde_json::from_str(json).unwrap();
-        let command = RpcCommand::representatives_online(RepresentativesOnlineArgs::default());
+        let command = RpcCommand::RepresentativesOnline(RepresentativesOnlineArgs::default());
         assert_eq!(deserialized, command);
     }
 
@@ -98,7 +93,7 @@ mod tests {
             .weight()
             .accounts(accounts.clone())
             .build();
-        let command = RpcCommand::representatives_online(args);
+        let command = RpcCommand::RepresentativesOnline(args);
         let serialized = serde_json::to_value(command).unwrap();
         let expected = json!({
             "action": "representatives_online",

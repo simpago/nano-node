@@ -2291,8 +2291,8 @@ fn rep_crawler_rep_remove() {
 
     let reps = searching_node.online_reps.lock().unwrap().peered_reps();
     assert_eq!(1, reps.len());
-    assert_eq!(rep_weight, searching_node.ledger.weight(&reps[0].account));
-    assert_eq!(key_rep1.public_key(), reps[0].account);
+    assert_eq!(rep_weight, searching_node.ledger.weight(&reps[0].rep_key));
+    assert_eq!(key_rep1.public_key(), reps[0].rep_key);
     assert_eq!(channel_rep1.channel_id(), reps[0].channel_id());
 
     // When rep1 disconnects then rep1 should not be found anymore

@@ -114,7 +114,7 @@ fn rep_weight() {
     let rep = node.online_reps.lock().unwrap().peered_reps()[0].clone();
     assert_eq!(
         node.balance(&DEV_GENESIS_ACCOUNT),
-        node.ledger.weight(&rep.account)
+        node.ledger.weight(&rep.rep_key)
     );
     assert_eq!(channel1, rep.channel);
     assert_eq!(
@@ -156,7 +156,7 @@ fn rep_list() {
     );
     assert_eq!(
         *DEV_GENESIS_PUB_KEY,
-        node2.online_reps.lock().unwrap().peered_reps()[0].account
+        node2.online_reps.lock().unwrap().peered_reps()[0].rep_key
     );
 }
 

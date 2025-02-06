@@ -76,7 +76,7 @@ impl ConfirmationSolicitor {
             if count >= self.max_election_broadcasts {
                 break;
             }
-            let should_broadcast = if let Some(existing) = guard.last_votes.get(&i.account) {
+            let should_broadcast = if let Some(existing) = guard.last_votes.get(&i.rep_key) {
                 existing.hash != hash
             } else {
                 count += 1;
@@ -107,7 +107,7 @@ impl ConfirmationSolicitor {
                 break;
             }
             let mut full_queue = false;
-            let existing = guard.last_votes.get(&rep.account);
+            let existing = guard.last_votes.get(&rep.rep_key);
             let exists = existing.is_some();
             let is_final = if let Some(existing) = existing {
                 !election.is_quorum.load(Ordering::SeqCst) || existing.timestamp == u64::MAX
@@ -138,13 +138,13 @@ impl ConfirmationSolicitor {
                 }
             }
             if full_queue {
-                to_remove.push(rep.account);
+                to_remove.push(rep.rep_key);
             }
         }
 
         if !to_remove.is_empty() {
             self.representative_requests
-                .retain(|i| !to_remove.contains(&i.account));
+                .retain(|i| !to_remove.contains(&i.rep_key));
         }
 
         error

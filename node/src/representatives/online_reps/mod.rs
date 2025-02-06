@@ -165,8 +165,11 @@ impl OnlineReps {
     }
 
     /// List of online representatives, both the currently sampling ones and the ones observed in the previous sampling period
-    pub fn online_reps(&self) -> impl Iterator<Item = &PublicKey> {
-        self.online_reps.iter()
+    pub fn online_reps(&self) -> impl Iterator<Item = OnlineRepInfo> + use<'_> {
+        self.online_reps.iter().map(|rep_key| OnlineRepInfo {
+            rep_key: *rep_key,
+            weight: self.rep_weights.weight(rep_key),
+        })
     }
 
     /// Request a list of the top \p count known representatives in descending order of weight, with at least \p weight_a voting weight, and optionally with a minimum version \p minimum_protocol_version
@@ -196,7 +199,7 @@ impl OnlineReps {
         reps_with_weight
             .drain(..)
             .map(|(rep, weight)| PeeredRepInfo {
-                account: rep.account,
+                rep_key: rep.account,
                 channel: rep.channel,
                 weight,
             })
@@ -274,8 +277,14 @@ impl Default for OnlineReps {
 
 #[derive(Clone)]
 pub struct PeeredRepInfo {
-    pub account: PublicKey,
+    pub rep_key: PublicKey,
     pub channel: Arc<Channel>,
+    pub weight: Amount,
+}
+
+#[derive(Clone)]
+pub struct OnlineRepInfo {
+    pub rep_key: PublicKey,
     pub weight: Amount,
 }
 

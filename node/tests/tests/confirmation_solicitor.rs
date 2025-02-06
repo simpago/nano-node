@@ -30,7 +30,7 @@ fn batches() {
 
     // Solicitor will only solicit from this representative
     let representative = PeeredRepInfo {
-        account: *DEV_GENESIS_PUB_KEY,
+        rep_key: *DEV_GENESIS_PUB_KEY,
         channel: channel1,
         weight: Amount::nano(100_000),
     };
@@ -111,7 +111,7 @@ fn different_hashes() {
         .clone();
     // Solicitor will only solicit from this representative
     let representative = PeeredRepInfo {
-        account: *DEV_GENESIS_PUB_KEY,
+        rep_key: *DEV_GENESIS_PUB_KEY,
         channel: channel1,
         weight: Amount::nano(100_000),
     };
@@ -179,7 +179,7 @@ fn bypass_max_requests_cap() {
     for i in 0..=MAX_REPRESENTATIVES {
         // Make a temporary channel associated with node2
         let rep = PeeredRepInfo {
-            account: PublicKey::from(i as u64),
+            rep_key: PublicKey::from(i as u64),
             channel: Arc::new(Channel::new_test_instance_with_id(i)),
             weight: Amount::nano(100_000),
         };
@@ -203,7 +203,7 @@ fn bypass_max_requests_cap() {
     // Add a vote for something else, not the winner
     for rep in &representatives {
         data.last_votes
-            .insert(rep.account, VoteInfo::new(1, 1.into()));
+            .insert(rep.rep_key, VoteInfo::new(1, 1.into()));
     }
     // Ensure the request and broadcast goes through
     assert_eq!(solicitor.add(&election, &data), false);

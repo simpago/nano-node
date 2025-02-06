@@ -97,7 +97,7 @@ impl NanoRpcClient {
         args: RepresentativesOnlineArgs,
     ) -> Result<RepresentativesOnlineResponse> {
         let detailed = args.weight.unwrap_or(false.into()).inner();
-        let cmd = RpcCommand::representatives_online(args);
+        let cmd = RpcCommand::RepresentativesOnline(args);
         let result = self.request_raw(&cmd).await?;
         if detailed {
             let detailed: DetailedRepresentativesOnline = serde_json::from_value(result)?;

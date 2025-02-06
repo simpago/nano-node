@@ -31,7 +31,7 @@ fn create_response(
             .peered_reps()
             .iter()
             .map(|rep| PeerDetailsDto {
-                account: rep.account.into(),
+                account: rep.rep_key.into(),
                 ip: rep.channel.peer_addr(),
                 weight: rep.weight,
             })
@@ -45,12 +45,11 @@ fn create_response(
 
 #[cfg(test)]
 mod tests {
+    use super::create_response;
     use crate::command_handler::test_rpc_command;
     use rsnano_core::Amount;
     use rsnano_node::representatives::OnlineReps;
     use rsnano_rpc_messages::{ConfirmationQuorumArgs, ConfirmationQuorumResponse, RpcCommand};
-
-    use super::create_response;
 
     #[tokio::test]
     async fn confirmation_quorum_command() {
