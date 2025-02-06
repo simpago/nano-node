@@ -259,7 +259,6 @@ impl From<&PublicKey> for Account {
 mod tests {
     use super::*;
 
-    // original test: account.encode_zero
     #[test]
     fn encode_zero() {
         let account = Account::zero();
@@ -272,7 +271,6 @@ mod tests {
         assert_eq!(account, copy);
     }
 
-    // original test: account.encode_all
     #[test]
     fn encode_all() {
         let account = Account::from_bytes([0xFF; 32]);
@@ -285,13 +283,24 @@ mod tests {
         assert_eq!(account, copy);
     }
 
-    // original test: account.encode_fail
     #[test]
-    fn encode_fail() {
+    fn decode_fail() {
         let account = Account::zero();
         let mut encoded = account.encode_account();
         encoded.replace_range(16..17, "x");
         assert!(Account::decode_account(&encoded).is_err());
+    }
+
+    #[test]
+    fn decode_fail_too_log() {
+        assert!(Account::decode_account(
+            "nano_3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzc3yoon411"
+        )
+        .is_err());
+        assert!(Account::decode_account(
+            "xrb_3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzc3yoon411"
+        )
+        .is_err());
     }
 
     #[test]
@@ -347,6 +356,42 @@ mod tests {
     }
 
     #[test]
+    fn decode_invalid_hex_string() {
+        assert_eq!(
+            Account::decode_account(
+                "nano_3e3j5tkog48pnny9dmfzj1r16pg8t1e76dz5tmXXXiq689wyjfpiij4txtd1"
+            )
+            .unwrap_err()
+            .to_string(),
+            "invalid hex string"
+        );
+    }
+
+    #[test]
+    fn decode_fails_invalid_char() {
+        assert_eq!(
+            Account::decode_account(
+                "xrb_3szoyggo7d3koqwqj/yhftkirykzqhgwoqnpdjc4i47fotgyyts1j8ab3mti"
+            )
+            .unwrap_err()
+            .to_string(),
+            "invalid hex string"
+        );
+    }
+
+    #[test]
+    fn decode_fails_utf8_char() {
+        assert_eq!(
+            Account::decode_account(
+                "xrb_3szoyggo7d3koqwqjӾyhftkirykzqhgwoqnpdjc4i47fotgyyts1j8ab3mti"
+            )
+            .unwrap_err()
+            .to_string(),
+            "invalid hex string"
+        );
+    }
+
+    #[test]
     fn serde_serialize() {
         let serialized = serde_json::to_string_pretty(&Account::from(123)).unwrap();
         assert_eq!(
@@ -362,5 +407,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(deserialized, Account::from(123));
+    }
+
+    #[test]
+    fn serde_deserialize_fails() {
+        let error = serde_json::from_str::<Account>("\"INVALID\"").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "invalid value: string \"INVALID\", expected an account in the form \"nano_...\" at line 1 column 9"
+        );
     }
 }
