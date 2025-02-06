@@ -52,7 +52,7 @@ impl FrontierAckProcessor {
             VerifyResult::Ok => {
                 self.stats
                     .inc(StatType::BootstrapVerifyFrontiers, DetailType::Ok);
-                self.spawn_worker(query, frontiers);
+                self.process_valid_frontiers(query, frontiers);
                 true
             }
             VerifyResult::NothingNew => {
@@ -68,7 +68,7 @@ impl FrontierAckProcessor {
         }
     }
 
-    fn spawn_worker(&self, query: &RunningQuery, frontiers: Vec<Frontier>) {
+    fn process_valid_frontiers(&self, query: &RunningQuery, frontiers: Vec<Frontier>) {
         self.stats.add_dir(
             StatType::Bootstrap,
             DetailType::Frontiers,
