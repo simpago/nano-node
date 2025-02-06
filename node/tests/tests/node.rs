@@ -1993,11 +1993,7 @@ fn vote_by_hash_republish() {
     let node2 = system.make_node();
     let key2 = PrivateKey::new();
     // by not setting a private key on node1's wallet for genesis account, it is stopped from voting
-    let wallet_id = node2.wallets.wallet_ids()[0];
-    node2
-        .wallets
-        .insert_adhoc2(&wallet_id, &key2.raw_key(), true)
-        .unwrap();
+    node2.insert_into_wallet(&key2);
 
     // send1 and send2 are forks of each other
     let mut lattice = UnsavedBlockLatticeBuilder::new();
@@ -2007,25 +2003,13 @@ fn vote_by_hash_republish() {
 
     // give block send1 to node1 and check that an election for send1 starts on both nodes
     node1.process_active(send1.clone());
-    assert_timely_msg(
-        Duration::from_secs(5),
-        || node1.active.active(&send1),
-        "not active on node 1",
-    );
-    assert_timely_msg(
-        Duration::from_secs(5),
-        || node2.active.active(&send1),
-        "not active on node 2",
-    );
+    assert_timely2(|| node1.active.active(&send1));
+    assert_timely2(|| node2.active.active(&send1));
 
     // give block send2 to node1 and wait until the block is received and processed by node1
     node1.network_filter.clear_all();
     node1.process_active(send2.clone());
-    assert_timely_msg(
-        Duration::from_secs(5),
-        || node1.active.active(&send2),
-        "send2 not active on node 1",
-    );
+    assert_timely2(|| node1.active.active(&send2));
 
     // construct a vote for send2 in order to overturn send1
     let vote = Arc::new(Vote::new_final(&DEV_GENESIS_KEY, vec![send2.hash()]));
@@ -2034,16 +2018,8 @@ fn vote_by_hash_republish() {
         .vote(vote, None, VoteSource::Live);
 
     // send2 should win on both nodes
-    assert_timely_msg(
-        Duration::from_secs(5),
-        || node1.blocks_confirmed(&[send2.clone()]),
-        "not confirmed on node1",
-    );
-    assert_timely_msg(
-        Duration::from_secs(5),
-        || node2.blocks_confirmed(&[send2.clone()]),
-        "not confirmed on node2",
-    );
+    assert_timely2(|| node1.blocks_confirmed(&[send2.clone()]));
+    assert_timely2(|| node2.blocks_confirmed(&[send2.clone()]));
     assert_eq!(node1.block_exists(&send1.hash()), false);
     assert_eq!(node2.block_exists(&send1.hash()), false);
 }
