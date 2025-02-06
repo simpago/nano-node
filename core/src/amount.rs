@@ -64,11 +64,6 @@ impl Amount {
         self.raw.to_le_bytes()
     }
 
-    pub unsafe fn copy_bytes(&self, target: *mut u8) {
-        let target_slice = std::slice::from_raw_parts_mut(target, 16);
-        target_slice.copy_from_slice(&self.to_be_bytes());
-    }
-
     pub fn encode_hex(&self) -> String {
         format!("{:032X}", self.raw)
     }
@@ -397,5 +392,14 @@ mod tests {
     fn implements_debug() {
         let formatted = format!("{:?}", Amount::raw(123));
         assert_eq!(formatted, "123");
+    }
+
+    #[test]
+    fn from_le_bytes() {
+        let bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let account = Amount::from_le_bytes(bytes);
+        assert_eq!(account.encode_hex(), "100F0E0D0C0B0A090807060504030201");
+        let back = account.to_le_bytes();
+        assert_eq!(back, bytes);
     }
 }

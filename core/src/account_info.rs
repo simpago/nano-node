@@ -1,16 +1,12 @@
-use std::mem::size_of;
-
+use super::{BlockHash, Epoch};
 use crate::{
     utils::{
-        BufferWriter, Deserialize, FixedSizeSerialize, MutStreamAdapter, Serialize, Stream,
-        StreamExt, UnixTimestamp,
+        BufferWriter, Deserialize, MutStreamAdapter, Serialize, Stream, StreamExt, UnixTimestamp,
     },
-    Account, Amount, PublicKey,
+    Amount, PublicKey,
 };
 use anyhow::Result;
 use num_traits::FromPrimitive;
-
-use super::{BlockHash, Epoch};
 
 /// Latest information about an account
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
@@ -55,18 +51,6 @@ impl Serialize for AccountInfo {
         stream.write_u64_ne_safe(self.modified.as_u64());
         stream.write_u64_ne_safe(self.block_count);
         stream.write_u8_safe(self.epoch as u8)
-    }
-}
-
-impl FixedSizeSerialize for AccountInfo {
-    fn serialized_size() -> usize {
-        BlockHash::serialized_size()  // head
-        + Account::serialized_size() // representative
-        + BlockHash::serialized_size() // open_block
-        + Amount::serialized_size() // balance
-        + size_of::<u64>() // modified
-        + size_of::<u64>() // block_count
-        + size_of::<Epoch>()
     }
 }
 
