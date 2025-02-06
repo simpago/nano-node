@@ -160,6 +160,12 @@ impl BlocksAckPayload {
         Self(blocks)
     }
 
+    pub fn new_test_instance() -> Self {
+        let mut blocks = VecDeque::new();
+        blocks.push_back(Block::new_test_instance());
+        Self::new(blocks)
+    }
+
     /* Header allows for 16 bit extensions; 65535 bytes / 500 bytes (block size with some future margin) ~ 131 */
     pub const MAX_BLOCKS: usize = 128;
 
@@ -220,7 +226,7 @@ impl AccountInfoAckPayload {
         Ok(())
     }
 
-    pub(crate) fn new_test_instance() -> AccountInfoAckPayload {
+    pub fn new_test_instance() -> AccountInfoAckPayload {
         Self {
             account: Account::from(1),
             account_open: BlockHash::from(2),

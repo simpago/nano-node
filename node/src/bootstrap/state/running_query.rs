@@ -216,7 +216,9 @@ impl RunningQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rsnano_messages::{AccountInfoReqPayload, BlocksReqPayload, FrontiersReqPayload};
+    use rsnano_messages::{
+        AccountInfoAckPayload, AccountInfoReqPayload, BlocksReqPayload, FrontiersReqPayload,
+    };
 
     #[test]
     fn query_from_frontiers_spec() {
@@ -346,6 +348,59 @@ mod tests {
             query.response_cutoff,
             RunningQuery::initial_response_cutoff(now, timeout)
         );
+    }
+
+    #[test]
+    fn valid_response_types() {
+        assert_valid_response_type(
+            QueryType::BlocksByHash,
+            AscPullAckType::Blocks(BlocksAckPayload::new_test_instance()),
+            true,
+        );
+        assert_valid_response_type(
+            QueryType::BlocksByAccount,
+            AscPullAckType::Blocks(BlocksAckPayload::new_test_instance()),
+            true,
+        );
+        assert_valid_response_type(
+            QueryType::AccountInfoByHash,
+            AscPullAckType::AccountInfo(AccountInfoAckPayload::new_test_instance()),
+            true,
+        );
+        assert_valid_response_type(
+            QueryType::Frontiers,
+            AscPullAckType::Frontiers(Vec::new()),
+            true,
+        );
+    }
+
+    #[test]
+    fn invalid_response_types() {
+        assert_valid_response_type(
+            QueryType::BlocksByHash,
+            AscPullAckType::AccountInfo(AccountInfoAckPayload::new_test_instance()),
+            false,
+        );
+        assert_valid_response_type(
+            QueryType::BlocksByHash,
+            AscPullAckType::AccountInfo(AccountInfoAckPayload::new_test_instance()),
+            false,
+        );
+        assert_valid_response_type(
+            QueryType::BlocksByHash,
+            AscPullAckType::Frontiers(Vec::new()),
+            false,
+        );
+    }
+
+    fn assert_valid_response_type(query_type: QueryType, pull_type: AscPullAckType, valid: bool) {
+        let query = RunningQuery {
+            query_type,
+            ..RunningQuery::new_test_instance()
+        };
+
+        let response = AscPullAck { id: 1, pull_type };
+        assert_eq!(query.is_valid_response_type(&response), valid);
     }
 
     mod verify_frontiers {
