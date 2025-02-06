@@ -3,6 +3,7 @@ use rsnano_core::{
     work::{WorkPool, WorkPoolImpl},
     Account, Block, Root,
 };
+use rsnano_output_tracker::{OutputListenerMt, OutputTrackerMt};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -53,12 +54,17 @@ impl WorkRequest {
 
 pub struct DistributedWorkFactory {
     work_pool: Arc<WorkPoolImpl>,
-    pub tokio: tokio::runtime::Handle,
+    tokio: tokio::runtime::Handle,
+    cancel_listener: OutputListenerMt<Root>,
 }
 
 impl DistributedWorkFactory {
     pub fn new(work_pool: Arc<WorkPoolImpl>, tokio: tokio::runtime::Handle) -> Self {
-        Self { work_pool, tokio }
+        Self {
+            work_pool,
+            tokio,
+            cancel_listener: OutputListenerMt::new(),
+        }
     }
 
     pub fn make_blocking_block(&self, block: &mut Block, difficulty: u64) -> Option<u64> {
@@ -118,6 +124,7 @@ impl DistributedWorkFactory {
     }
 
     pub fn cancel(&self, root: Root) {
+        self.cancel_listener.emit(root);
         self.work_pool.cancel(&root);
     }
 
@@ -127,6 +134,10 @@ impl DistributedWorkFactory {
 
     pub fn stop(&self) {
         //TODO
+    }
+
+    pub fn track_cancellations(&self) -> Arc<OutputTrackerMt<Root>> {
+        self.cancel_listener.track()
     }
 }
 
@@ -151,6 +162,19 @@ mod tests {
         let work = work_factory.generate_work(request.clone()).await;
 
         assert_eq!(work, Some(expected_work));
+    }
+
+    #[tokio::test]
+    async fn cancellations_can_be_tracked() {
+        let work_pool = Arc::new(WorkPoolImpl::new_null(1));
+        let work_factory =
+            DistributedWorkFactory::new(work_pool, tokio::runtime::Handle::current());
+        let cancel_tracker = work_factory.track_cancellations();
+
+        let root = Root::from(1);
+        work_factory.cancel(root);
+
+        assert_eq!(cancel_tracker.output(), vec![root]);
     }
 
     // TODO:

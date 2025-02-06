@@ -53,10 +53,12 @@ impl ManualScheduler {
     }
 
     pub fn push(&self, block: SavedBlock, previous_balance: Option<Amount>) {
-        let mut guard = self.mutex.lock().unwrap();
-        guard
-            .queue
-            .push_back((block, previous_balance, ElectionBehavior::Manual));
+        {
+            let mut guard = self.mutex.lock().unwrap();
+            guard
+                .queue
+                .push_back((block, previous_balance, ElectionBehavior::Manual));
+        }
         self.notify();
     }
 

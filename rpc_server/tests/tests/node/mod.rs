@@ -17,6 +17,5 @@ mod unchecked_clear;
 mod unchecked_get;
 mod unchecked_keys;
 mod uptime;
-mod work_cancel;
 mod work_generate;
 mod work_validate;
