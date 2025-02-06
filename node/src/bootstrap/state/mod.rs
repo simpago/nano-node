@@ -12,6 +12,7 @@ pub(crate) use peer_scoring::PeerScoring;
 pub(crate) use running_query::*;
 pub(crate) use running_query_container::*;
 
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum VerifyResult {
     Ok,
     NothingNew,

@@ -1,4 +1,4 @@
-use super::running_query::{QuerySource, RunningQuery};
+use super::{QuerySource, RunningQuery};
 use rsnano_core::{Account, BlockHash};
 use std::{
     collections::{HashMap, VecDeque},
