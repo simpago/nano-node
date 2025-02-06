@@ -690,14 +690,13 @@ fn confirm_frontier() {
     let send = lattice.genesis().send(Account::from(1), 100);
 
     // Voting node
-    let flags = NodeFlags {
-        disable_request_loop: true,
-        disable_ongoing_bootstrap: true,
-        ..Default::default()
-    };
     let node1 = system
         .build_node()
-        .flags(flags)
+        .flags(NodeFlags {
+            disable_request_loop: true,
+            disable_ongoing_bootstrap: true,
+            ..Default::default()
+        })
         .config(NodeConfig {
             bootstrap: BootstrapConfig {
                 enable: false,
@@ -706,25 +705,19 @@ fn confirm_frontier() {
             ..System::default_config()
         })
         .finish();
-    let wallet_id = node1.wallets.wallet_ids()[0];
-    node1
-        .wallets
-        .insert_adhoc2(&wallet_id, &DEV_GENESIS_KEY.raw_key(), true)
-        .unwrap();
 
     node1.process(send.clone()).unwrap();
     node1.confirm(send.hash());
 
     // The rep crawler would otherwise request confirmations in order to find representatives
-    let flags2 = NodeFlags {
-        disable_ongoing_bootstrap: true,
-        disable_rep_crawler: true,
-        ..Default::default()
-    };
     // start node2 later so that we do not get the gossip traffic
     let node2 = system
         .build_node()
-        .flags(flags2)
+        .flags(NodeFlags {
+            disable_ongoing_bootstrap: true,
+            disable_rep_crawler: true,
+            ..Default::default()
+        })
         .config(NodeConfig {
             bootstrap: BootstrapConfig {
                 enable: false,
@@ -744,19 +737,17 @@ fn confirm_frontier() {
     );
 
     node2.process(send.clone()).unwrap();
-    assert_timely(Duration::from_secs(5), || node2.active.len() > 0);
+    assert_timely2(|| node2.active.len() > 0);
+
+    node1.insert_into_wallet(&DEV_GENESIS_KEY);
 
     // Save election to check request count afterwards
-    assert_timely(Duration::from_secs(5), || {
-        node2.active.election(&send.qualified_root()).is_some()
-    });
+    assert_timely2(|| node2.active.election(&send.qualified_root()).is_some());
     let election2 = node2.active.election(&send.qualified_root()).unwrap();
 
-    assert_timely(Duration::from_secs(5), || {
-        node2.block_confirmed(&send.hash())
-    });
-    assert_timely_eq(Duration::from_secs(5), || node2.ledger.cemented_count(), 2);
-    assert_timely(Duration::from_secs(5), || node2.active.len() == 0);
+    assert_timely2(|| node2.block_confirmed(&send.hash()));
+    assert_timely_eq2(|| node2.ledger.cemented_count(), 2);
+    assert_timely_eq2(|| node2.active.len(), 0);
     assert!(election2.confirmation_request_count.load(Ordering::SeqCst) > 0);
 }
 
