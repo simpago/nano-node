@@ -391,6 +391,11 @@ mod tests {
             AscPullAckType::Frontiers(Vec::new()),
             false,
         );
+        assert_valid_response_type(
+            QueryType::Frontiers,
+            AscPullAckType::Blocks(BlocksAckPayload::new_test_instance()),
+            false,
+        );
     }
 
     fn assert_valid_response_type(query_type: QueryType, pull_type: AscPullAckType, valid: bool) {
