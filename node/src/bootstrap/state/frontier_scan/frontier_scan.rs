@@ -4,13 +4,13 @@ use rsnano_nullable_clock::Timestamp;
 use std::time::Duration;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct AccountRangesConfig {
+pub struct FrontierScanConfig {
     pub heads: FrontierHeadsConfig,
     pub cooldown: Duration,
     pub max_pending: usize,
 }
 
-impl Default for AccountRangesConfig {
+impl Default for FrontierScanConfig {
     fn default() -> Self {
         Self {
             heads: Default::default(),
@@ -23,13 +23,13 @@ impl Default for AccountRangesConfig {
 /// Divides the account space into ranges and scans each range for
 /// outdated frontiers in parallel.
 /// This class is used to track the progress of each range.
-pub struct AccountRanges {
-    config: AccountRangesConfig,
+pub struct FrontierScan {
+    config: FrontierScanConfig,
     heads: HeadsContainer,
 }
 
-impl AccountRanges {
-    pub fn new(config: AccountRangesConfig) -> Self {
+impl FrontierScan {
+    pub fn new(config: FrontierScanConfig) -> Self {
         assert!(!config.heads.parallelism > 0);
         Self {
             heads: HeadsContainer::with_heads(config.heads.clone()),
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn next_basic() {
-        let config = AccountRangesConfig {
+        let config = FrontierScanConfig {
             heads: FrontierHeadsConfig {
                 parallelism: 2,
                 consideration_count: 3,
@@ -110,15 +110,15 @@ mod tests {
             },
             ..Default::default()
         };
-        let mut ranges = AccountRanges::new(config);
+        let mut scan = FrontierScan::new(config);
         let now = Timestamp::new_test_instance();
 
         // First call should return first head, account number 1 (avoiding burn account 0)
-        let first = ranges.next(now);
+        let first = scan.next(now);
         assert_eq!(first, Account::from(1));
 
         // Second call should return second head, account number 0x7FF... (half the range)
-        let second = ranges.next(now);
+        let second = scan.next(now);
         assert_eq!(
             second,
             Account::decode_hex("7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
@@ -126,13 +126,13 @@ mod tests {
         );
 
         // Third call should return first head again, sequentially iterating through heads
-        let third = ranges.next(now);
+        let third = scan.next(now);
         assert_eq!(third, Account::from(1));
     }
 
     #[test]
     fn process_basic() {
-        let config = AccountRangesConfig {
+        let config = FrontierScanConfig {
             heads: FrontierHeadsConfig {
                 parallelism: 1,
                 consideration_count: 3,
@@ -140,11 +140,11 @@ mod tests {
             },
             ..Default::default()
         };
-        let mut ranges = AccountRanges::new(config);
+        let mut scan = FrontierScan::new(config);
         let now = Timestamp::new_test_instance();
 
         // Get initial account to scan
-        let start = ranges.next(now);
+        let start = scan.next(now);
         assert_eq!(start, Account::from(1));
 
         // Create response with some frontiers
@@ -154,22 +154,22 @@ mod tests {
         ];
 
         // Process should not be done until consideration_count is reached
-        assert!(!ranges.process(start, &response));
-        assert!(!ranges.process(start, &response));
+        assert!(!scan.process(start, &response));
+        assert!(!scan.process(start, &response));
 
         // Head should not advance before reaching `consideration_count` responses
-        assert_eq!(ranges.next(now), Account::from(1));
+        assert_eq!(scan.next(now), Account::from(1));
 
         // After consideration_count responses, should be done
-        assert!(ranges.process(start, &response));
+        assert!(scan.process(start, &response));
 
         // Head should advance to next account and start subsequent scan from there
-        assert_eq!(ranges.next(now), Account::from(3));
+        assert_eq!(scan.next(now), Account::from(3));
     }
 
     #[test]
     fn range_wrap_around() {
-        let config = AccountRangesConfig {
+        let config = FrontierScanConfig {
             heads: FrontierHeadsConfig {
                 parallelism: 1,
                 consideration_count: 1,
@@ -178,24 +178,24 @@ mod tests {
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config);
+        let mut scan = FrontierScan::new(config);
 
-        let start = ranges.next(now);
+        let start = scan.next(now);
 
         // Create response that would push next beyond the range end
         let response = [Frontier::new(Account::MAX, BlockHash::from(1))];
 
         // Process should succeed and wrap around
-        assert!(ranges.process(start, &response));
+        assert!(scan.process(start, &response));
 
         // Next account should be back at start of range
-        let next = ranges.next(now);
+        let next = scan.next(now);
         assert_eq!(next, Account::from(1));
     }
 
     #[test]
     fn cooldown() {
-        let config = AccountRangesConfig {
+        let config = FrontierScanConfig {
             heads: FrontierHeadsConfig {
                 parallelism: 1,
                 consideration_count: 1,
@@ -205,24 +205,24 @@ mod tests {
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config);
+        let mut scan = FrontierScan::new(config);
 
         // First call should succeed
-        let first = ranges.next(now);
+        let first = scan.next(now);
         assert!(!first.is_zero());
 
         // Immediate second call should fail (return 0)
-        let second = ranges.next(now);
+        let second = scan.next(now);
         assert!(second.is_zero());
 
         // After cooldown, should succeed again
-        let third = ranges.next(now + Duration::from_millis(251));
+        let third = scan.next(now + Duration::from_millis(251));
         assert!(!third.is_zero());
     }
 
     #[test]
     fn candidate_trimming() {
-        let config = AccountRangesConfig {
+        let config = FrontierScanConfig {
             heads: FrontierHeadsConfig {
                 parallelism: 1,
                 consideration_count: 2,
@@ -231,9 +231,9 @@ mod tests {
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config);
+        let mut scan = FrontierScan::new(config);
 
-        let start = ranges.next(now);
+        let start = scan.next(now);
         // Create response with more candidates than limit
         let response1 = [
             Frontier::new(Account::from(1), BlockHash::from(0)),
@@ -242,7 +242,7 @@ mod tests {
             Frontier::new(Account::from(10), BlockHash::from(9)),
         ];
 
-        assert!(!ranges.process(start, &response1));
+        assert!(!scan.process(start, &response1));
 
         let response2 = [
             Frontier::new(Account::from(1), BlockHash::from(0)),
@@ -251,16 +251,16 @@ mod tests {
             Frontier::new(Account::from(7), BlockHash::from(6)),
             Frontier::new(Account::from(9), BlockHash::from(8)),
         ];
-        assert!(ranges.process(start, &response2));
+        assert!(scan.process(start, &response2));
 
         // After processing replies candidates should be ordered and trimmed
-        let next = ranges.next(now);
+        let next = scan.next(now);
         assert_eq!(next, Account::from(5));
     }
 
     #[test]
     fn heads_distribution() {
-        let config = AccountRangesConfig {
+        let config = FrontierScanConfig {
             heads: FrontierHeadsConfig {
                 parallelism: 4,
                 ..Default::default()
@@ -268,13 +268,13 @@ mod tests {
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config);
+        let mut scan = FrontierScan::new(config);
 
         // Collect initial accounts from each head
-        let first0 = ranges.next(now);
-        let first1 = ranges.next(now);
-        let first2 = ranges.next(now);
-        let first3 = ranges.next(now);
+        let first0 = scan.next(now);
+        let first1 = scan.next(now);
+        let first2 = scan.next(now);
+        let first3 = scan.next(now);
 
         // Verify accounts are properly distributed across the range
         assert!(first1 > first0);
@@ -284,7 +284,7 @@ mod tests {
 
     #[test]
     fn invalid_response_ordering() {
-        let config = AccountRangesConfig {
+        let config = FrontierScanConfig {
             heads: FrontierHeadsConfig {
                 parallelism: 1,
                 consideration_count: 1,
@@ -293,9 +293,9 @@ mod tests {
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config);
+        let mut scan = FrontierScan::new(config);
 
-        let start = ranges.next(now);
+        let start = scan.next(now);
 
         // Create response with out-of-order accounts
         let response = [
@@ -304,13 +304,13 @@ mod tests {
         ];
 
         // Should still process successfully
-        assert!(ranges.process(start, &response));
-        assert_eq!(ranges.next(now), Account::from(3));
+        assert!(scan.process(start, &response));
+        assert_eq!(scan.next(now), Account::from(3));
     }
 
     #[test]
     fn empty_responses() {
-        let config = AccountRangesConfig {
+        let config = FrontierScanConfig {
             heads: FrontierHeadsConfig {
                 parallelism: 1,
                 consideration_count: 2,
@@ -319,34 +319,34 @@ mod tests {
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
-        let mut ranges = AccountRanges::new(config);
+        let mut scan = FrontierScan::new(config);
 
-        let start = ranges.next(now);
+        let start = scan.next(now);
 
         // Empty response should not advance head even after receiving `consideration_count` responses
-        assert!(!ranges.process(start, &[]));
-        assert!(!ranges.process(start, &[]));
-        assert_eq!(ranges.next(now), start);
+        assert!(!scan.process(start, &[]));
+        assert!(!scan.process(start, &[]));
+        assert_eq!(scan.next(now), start);
 
         // Let the head advance
         let response = [Frontier::new(Account::from(2), BlockHash::from(1))];
-        assert!(ranges.process(start, &response));
-        assert_eq!(ranges.next(now), Account::from(2));
+        assert!(scan.process(start, &response));
+        assert_eq!(scan.next(now), Account::from(2));
 
         // However, after receiving enough empty responses, head should wrap around to the start
-        assert!(!ranges.process(start, &[]));
-        assert!(!ranges.process(start, &[]));
-        assert!(!ranges.process(start, &[]));
-        assert_eq!(ranges.next(now), Account::from(2));
-        assert!(ranges.process(start, &[]));
+        assert!(!scan.process(start, &[]));
+        assert!(!scan.process(start, &[]));
+        assert!(!scan.process(start, &[]));
+        assert_eq!(scan.next(now), Account::from(2));
+        assert!(scan.process(start, &[]));
         // Wraps around:
-        assert_eq!(ranges.next(now), Account::from(1));
+        assert_eq!(scan.next(now), Account::from(1));
     }
 
     #[test]
     fn container_info() {
-        let ranges = AccountRanges::new(Default::default());
-        let info = ranges.container_info();
+        let scan = FrontierScan::new(Default::default());
+        let info = scan.container_info();
         assert_eq!(info, [("total_processed", 0, 0)].into());
     }
 }

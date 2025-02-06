@@ -105,7 +105,7 @@ impl BootstrapPromise<AscPullQuerySpec> for FrontierRequester {
             },
             FrontierState::WaitFrontier(ref channel) => {
                 let now = self.clock.now();
-                let start = boot_state.account_ranges.next(now);
+                let start = boot_state.frontier_scan.next(now);
                 if !start.is_zero() {
                     self.stats
                         .inc(StatType::BootstrapNext, DetailType::NextFrontier);

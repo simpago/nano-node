@@ -3,7 +3,7 @@ use super::{
     cleanup::BootstrapCleanup,
     requesters::Requesters,
     response_processor::{ProcessError, ResponseProcessor},
-    state::{AccountRangesConfig, BootstrapState, CandidateAccountsConfig, QueryType},
+    state::{BootstrapState, CandidateAccountsConfig, FrontierScanConfig, QueryType},
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, LedgerNotifications},
@@ -48,7 +48,7 @@ pub struct BootstrapConfig {
     pub max_requests: usize,
     pub optimistic_request_percentage: u8,
     pub candidate_accounts: CandidateAccountsConfig,
-    pub frontier_scan: AccountRangesConfig,
+    pub frontier_scan: FrontierScanConfig,
 }
 
 impl Default for BootstrapConfig {

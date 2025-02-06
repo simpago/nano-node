@@ -76,7 +76,7 @@ impl FrontierAckProcessor {
             frontiers.len() as u64,
         );
 
-        self.update_account_ranges(query, &frontiers);
+        self.update_frontier_scan(query, &frontiers);
 
         if self.can_spawn_worker() {
             let ledger = self.ledger.clone();
@@ -96,11 +96,11 @@ impl FrontierAckProcessor {
         }
     }
 
-    fn update_account_ranges(&self, query: &RunningQuery, frontiers: &[Frontier]) {
+    fn update_frontier_scan(&self, query: &RunningQuery, frontiers: &[Frontier]) {
         let mut guard = self.state.lock().unwrap();
         self.stats
             .inc(StatType::BootstrapFrontierScan, DetailType::Process);
-        let done = guard.account_ranges.process(query.start.into(), &frontiers);
+        let done = guard.frontier_scan.process(query.start.into(), &frontiers);
         if done {
             self.stats
                 .inc(StatType::BootstrapFrontierScan, DetailType::Done);
@@ -139,6 +139,6 @@ mod tests {
 
         let success = processor.process(&query, vec![Frontier::new_test_instance()]);
         assert!(success);
-        assert_eq!(state.lock().unwrap().account_ranges.total_completed(), 1);
+        assert_eq!(state.lock().unwrap().frontier_scan.total_completed(), 1);
     }
 }

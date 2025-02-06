@@ -1,5 +1,5 @@
 use super::{
-    AccountRanges, CandidateAccounts, PeerScoring, PriorityResult, QuerySource,
+    CandidateAccounts, FrontierScan, PeerScoring, PriorityResult, QuerySource,
     RunningQueryContainer,
 };
 use crate::bootstrap::{AscPullQuerySpec, BootstrapConfig};
@@ -14,7 +14,7 @@ pub(crate) struct BootstrapState {
     pub candidate_accounts: CandidateAccounts,
     pub scoring: PeerScoring,
     pub running_queries: RunningQueryContainer,
-    pub account_ranges: AccountRanges,
+    pub frontier_scan: FrontierScan,
 }
 
 impl BootstrapState {
@@ -22,7 +22,7 @@ impl BootstrapState {
         Self {
             candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
             scoring: PeerScoring::new(config.clone(), network),
-            account_ranges: AccountRanges::new(config.frontier_scan.clone()),
+            frontier_scan: FrontierScan::new(config.frontier_scan.clone()),
             running_queries: RunningQueryContainer::default(),
         }
     }
@@ -112,7 +112,7 @@ impl BootstrapState {
                 RunningQueryContainer::ELEMENT_SIZE,
             )
             .node("accounts", self.candidate_accounts.container_info())
-            .node("frontiers", self.account_ranges.container_info())
+            .node("frontiers", self.frontier_scan.container_info())
             .node("peers", self.scoring.container_info())
             .finish()
     }
