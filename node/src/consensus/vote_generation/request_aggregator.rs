@@ -8,11 +8,11 @@ use rsnano_core::{
     BlockHash, Root,
 };
 use rsnano_ledger::Ledger;
-use rsnano_network::{Channel, ChannelId, DeadChannelCleanupStep, Network, TrafficType};
+use rsnano_network::{Channel, ChannelId, DeadChannelCleanupStep, TrafficType};
 use rsnano_store_lmdb::{LmdbReadTransaction, Transaction};
 use std::{
     cmp::{max, min},
-    sync::{Arc, Condvar, Mutex, MutexGuard, RwLock},
+    sync::{Arc, Condvar, Mutex, MutexGuard},
     thread::JoinHandle,
 };
 
@@ -49,7 +49,6 @@ pub struct RequestAggregator {
     pub(crate) state: Arc<Mutex<RequestAggregatorState>>,
     condition: Arc<Condvar>,
     threads: Mutex<Vec<JoinHandle<()>>>,
-    network: Arc<RwLock<Network>>,
 }
 
 impl RequestAggregator {
@@ -58,7 +57,6 @@ impl RequestAggregator {
         stats: Arc<Stats>,
         vote_generators: Arc<VoteGenerators>,
         ledger: Arc<Ledger>,
-        network: Arc<RwLock<Network>>,
     ) -> Self {
         let max_queue = config.max_queue;
         Self {
@@ -72,7 +70,6 @@ impl RequestAggregator {
                 stopped: false,
             })),
             threads: Mutex::new(Vec::new()),
-            network,
         }
     }
 
@@ -86,7 +83,6 @@ impl RequestAggregator {
                 config: self.config.clone(),
                 ledger: self.ledger.clone(),
                 vote_generators: self.vote_generators.clone(),
-                network: self.network.clone(),
             };
 
             guard.push(
@@ -199,7 +195,6 @@ struct RequestAggregatorLoop {
     config: RequestAggregatorConfig,
     ledger: Arc<Ledger>,
     vote_generators: Arc<VoteGenerators>,
-    network: Arc<RwLock<Network>>,
 }
 
 impl RequestAggregatorLoop {
@@ -229,11 +224,7 @@ impl RequestAggregatorLoop {
         for (_, request) in &batch {
             tx.refresh_if_needed();
 
-            let should_drop = self
-                .network
-                .read()
-                .unwrap()
-                .should_drop(request.channel.channel_id(), TrafficType::VoteReply);
+            let should_drop = request.channel.should_drop(TrafficType::VoteReply);
 
             if !should_drop {
                 self.process(&tx, request);

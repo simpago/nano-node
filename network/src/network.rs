@@ -370,13 +370,6 @@ impl Network {
         dead_channels
     }
 
-    pub fn should_drop(&self, channel_id: ChannelId, traffic_type: TrafficType) -> bool {
-        self.channels
-            .get(&channel_id)
-            .map(|c| c.should_drop(traffic_type))
-            .unwrap_or(true)
-    }
-
     fn size_ln(&self) -> f32 {
         // Clamp size to domain of std::log
         let size = max(1, self.count_by_mode(ChannelMode::Realtime));
@@ -675,20 +668,6 @@ impl Network {
             }
         }
         info
-    }
-
-    pub fn try_send_buffer(
-        &self,
-        channel_id: ChannelId,
-        buffer: &[u8],
-        traffic_type: TrafficType,
-    ) -> bool {
-        let channel = self.channels.get(&channel_id);
-        if let Some(channel) = channel {
-            channel.send(buffer, traffic_type)
-        } else {
-            false
-        }
     }
 
     pub fn len(&self) -> usize {

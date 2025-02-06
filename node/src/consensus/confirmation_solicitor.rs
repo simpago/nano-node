@@ -10,8 +10,7 @@ use std::{
 };
 
 /// This struct accepts elections that need further votes before they can be confirmed and bundles them in to single confirm_req packets
-pub struct ConfirmationSolicitor<'a> {
-    network: &'a RwLock<Network>,
+pub struct ConfirmationSolicitor {
     /// Global maximum amount of block broadcasts
     max_block_broadcasts: usize,
     /// Maximum amount of requests to be sent per election, bypassed if an existing vote is for a different hash
@@ -26,15 +25,14 @@ pub struct ConfirmationSolicitor<'a> {
     message_flooder: MessageFlooder,
 }
 
-impl<'a> ConfirmationSolicitor<'a> {
+impl ConfirmationSolicitor {
     pub fn new(
         network_params: &NetworkParams,
-        network: &'a RwLock<Network>,
+        network: &RwLock<Network>,
         message_flooder: MessageFlooder,
     ) -> Self {
         let max_election_broadcasts = max(network.read().unwrap().fanout(1.0) / 2, 1);
         Self {
-            network,
             max_block_broadcasts: if network_params.network.is_dev_network() {
                 4
             } else {
@@ -122,11 +120,7 @@ impl<'a> ConfirmationSolicitor<'a> {
                 false
             };
             if !exists || !is_final || different {
-                let should_drop = self
-                    .network
-                    .read()
-                    .unwrap()
-                    .should_drop(rep.channel_id(), TrafficType::ConfirmationRequests);
+                let should_drop = rep.channel.should_drop(TrafficType::ConfirmationRequests);
 
                 if !should_drop {
                     let rep_channel = rep.channel.clone();

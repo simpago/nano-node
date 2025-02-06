@@ -688,7 +688,6 @@ impl Node {
             stats.clone(),
             vote_generators.clone(),
             ledger.clone(),
-            network.clone(),
         ));
         dead_channel_cleanup.add_step(RequestAggregatorCleanup::new(
             request_aggregator.state.clone(),
