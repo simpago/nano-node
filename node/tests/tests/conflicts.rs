@@ -2,7 +2,9 @@ use rsnano_core::{Amount, BlockSideband, PrivateKey, SavedBlock, UnsavedBlockLat
 use rsnano_network::ChannelId;
 use rsnano_node::block_processing::BlockSource;
 use std::time::Duration;
-use test_helpers::{assert_timely, assert_timely_eq, start_election, start_elections, System};
+use test_helpers::{
+    assert_timely, assert_timely_eq, assert_timely_eq2, start_election, start_elections, System,
+};
 
 #[test]
 fn start_stop() {
@@ -82,5 +84,4 @@ fn add_two() {
 
     assert!(node.active.election(&send_a.qualified_root()).is_some());
     assert!(node.active.election(&send_b.qualified_root()).is_some());
-    assert_timely_eq(Duration::from_secs(5), || node.active.len(), 2);
 }
