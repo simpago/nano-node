@@ -25,7 +25,7 @@ fn check_signature() {
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let key1 = PrivateKey::new();
     let send1 = lattice.genesis().send(&key1, 100);
-    node.process(send1.clone()).unwrap();
+    node.process(send1.clone());
     let election1 = start_election(&node, &send1.hash());
     assert_eq!(1, election1.vote_count());
     let mut vote1 = Vote::new(&DEV_GENESIS_KEY, Vote::TIMESTAMP_MIN, 0, vec![send1.hash()]);
@@ -69,7 +69,7 @@ fn add_old() {
     let mut fork_lattice = UnsavedBlockLatticeBuilder::new();
     let key1 = PrivateKey::new();
     let send1 = lattice.genesis().send_max(&key1);
-    node.process(send1.clone()).unwrap();
+    node.process(send1.clone());
     start_election(&node, &send1.hash());
     assert_timely(Duration::from_secs(5), || {
         node.active.election(&send1.qualified_root()).is_some()
@@ -120,7 +120,7 @@ fn add_cooldown() {
     let mut fork_lattice = UnsavedBlockLatticeBuilder::new();
     let key1 = PrivateKey::new();
     let send1 = lattice.genesis().send_max(&key1);
-    node.process(send1.clone()).unwrap();
+    node.process(send1.clone());
     start_election(&node, &send1.hash());
     assert_timely(Duration::from_secs(5), || {
         node.active.election(&send1.qualified_root()).is_some()
@@ -411,7 +411,7 @@ fn vote_spacing_rapid() {
         .genesis()
         .send(&*DEV_GENESIS_KEY, Amount::nano(1001));
 
-    node.process(send1.clone()).unwrap();
+    node.process(send1.clone());
 
     node.vote_generators
         .generate_non_final_vote(&(*DEV_GENESIS_HASH).into(), &send1.hash().into());

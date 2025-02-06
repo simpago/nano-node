@@ -568,7 +568,7 @@ fn bootstrap_confirm_frontiers() {
 
     // create block to send 500 raw from genesis to key0 and save into node0 ledger without immediately triggering an election
     let send0 = lattice.genesis().legacy_send(Account::from(123), 500);
-    node0.process(send0.clone()).unwrap();
+    node0.process(send0.clone());
 
     assert_timely(Duration::from_secs(10), || {
         node1.block_confirmed(&send0.hash())
@@ -611,8 +611,8 @@ fn bootstrap_fork_open() {
         .receive_and_change(&send0, PublicKey::from_bytes([2; 32]));
 
     // Both know about send0
-    node0.process(send0.clone()).unwrap();
-    node1.process(send0.clone()).unwrap();
+    node0.process(send0.clone());
+    node1.process(send0.clone());
 
     // Confirm send0 to allow starting and voting on the following blocks
     node0.confirm(send0.hash());
@@ -621,8 +621,8 @@ fn bootstrap_fork_open() {
     assert_timely2(|| node0.block_confirmed(&send0.hash()));
 
     // They disagree about open0/open1
-    node0.process(open0.clone()).unwrap();
-    node1.process(open1.clone()).unwrap();
+    node0.process(open0.clone());
+    node1.process(open1.clone());
 
     node0.confirming_set.add(open0.hash());
     assert_timely2(|| node0.block_confirmed(&open0.hash()));
@@ -801,10 +801,10 @@ fn fork_multi_flip() {
     let send2 = fork_lattice.genesis().legacy_send(&key2, 100);
     let send3 = fork_lattice.genesis().legacy_send(&key2, 0);
 
-    node1.process(send1.clone()).unwrap();
+    node1.process(send1.clone());
     // Node2 has two blocks that will be rolled back by node1's vote
-    node2.process(send2.clone()).unwrap();
-    node2.process(send3.clone()).unwrap();
+    node2.process(send2.clone());
+    node2.process(send3.clone());
 
     // Insert voting key into node1
     node1.insert_into_wallet(&DEV_GENESIS_KEY);
@@ -1665,14 +1665,14 @@ fn fork_no_vote_quorum() {
     let wallet_id1 = node1.wallets.wallet_ids()[0];
     let wallet_id2 = node2.wallets.wallet_ids()[0];
     let wallet_id3 = node3.wallets.wallet_ids()[0];
-    node1
-        .wallets
-        .insert_adhoc2(&wallet_id1, &DEV_GENESIS_KEY.raw_key(), true)
-        .unwrap();
+
+    node1.insert_into_wallet(&DEV_GENESIS_KEY);
+
     let key4 = node1
         .wallets
         .deterministic_insert2(&wallet_id1, true)
         .unwrap();
+
     node1
         .wallets
         .send_action2(
@@ -1685,14 +1685,17 @@ fn fork_no_vote_quorum() {
             None,
         )
         .unwrap();
+
     let key1 = node2
         .wallets
         .deterministic_insert2(&wallet_id2, true)
         .unwrap();
+
     node2
         .wallets
         .set_representative(wallet_id2, key1, false)
         .unwrap();
+
     let block = node1
         .wallets
         .send_action2(
@@ -1705,6 +1708,7 @@ fn fork_no_vote_quorum() {
             None,
         )
         .unwrap();
+
     assert_timely_msg(
         Duration::from_secs(30),
         || {
@@ -1728,9 +1732,9 @@ fn fork_no_vote_quorum() {
     }
     .into();
 
-    node1.process(send1.clone()).unwrap();
-    node2.process(send1.clone()).unwrap();
-    node3.process(send1.clone()).unwrap();
+    node1.process(send1.clone());
+    node2.process(send1.clone());
+    node3.process(send1.clone());
 
     let key2 = node3
         .wallets
@@ -2152,8 +2156,8 @@ fn rollback_vote_self() {
     let fork = fork_lattice.account(&key).send(&*DEV_GENESIS_KEY, 2);
 
     // Process and mark the first 2 blocks as confirmed to allow voting
-    node.process(send1.clone()).unwrap();
-    node.process(open.clone()).unwrap();
+    node.process(send1.clone());
+    node.process(open.clone());
     node.confirm(open.hash());
 
     // wait until the rep weights have caught up with the weight transfer
@@ -2264,10 +2268,10 @@ fn rep_crawler_rep_remove() {
     // Receive by Rep2
     let receive_rep2 = lattice.account(&key_rep2).receive(&send_to_rep2);
 
-    searching_node.process(send_to_rep1).unwrap();
-    searching_node.process(receive_rep1).unwrap();
-    searching_node.process(send_to_rep2).unwrap();
-    searching_node.process(receive_rep2).unwrap();
+    searching_node.process(send_to_rep1);
+    searching_node.process(receive_rep1);
+    searching_node.process(send_to_rep2);
+    searching_node.process(receive_rep2);
 
     // Create channel for Rep1
     let channel_rep1 = make_fake_channel(&searching_node);
@@ -2594,7 +2598,7 @@ fn fork_open_flip() {
     assert_ne!(open1.hash(), open2.hash());
 
     // give block open1 to node1, manually trigger an election for open1 and ensure it is in the ledger
-    let open1 = node1.process(open1).unwrap();
+    let open1 = node1.process(open1);
     node1.election_schedulers.manual.push(open1.clone(), None);
     assert_timely_msg(
         Duration::from_secs(5),

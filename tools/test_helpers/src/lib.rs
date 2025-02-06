@@ -459,7 +459,7 @@ pub fn setup_chain(
     }
 
     for block in &blocks {
-        let saved = node.process(block.clone()).unwrap();
+        let saved = node.process(block.clone());
         result.push(saved);
     }
 
@@ -509,8 +509,8 @@ pub fn setup_chains(
         .into();
 
         latest = send.hash();
-        node.process(send.clone()).unwrap();
-        let open = node.process(open).unwrap();
+        node.process(send.clone());
+        let open = node.process(open);
 
         if confirm {
             node.confirm(send.hash());
@@ -559,8 +559,8 @@ pub fn setup_independent_blocks(node: &Node, count: usize, source: &PrivateKey) 
         }
         .into();
 
-        node.process(send.clone()).unwrap();
-        let open = node.process(open).unwrap();
+        node.process(send.clone());
+        let open = node.process(open);
         // Ensure blocks are in the ledger
         assert_timely(Duration::from_secs(5), || {
             node.block_hashes_exist([send.hash(), open.hash()])
@@ -727,7 +727,7 @@ pub fn process_send_block(node: Arc<Node>, account: Account, amount: Amount) -> 
     }
     .into();
 
-    node.process(send.clone()).unwrap();
+    node.process(send.clone());
 
     send
 }
@@ -753,7 +753,7 @@ pub fn process_open_block(node: Arc<Node>, keys: PrivateKey) -> Block {
     }
     .into();
 
-    node.process(open.clone()).unwrap();
+    node.process(open.clone());
 
     open
 }
@@ -833,8 +833,8 @@ pub fn setup_new_account(
     }
     .into();
 
-    node.process(send.clone()).unwrap();
-    node.process(open.clone()).unwrap();
+    node.process(send.clone());
+    node.process(open.clone());
 
     if force_confirm {
         node.confirm(send.hash());

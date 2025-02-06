@@ -37,13 +37,13 @@ fn quorum_minimum_update_weight_before_quorum_checks() {
     });
 
     let open1 = lattice.account(&key1).receive(&send1);
-    node1.process(open1.clone()).unwrap();
+    node1.process(open1.clone());
 
     let key2 = PrivateKey::new();
     let send2 = lattice
         .account(&key1)
         .send(&key2, Amount::MAX - amount - Amount::raw(3));
-    node1.process(send2.clone()).unwrap();
+    node1.process(send2.clone());
     assert_timely_eq(Duration::from_secs(5), || node1.ledger.block_count(), 4);
 
     let config2 = NodeConfig {
@@ -105,13 +105,13 @@ fn continuous_voting() {
     let key1 = PrivateKey::new();
     let send1 = lattice.genesis().send(&key1, (Amount::MAX / 10) * 9);
 
-    node1.process(send1.clone()).unwrap();
+    node1.process(send1.clone());
     node1.confirm(send1.hash());
     node1.stats.clear();
 
     // Create a block that should be staying in AEC but not get confirmed
     let send2 = lattice.genesis().send(&key1, 1);
-    node1.process(send2.clone()).unwrap();
+    node1.process(send2.clone());
     assert_timely(Duration::from_secs(5), || node1.active.active(&send2));
 
     // Ensure votes are broadcasted in continuous manner

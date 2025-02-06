@@ -1302,7 +1302,7 @@ fn epoch_2_receive_unopened() {
             work: node.work_generate_dev(&key),
         }
         .into();
-        node.process(epoch2_unopened).unwrap();
+        node.process(epoch2_unopened);
 
         node.wallets
             .insert_adhoc2(&wallet_id, &key.raw_key(), false)
@@ -1385,7 +1385,7 @@ fn search_receivable() {
     let send = lattice
         .genesis()
         .send(&*DEV_GENESIS_KEY, node.config.receive_minimum);
-    node.process(send.clone()).unwrap();
+    node.process(send.clone());
 
     // Pending search should start an election
     assert_eq!(node.active.len(), 0);

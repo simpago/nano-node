@@ -1316,10 +1316,21 @@ impl Node {
         }
     }
 
-    pub fn process(&self, block: Block) -> Result<SavedBlock, BlockStatus> {
+    pub fn try_process(&self, block: Block) -> Result<SavedBlock, BlockStatus> {
         let _guard = self.ledger.write_queue.wait(Writer::Testing);
         let mut tx = self.ledger.rw_txn();
         self.ledger.process(&mut tx, &block)
+    }
+
+    pub fn process(&self, block: Block) -> SavedBlock {
+        let hash = block.hash();
+        match self.try_process(block) {
+            Ok(saved_block) => saved_block,
+            Err(BlockStatus::Old) => self.block(&hash).unwrap(),
+            Err(e) => {
+                panic!("Could not process block: {:?}", e);
+            }
+        }
     }
 
     pub fn process_multi(&self, blocks: &[Block]) {

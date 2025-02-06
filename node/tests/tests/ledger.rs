@@ -23,7 +23,7 @@ mod votes {
         let mut lattice = UnsavedBlockLatticeBuilder::new();
         let key1 = PrivateKey::new();
         let send1 = lattice.genesis().legacy_send(&key1, 100);
-        let send1 = node1.process(send1).unwrap();
+        let send1 = node1.process(send1);
         node1
             .election_schedulers
             .manual
@@ -102,7 +102,7 @@ mod votes {
         let send1 = lattice
             .genesis()
             .send_all_except(&key1, Amount::MAX / 2 - Amount::nano(1000));
-        node1.process(send1.clone()).unwrap();
+        node1.process(send1.clone());
         let election1 = start_election(&node1, &send1.hash());
         let vote1 = Arc::new(Vote::new(
             &DEV_GENESIS_KEY,
@@ -215,7 +215,7 @@ fn epoch_open_pending() {
     let send1 = lattice.genesis().send(&key1, 100);
     let epoch_open = lattice.epoch_open(&key1);
 
-    let status = node1.process(epoch_open.clone()).unwrap_err();
+    let status = node1.try_process(epoch_open.clone()).unwrap_err();
     assert_eq!(status, BlockStatus::GapEpochOpenPending);
     node1.block_processor.add(
         epoch_open.clone().into(),

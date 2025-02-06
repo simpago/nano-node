@@ -140,7 +140,7 @@ fn receivable_processor_confirm_insufficient_pos() {
 
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let send1 = lattice.genesis().send(Account::zero(), 1);
-    node1.process(send1.clone()).unwrap();
+    node1.process(send1.clone());
 
     let election = start_election(&node1, &send1.hash());
     let key1 = PrivateKey::new();
@@ -163,7 +163,7 @@ fn receivable_processor_confirm_sufficient_pos() {
 
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let send1 = lattice.genesis().send(Account::zero(), 1);
-    node1.process(send1.clone()).unwrap();
+    node1.process(send1.clone());
 
     let election = start_election(&node1, &send1.hash());
     let vote = Arc::new(Vote::new_final(&DEV_GENESIS_KEY, vec![send1.hash()]));

@@ -48,7 +48,7 @@ fn block_create_state() {
     assert_eq!(block.block_type(), BlockType::State);
     assert_eq!(block.hash(), block_hash);
 
-    node.process(block.clone()).unwrap();
+    node.process(block.clone());
 
     let tx = node.ledger.read_txn();
     assert_eq!(

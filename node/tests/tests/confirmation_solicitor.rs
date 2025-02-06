@@ -45,7 +45,7 @@ fn batches() {
 
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let send = lattice.genesis().send(Account::from(123), 100);
-    let send = node2.process(send).unwrap();
+    let send = node2.process(send);
 
     {
         for i in 0..ConfirmReq::HASHES_MAX {
@@ -126,7 +126,7 @@ fn different_hashes() {
 
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let send = lattice.genesis().send(Account::from(123), 100);
-    let send = node2.process(send).unwrap();
+    let send = node2.process(send);
 
     let election = Election::new(
         100,
@@ -190,7 +190,7 @@ fn bypass_max_requests_cap() {
 
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let send = lattice.genesis().send(Account::from(123), 100);
-    let send = node2.process(send).unwrap();
+    let send = node2.process(send);
 
     let election = Election::new(
         100,

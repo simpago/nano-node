@@ -333,8 +333,8 @@ fn inactive_votes_cache_existing_vote() {
     let send = lattice.genesis().send(&key, rep_weight);
     let open = lattice.account(&key).receive(&send);
 
-    node.process(send.clone()).unwrap();
-    node.process(open.clone()).unwrap();
+    node.process(send.clone());
+    node.process(open.clone());
 
     let election = start_election(&node, &send.hash());
     assert!(
@@ -407,9 +407,9 @@ fn inactive_votes_cache_multiple_votes() {
     let open = lattice.account(&key).receive(&send1);
 
     // put the blocks in the ledger witout triggering an election
-    node.process(send1.clone()).unwrap();
-    node.process(send2.clone()).unwrap();
-    node.process(open.clone()).unwrap();
+    node.process(send1.clone());
+    node.process(send2.clone());
+    node.process(open.clone());
 
     // Process votes
     let vote1 = Arc::new(Vote::new(&key, 0, 0, vec![send1.hash()]));
@@ -457,10 +457,10 @@ fn inactive_votes_cache_election_start() {
     let open1 = lattice.account(&key1).receive(&send1);
     let open2 = lattice.account(&key2).receive(&send2);
 
-    node.process(send1.clone()).unwrap();
-    let send2 = node.process(send2.clone()).unwrap();
-    node.process(open1.clone()).unwrap();
-    node.process(open2.clone()).unwrap();
+    node.process(send1.clone());
+    let send2 = node.process(send2.clone());
+    node.process(open1.clone());
+    node.process(open2.clone());
 
     // These blocks will be processed later
     let send3 = lattice.genesis().send(Account::from(2), 1);
@@ -604,7 +604,7 @@ fn confirm_election_by_request() {
     let send1 = lattice.genesis().send(Account::from(1), 100);
 
     // Process send1 locally on node1
-    node1.process(send1.clone()).unwrap();
+    node1.process(send1.clone());
 
     // Add rep key to node1
     let wallet_id = node1.wallets.wallet_ids()[0];
@@ -706,7 +706,7 @@ fn confirm_frontier() {
         })
         .finish();
 
-    node1.process(send.clone()).unwrap();
+    node1.process(send.clone());
     node1.confirm(send.hash());
 
     // The rep crawler would otherwise request confirmations in order to find representatives
@@ -736,7 +736,7 @@ fn confirm_frontier() {
         node2.steady_clock.now(),
     );
 
-    node2.process(send.clone()).unwrap();
+    node2.process(send.clone());
     assert_timely2(|| node2.active.len() > 0);
 
     node1.insert_into_wallet(&DEV_GENESIS_KEY);
@@ -763,7 +763,7 @@ fn vacancy() {
     let send = lattice
         .genesis()
         .send(&*DEV_GENESIS_KEY, Amount::nano(1000));
-    node.process(send.clone()).unwrap();
+    node.process(send.clone());
 
     assert_eq!(1, node.active.vacancy(ElectionBehavior::Priority),);
     assert_eq!(0, node.active.len());
@@ -848,7 +848,7 @@ fn broadcast_block_on_activation() {
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let send1 = lattice.genesis().send(*DEV_GENESIS_ACCOUNT, 1000);
     // Adds a block to the first node
-    let send1 = node1.process(send1.clone()).unwrap();
+    let send1 = node1.process(send1.clone());
 
     // The second node should not have the block
     assert_never(Duration::from_millis(500), || {

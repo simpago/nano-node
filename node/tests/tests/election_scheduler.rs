@@ -208,11 +208,11 @@ mod election_scheduler {
 
         // Activating accounts depends on confirmed dependencies. First, prepare 2 accounts
         let send = lattice.genesis().send(&key, Amount::nano(1000));
-        let send = node.process(send.clone()).unwrap();
+        let send = node.process(send.clone());
         node.confirming_set.add(send.hash());
 
         let receive = lattice.account(&key).receive(&send);
-        let receive = node.process(receive.clone()).unwrap();
+        let receive = node.process(receive.clone());
         node.confirming_set.add(receive.hash());
 
         assert_timely2(|| {
@@ -223,7 +223,7 @@ mod election_scheduler {
         let block1 = lattice
             .genesis()
             .send(&*DEV_GENESIS_KEY, Amount::nano(1000));
-        node.process(block1.clone()).unwrap();
+        node.process(block1.clone());
 
         // There is vacancy so it should be inserted
         node.election_schedulers
@@ -239,7 +239,7 @@ mod election_scheduler {
         });
 
         let block2 = lattice.account(&key).send(&key, Amount::nano(1000));
-        node.process(block2.clone()).unwrap();
+        node.process(block2.clone());
 
         // There is no vacancy so it should stay queued
         node.election_schedulers

@@ -15,7 +15,7 @@ fn account_base() {
     let node0 = system.make_node();
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let send1 = lattice.genesis().send(Account::zero(), 1);
-    node0.process(send1.clone()).unwrap();
+    node0.process(send1.clone());
     let node1 = system.make_node();
     assert_timely(Duration::from_secs(5), || node1.block_exists(&send1.hash()));
 }
@@ -30,8 +30,8 @@ fn account_inductive() {
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let send1 = lattice.genesis().send(Account::zero(), 1);
     let send2 = lattice.genesis().send(Account::zero(), 1);
-    node0.process(send1).unwrap();
-    node0.process(send2.clone()).unwrap();
+    node0.process(send1);
+    node0.process(send2.clone());
     let node1 = system.make_node();
     assert_timely(Duration::from_secs(50), || {
         node1.block_exists(&send2.hash())
@@ -50,8 +50,8 @@ fn trace_base() {
     let key = PrivateKey::new();
     let send1 = lattice.genesis().send(&key, 1);
     let receive1 = lattice.account(&key).receive(&send1);
-    node0.process(send1).unwrap();
-    node0.process(receive1.clone()).unwrap();
+    node0.process(send1);
+    node0.process(receive1.clone());
     let node1 = system.make_node();
     assert_timely(Duration::from_secs(10), || {
         node1.block_exists(&receive1.hash())
