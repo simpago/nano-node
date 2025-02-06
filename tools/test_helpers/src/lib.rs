@@ -132,10 +132,10 @@ impl System {
 
         if self.nodes.len() > 1 && !disconnected {
             let other = &self.nodes[0];
-            other
-                .peer_connector
-                .connect_to(node.tcp_listener.local_address())
-                .unwrap();
+            let node_addr = node.tcp_listener.local_address();
+            if let Err(e) = other.peer_connector.connect_to(node_addr) {
+                panic!("Could not connect to {}. Reason: {:?}", node_addr, e);
+            }
 
             let start = Instant::now();
             loop {
