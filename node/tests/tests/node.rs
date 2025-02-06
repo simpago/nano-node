@@ -1991,15 +1991,13 @@ fn vote_by_hash_republish() {
     let mut system = System::new();
     let node1 = system.make_node();
     let node2 = system.make_node();
-    let key2 = PrivateKey::new();
-    // by not setting a private key on node1's wallet for genesis account, it is stopped from voting
-    node2.insert_into_wallet(&key2);
+    let key = PrivateKey::new();
 
     // send1 and send2 are forks of each other
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let mut fork_lattice = UnsavedBlockLatticeBuilder::new();
-    let send1 = lattice.genesis().send(&key2, Amount::nano(1000));
-    let send2 = fork_lattice.genesis().send(&key2, Amount::nano(2000));
+    let send1 = lattice.genesis().send(&key, Amount::nano(1000));
+    let send2 = fork_lattice.genesis().send(&key, Amount::nano(2000));
 
     // give block send1 to node1 and check that an election for send1 starts on both nodes
     node1.process_active(send1.clone());
