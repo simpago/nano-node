@@ -89,7 +89,6 @@ impl NodeCallbacksBuilder {
 
 pub struct NodeBuilder {
     network: Networks,
-    runtime: Option<tokio::runtime::Handle>,
     data_path: Option<PathBuf>,
     config: Option<NodeConfig>,
     network_params: Option<NetworkParams>,
@@ -102,7 +101,6 @@ impl NodeBuilder {
     pub fn new(network: Networks) -> Self {
         Self {
             network,
-            runtime: None,
             data_path: None,
             config: None,
             network_params: None,
@@ -110,11 +108,6 @@ impl NodeBuilder {
             work: None,
             callbacks: None,
         }
-    }
-
-    pub fn runtime(mut self, runtime: tokio::runtime::Handle) -> Self {
-        self.runtime = Some(runtime);
-        self
     }
 
     pub fn data_path(mut self, path: impl Into<PathBuf>) -> Self {
@@ -156,9 +149,6 @@ impl NodeBuilder {
 
     pub fn finish(self) -> anyhow::Result<Node> {
         let data_path = self.get_data_path()?;
-        let runtime = self
-            .runtime
-            .unwrap_or_else(|| tokio::runtime::Handle::current());
 
         let network_params = self
             .network_params
@@ -191,7 +181,6 @@ impl NodeBuilder {
         let callbacks = self.callbacks.unwrap_or_default();
 
         let args = NodeArgs {
-            runtime,
             data_path,
             config,
             network_params,

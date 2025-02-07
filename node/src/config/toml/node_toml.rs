@@ -25,7 +25,7 @@ pub struct NodeToml {
     pub enable_voting: Option<bool>,
     pub external_address: Option<String>,
     pub external_port: Option<u16>,
-    pub io_threads: Option<u32>,
+    pub io_threads: Option<usize>,
     pub max_queued_requests: Option<u32>,
     pub max_unchecked_blocks: Option<u32>,
     pub max_backlog: Option<usize>,

@@ -344,8 +344,8 @@ mod tests {
     use crate::command_handler::test_rpc_command;
     use rsnano_rpc_messages::{RpcCommand, RpcError};
 
-    #[tokio::test]
-    async fn history_rpc_call() {
+    #[test]
+    fn history_rpc_call() {
         let cmd = RpcCommand::account_history(
             AccountHistoryArgs::build_for_account(Account::from(42), 3).finish(),
         );

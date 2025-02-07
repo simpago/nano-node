@@ -25,6 +25,7 @@ use crate::{
         adapters::{LedgerStats, NetworkStats},
         Stats,
     },
+    tokio_runner::TokioRunner,
     transport::{
         keepalive::{KeepaliveMessageFactory, KeepalivePublisher},
         BlockFlooder, InboundMessageQueue, InboundMessageQueueCleanup, LatestKeepalives,
@@ -134,10 +135,10 @@ pub struct Node {
     ledger_notification_thread: LedgerNotificationThread,
     pub ledger_notifications: LedgerNotifications,
     vote_rebroadcaster: VoteRebroadcaster,
+    tokio_runner: TokioRunner,
 }
 
 pub(crate) struct NodeArgs {
-    pub runtime: tokio::runtime::Handle,
     pub data_path: PathBuf,
     pub config: NodeConfig,
     pub network_params: NetworkParams,
@@ -151,7 +152,6 @@ impl NodeArgs {
         let network_params = NetworkParams::new(Networks::NanoDevNetwork);
         let config = NodeConfig::new(None, &network_params, 2);
         Self {
-            runtime: tokio::runtime::Handle::current(),
             data_path: "/home/nulled-node".into(),
             network_params,
             config,
@@ -184,11 +184,14 @@ impl Node {
     }
 
     fn new(args: NodeArgs, is_nulled: bool, mut node_id_key_file: NodeIdKeyFile) -> Self {
+        let mut tokio_runner = TokioRunner::new(args.config.io_threads);
+        tokio_runner.start();
+        let runtime = tokio_runner.handle().clone();
+
         let network_params = args.network_params;
         let current_network = network_params.network.current_network;
         let config = args.config;
         let flags = args.flags;
-        let runtime = args.runtime;
         let work = args.work;
         // Time relative to the start of the node. This makes time exlicit and enables us to
         // write time relevant unit tests with ease.
@@ -1236,6 +1239,7 @@ impl Node {
             ledger_notification_thread,
             ledger_notifications,
             vote_rebroadcaster,
+            tokio_runner,
         }
     }
 
@@ -1603,6 +1607,7 @@ impl Node {
         self.election_workers.stop();
         self.workers.stop();
 
+        self.tokio_runner.stop();
         // work pool is not stopped on purpose due to testing setup
     }
 }
@@ -1651,15 +1656,14 @@ mod tests {
     };
     use rsnano_core::Networks;
     use std::ops::{Deref, DerefMut};
-    use tokio::task::spawn_blocking;
     use uuid::Uuid;
 
-    #[tokio::test]
-    async fn start_peer_cache_updater() {
-        let mut node = TestNode::new().await;
+    #[test]
+    fn start_peer_cache_updater() {
+        let mut node = TestNode::new();
         let start_tracker = node.peer_cache_updater.track_start();
 
-        spawn_blocking(move || node.start()).await.unwrap();
+        node.start();
 
         assert_eq!(
             start_tracker.output(),
@@ -1671,13 +1675,13 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn start_peer_cache_connector() {
-        let mut node = TestNode::new().await;
+    #[test]
+    fn start_peer_cache_connector() {
+        let mut node = TestNode::new();
         let merge_period = node.network_params.network.merge_period;
         let start_tracker = node.peer_cache_connector.track_start();
 
-        spawn_blocking(move || node.start()).await.unwrap();
+        node.start();
 
         assert_eq!(
             start_tracker.output(),
@@ -1689,26 +1693,22 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn stop_node() {
-        let mut node = TestNode::new().await;
-        spawn_blocking(move || {
-            node.start();
-            node.stop();
+    #[test]
+    fn stop_node() {
+        let mut node = TestNode::new();
+        node.start();
+        node.stop();
 
-            assert_eq!(
-                node.peer_cache_updater.is_running(),
-                false,
-                "peer_cache_updater running"
-            );
-            assert_eq!(
-                node.peer_cache_connector.is_running(),
-                false,
-                "peer_cache_connector running"
-            );
-        })
-        .await
-        .unwrap();
+        assert_eq!(
+            node.peer_cache_updater.is_running(),
+            false,
+            "peer_cache_updater running"
+        );
+        assert_eq!(
+            node.peer_cache_connector.is_running(),
+            false,
+            "peer_cache_connector running"
+        );
     }
 
     struct TestNode {
@@ -1717,7 +1717,7 @@ mod tests {
     }
 
     impl TestNode {
-        pub async fn new() -> Self {
+        pub fn new() -> Self {
             let mut app_path = std::env::temp_dir();
             app_path.push(format!("rsnano-test-{}", Uuid::new_v4().simple()));
             let config = NodeConfig::new_test_instance();

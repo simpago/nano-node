@@ -39,7 +39,7 @@ pub struct NodeConfig {
     /// All representatives above this weight will be kept in memory!
     pub representative_vote_weight_minimum: Amount,
     pub password_fanout: u32,
-    pub io_threads: u32,
+    pub io_threads: usize,
     pub network_threads: u32,
     pub work_threads: u32,
     pub background_threads: u32,
@@ -231,7 +231,7 @@ impl NodeConfig {
             online_weight_minimum: Amount::nano(60_000_000),
             representative_vote_weight_minimum: Amount::nano(10),
             password_fanout: 1024,
-            io_threads: max(parallelism, 4) as u32,
+            io_threads: max(parallelism, 4),
             network_threads: max(parallelism, 4) as u32,
             work_threads: max(parallelism, 4) as u32,
             background_threads: max(parallelism, 4) as u32,

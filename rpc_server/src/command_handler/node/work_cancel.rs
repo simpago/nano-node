@@ -16,15 +16,15 @@ mod tests {
     use rsnano_rpc_messages::{HashRpcMessage, RpcCommand, SuccessResponse};
     use std::sync::Arc;
 
-    #[tokio::test]
-    async fn without_rpc_control_enabled() {
+    #[test]
+    fn without_rpc_control_enabled() {
         test_rpc_command_requires_control(RpcCommand::WorkCancel(HashRpcMessage {
             hash: 1.into(),
         }));
     }
 
-    #[tokio::test]
-    async fn handle_work_cancel_command() {
+    #[test]
+    fn handle_work_cancel_command() {
         let node = Arc::new(Node::new_null());
         let cancel_tracker = node.distributed_work.track_cancellations();
         let root = Root::from(42);

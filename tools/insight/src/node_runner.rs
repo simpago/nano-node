@@ -115,8 +115,8 @@ impl Drop for NodeRunner {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn can_be_nulled() {
+    #[test]
+    fn can_be_nulled() {
         let node = Arc::new(Node::new_null());
         let runner = NodeRunner::new_null_with(node.clone());
         assert!(Arc::ptr_eq(&node, &runner.node().unwrap()));
