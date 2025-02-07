@@ -3,7 +3,9 @@ use super::{
     cleanup::BootstrapCleanup,
     requesters::Requesters,
     response_processor::{ProcessError, ResponseProcessor},
-    state::{BootstrapState, CandidateAccountsConfig, FrontierScanConfig, QueryType},
+    state::{
+        BootstrapState, CandidateAccountsConfig, FrontierHeadInfo, FrontierScanConfig, QueryType,
+    },
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, LedgerNotifications},
@@ -160,6 +162,10 @@ impl Bootstrapper {
         if let Some(threads) = threads {
             threads.cleanup.join().unwrap();
         }
+    }
+
+    pub fn frontier_heads(&self) -> Vec<FrontierHeadInfo> {
+        self.state.lock().unwrap().frontier_scan.heads()
     }
 
     pub fn prioritized(&self, account: &Account) -> bool {

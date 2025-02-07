@@ -35,17 +35,18 @@ impl HeadsContainer {
     fn create_head(config: FrontierHeadsConfig, index: usize) -> FrontierHead {
         let range_size = Account::MAX.number() / config.parallelism;
 
-        // Start at 1 to avoid the burn account
-        let start = if index == 0 {
-            U256::from(1)
-        } else {
-            range_size * index
-        };
+        let mut start = range_size * index;
         let end = if index == config.parallelism - 1 {
             Account::MAX.number()
         } else {
             start + range_size
         };
+
+        // Start at 1 to avoid the burn account
+        if index == 0 {
+            start = 1.into();
+        }
+
         FrontierHead::new(start, end, config)
     }
 

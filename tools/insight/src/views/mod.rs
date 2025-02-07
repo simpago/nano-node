@@ -1,5 +1,6 @@
 mod app_view;
 mod badge;
+mod bootstrap_view;
 mod channels_view;
 mod ledger_stats_view;
 mod message_recorder_controls_view;

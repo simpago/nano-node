@@ -1,4 +1,5 @@
 use super::{heads_container::HeadsContainer, FrontierHeadsConfig};
+use primitive_types::U512;
 use rsnano_core::{utils::ContainerInfo, Account, Frontier};
 use rsnano_nullable_clock::Timestamp;
 
@@ -80,18 +81,45 @@ impl FrontierScan {
         self.heads.iter().map(|i| i.requests_completed).sum()
     }
 
+    pub fn heads(&self) -> Vec<FrontierHeadInfo> {
+        self.heads
+            .iter()
+            .map(|i| FrontierHeadInfo {
+                start: i.start,
+                end: i.end,
+                current: i.next,
+            })
+            .collect()
+    }
+
     pub fn container_info(&self) -> ContainerInfo {
         // TODO port the detailed container info from nano_node
         [("total_processed", self.total_accounts_processed(), 0)].into()
     }
 }
 
+#[derive(PartialEq, Eq, Debug)]
+pub struct FrontierHeadInfo {
+    pub start: Account,
+    pub end: Account,
+    pub current: Account,
+}
+
+impl FrontierHeadInfo {
+    /// Returns how far the current frontier is in the range [0, 1]
+    pub fn done_normalized(&self) -> f32 {
+        let total: U512 = (self.end.number() - self.start.number()).into();
+        let mut progress: U512 = (self.current.number() - self.start.number()).into();
+        progress *= 1000;
+        (progress / total).as_u64() as f32 / 1000.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use super::*;
     use rsnano_core::BlockHash;
+    use std::time::Duration;
 
     #[test]
     fn next_basic() {
@@ -344,5 +372,72 @@ mod tests {
         let scan = FrontierScan::new(Default::default());
         let info = scan.container_info();
         assert_eq!(info, [("total_processed", 0, 0)].into());
+    }
+
+    #[test]
+    fn heads_info() {
+        let config = FrontierScanConfig {
+            heads: FrontierHeadsConfig {
+                parallelism: 4,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let scan = FrontierScan::new(config);
+
+        let heads = scan.heads();
+
+        assert_eq!(heads.len(), 4);
+        assert_eq!(
+            heads[0],
+            frontier_head_info(
+                "0000000000000000000000000000000000000000000000000000000000000001",
+                "3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+                "0000000000000000000000000000000000000000000000000000000000000001"
+            )
+        );
+        assert_eq!(
+            heads[1],
+            frontier_head_info(
+                "3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+                "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE",
+                "3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+            )
+        );
+        assert_eq!(
+            heads[2],
+            frontier_head_info(
+                "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE",
+                "BFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD",
+                "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE",
+            )
+        );
+        assert_eq!(
+            heads[3],
+            frontier_head_info(
+                "BFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD",
+                "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+                "BFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD",
+            )
+        );
+    }
+
+    #[test]
+    fn heads_info_done() {
+        let info = FrontierHeadInfo {
+            start: 1.into(),
+            end: 13.into(),
+            current: 10.into(),
+        };
+        let done = info.done_normalized();
+        assert!((done - 0.75).abs() < 0.001, "done was: {}", done);
+    }
+
+    fn frontier_head_info(start: &str, end: &str, current: &str) -> FrontierHeadInfo {
+        FrontierHeadInfo {
+            start: Account::decode_hex(start).unwrap(),
+            end: Account::decode_hex(end).unwrap(),
+            current: Account::decode_hex(current).unwrap(),
+        }
     }
 }

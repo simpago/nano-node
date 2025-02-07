@@ -7,7 +7,7 @@ use std::{collections::BTreeSet, time::Duration};
 pub(super) struct FrontierHead {
     /// The range of accounts to scan is [start, end)
     pub start: Account,
-    end: Account,
+    pub end: Account,
 
     /// We scan the range by querying frontiers starting at 'next' and gathering candidates
     pub next: Account,

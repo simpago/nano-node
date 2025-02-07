@@ -1,6 +1,6 @@
 use super::{
-    ChannelsViewModel, LedgerStatsViewModel, MessageStatsViewModel, MessageTableViewModel,
-    NodeRunnerViewModel, QueueGroupViewModel, TabBarViewModel,
+    BootstrapViewModel, ChannelsViewModel, LedgerStatsViewModel, MessageStatsViewModel,
+    MessageTableViewModel, NodeRunnerViewModel, QueueGroupViewModel, TabBarViewModel,
 };
 use crate::{
     channels::Channels, ledger_stats::LedgerStats, message_collection::MessageCollection,
@@ -32,6 +32,7 @@ pub(crate) struct AppViewModel {
     pub confirming_set: ConfirmingSetInfo,
     pub block_processor_info: FairQueueInfo<BlockSource>,
     pub vote_processor_info: FairQueueInfo<RepTier>,
+    pub bootstrap: BootstrapViewModel,
 }
 
 impl AppViewModel {
@@ -61,6 +62,7 @@ impl AppViewModel {
             confirming_set: Default::default(),
             block_processor_info: Default::default(),
             vote_processor_info: Default::default(),
+            bootstrap: Default::default(),
         }
     }
 
@@ -86,6 +88,7 @@ impl AppViewModel {
             self.confirming_set = node.confirming_set.info();
             self.block_processor_info = node.block_processor.info();
             self.vote_processor_info = node.vote_processor_queue.info();
+            self.bootstrap.update(&node.bootstrapper);
         }
 
         self.message_table.update_message_counts();
