@@ -51,8 +51,8 @@ mod tests {
     use rsnano_node::representatives::OnlineReps;
     use rsnano_rpc_messages::{ConfirmationQuorumArgs, ConfirmationQuorumResponse, RpcCommand};
 
-    #[tokio::test]
-    async fn confirmation_quorum_command() {
+    #[test]
+    fn confirmation_quorum_command() {
         let result: ConfirmationQuorumResponse =
             test_rpc_command(RpcCommand::confirmation_quorum());
         assert!(result.quorum_delta > Amount::zero());

@@ -22,8 +22,8 @@ mod tests {
     use rsnano_rpc_messages::RpcCommand;
     use std::{sync::Arc, thread::spawn};
 
-    #[tokio::test]
-    async fn keepalive() {
+    #[test]
+    fn keepalive() {
         let node = Arc::new(Node::new_null());
         let keepalive_tracker = node.keepalive_publisher.track_keepalives();
         let cmd = RpcCommand::keepalive("foobar.com", 123);
@@ -37,8 +37,8 @@ mod tests {
         assert_eq!(keepalives, [Peer::new("foobar.com", 123)]);
     }
 
-    #[tokio::test]
-    async fn keepalive_fails_without_rpc_control_enabled() {
+    #[test]
+    fn keepalive_fails_without_rpc_control_enabled() {
         test_rpc_command_requires_control(RpcCommand::keepalive("foobar.com", 123));
     }
 }

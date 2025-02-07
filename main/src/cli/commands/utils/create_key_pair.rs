@@ -17,13 +17,13 @@ mod tests {
     use crate::cli::{Cli, CliInfrastructure};
     use clap::Parser;
 
-    #[tokio::test]
-    async fn create_key_pair() {
+    #[test]
+    fn create_key_pair() {
         let cli = Cli::try_parse_from(["nulled_node", "utils", "create-key-pair"]).unwrap();
         let mut infra = CliInfrastructure::new_null();
         let print_tracker = infra.console.track();
 
-        cli.run(&mut infra).await.unwrap();
+        cli.run(&mut infra).unwrap();
 
         let output = print_tracker.output();
         assert_eq!(

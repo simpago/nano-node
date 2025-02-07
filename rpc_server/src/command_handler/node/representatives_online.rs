@@ -91,8 +91,8 @@ mod tests {
     };
     use std::collections::HashMap;
 
-    #[tokio::test]
-    async fn online_reps_command() {
+    #[test]
+    fn online_reps_command() {
         let result: RepresentativesOnlineResponse = test_rpc_command(
             RpcCommand::RepresentativesOnline(RepresentativesOnlineArgs::default()),
         );
