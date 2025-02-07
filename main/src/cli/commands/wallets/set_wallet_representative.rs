@@ -1,10 +1,8 @@
-use crate::cli::get_path;
+use crate::cli::build_node;
 use anyhow::{anyhow, Result};
 use clap::{ArgGroup, Parser};
 use rsnano_core::{Account, WalletId};
-use rsnano_node::wallets::{Wallets, WalletsExt};
-use rsnano_store_lmdb::LmdbEnv;
-use std::sync::Arc;
+use rsnano_node::wallets::WalletsExt;
 
 #[derive(Parser)]
 #[command(group = ArgGroup::new("input")
@@ -28,21 +26,15 @@ pub(crate) struct SetWalletRepresentativeArgs {
 }
 
 impl SetWalletRepresentativeArgs {
-    pub(crate) async fn set_representative_wallet(&self) -> Result<()> {
+    pub(crate) fn set_representative_wallet(&self) -> Result<()> {
+        let node = build_node(&self.data_path, &self.network)?;
         let wallet_id = WalletId::decode_hex(&self.wallet)?;
         let representative = Account::decode_account(&self.account)?.into();
-        let path = get_path(&self.data_path, &self.network).join("wallets.ldb");
-        let env = Arc::new(LmdbEnv::new(&path)?);
-
-        let wallets = Arc::new(Wallets::new_null_with_env(
-            env,
-            tokio::runtime::Handle::current(),
-        ));
-
         let password = self.password.clone().unwrap_or_default();
-        wallets.ensure_wallet_is_unlocked(wallet_id, &password);
 
-        wallets
+        node.wallets.ensure_wallet_is_unlocked(wallet_id, &password);
+
+        node.wallets
             .set_representative(wallet_id, representative, false)
             .map_err(|e| anyhow!("Failed to set wallet representative: {:?}", e))?;
 

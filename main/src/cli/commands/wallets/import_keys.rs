@@ -1,11 +1,10 @@
-use crate::cli::get_path;
+use crate::cli::build_node;
 use anyhow::Context;
 use anyhow::{anyhow, Result};
 use clap::{ArgGroup, Parser};
 use rsnano_core::WalletId;
-use rsnano_node::wallets::{Wallets, WalletsExt};
-use rsnano_store_lmdb::LmdbEnv;
-use std::{fs::File, io::Read, path::PathBuf, sync::Arc};
+use rsnano_node::wallets::WalletsExt;
+use std::{fs::File, io::Read, path::PathBuf};
 
 #[derive(Parser)]
 #[command(group = ArgGroup::new("input")
@@ -32,29 +31,24 @@ pub(crate) struct ImportKeysArgs {
 }
 
 impl ImportKeysArgs {
-    pub(crate) async fn import_keys(&self) -> Result<()> {
+    pub(crate) fn import_keys(&self) -> Result<()> {
         let mut file = File::open(PathBuf::from(&self.file))?;
         let mut contents = String::new();
 
         file.read_to_string(&mut contents)
             .context("Unable to read <file> contents")?;
 
-        let path = get_path(&self.data_path, &self.network).join("wallets.ldb");
+        let node = build_node(&self.data_path, &self.network)?;
         let wallet_id = WalletId::decode_hex(&self.wallet)?;
-        let env = Arc::new(LmdbEnv::new(&path)?);
-        let wallets = Arc::new(Wallets::new_null_with_env(
-            env,
-            tokio::runtime::Handle::current(),
-        ));
-
         let password = self.password.clone().unwrap_or_default();
 
-        wallets.ensure_wallet_is_unlocked(wallet_id, &password);
+        node.wallets.ensure_wallet_is_unlocked(wallet_id, &password);
 
-        if wallets.mutex.lock().unwrap().contains_key(&wallet_id) {
-            let valid = wallets.ensure_wallet_is_unlocked(wallet_id, &password);
+        if node.wallets.mutex.lock().unwrap().contains_key(&wallet_id) {
+            let valid = node.wallets.ensure_wallet_is_unlocked(wallet_id, &password);
             if valid {
-                wallets.import_replace(wallet_id, &contents, &password)?
+                node.wallets
+                    .import_replace(wallet_id, &contents, &password)?
             } else {
                 eprintln!("Invalid password for wallet {}. New wallet should have empty (default) password or passwords for new wallet & json file should match", wallet_id);
                 return Err(anyhow!("Invalid arguments"));
@@ -64,7 +58,7 @@ impl ImportKeysArgs {
                 eprintln!("Wallet doesn't exist");
                 return Err(anyhow!("Invalid arguments"));
             } else {
-                wallets.import(wallet_id, &contents)?
+                node.wallets.import(wallet_id, &contents)?
             }
         }
 

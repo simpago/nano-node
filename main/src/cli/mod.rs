@@ -5,7 +5,7 @@ use commands::{
     wallets::WalletsCommand,
 };
 use rsnano_core::{Networks, PrivateKeyFactory};
-use rsnano_node::{config::NetworkConstants, working_path_for};
+use rsnano_node::{config::NetworkConstants, working_path_for, Node, NodeBuilder};
 use rsnano_nullable_console::Console;
 use std::{path::PathBuf, str::FromStr};
 
@@ -20,7 +20,7 @@ pub(crate) struct Cli {
 impl Cli {
     pub(crate) async fn run(&self, infra: &mut CliInfrastructure) -> Result<()> {
         match &self.command {
-            Some(Commands::Wallets(command)) => command.run().await?,
+            Some(Commands::Wallets(command)) => command.run()?,
             Some(Commands::Utils(command)) => command.run(infra)?,
             Some(Commands::Node(command)) => command.run().await?,
             Some(Commands::Ledger(command)) => command.run()?,
@@ -55,6 +55,25 @@ pub(crate) fn get_path(path_str: &Option<String>, network_str: &Option<String>) 
     }
     let network = NetworkConstants::active_network();
     working_path_for(network).unwrap()
+}
+
+pub(crate) fn get_network(network_str: &Option<String>) -> Networks {
+    match network_str {
+        None => Networks::NanoLiveNetwork,
+        Some(s) => Networks::from_str(s).expect("invalid network"),
+    }
+}
+
+pub(crate) fn build_node(
+    data_path: &Option<String>,
+    network: &Option<String>,
+) -> anyhow::Result<Node> {
+    let network = get_network(network);
+    let mut node_builder = NodeBuilder::new(network);
+    if let Some(path) = data_path {
+        node_builder = node_builder.data_path(path);
+    }
+    node_builder.finish()
 }
 
 #[derive(Default)]

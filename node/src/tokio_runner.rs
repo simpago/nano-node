@@ -3,7 +3,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use tokio::sync::oneshot;
 
 /// Spawns the tokio runtime
-pub(crate) struct TokioRunner {
+pub struct TokioRunner {
     io_threads: usize,
     handle: Option<tokio::runtime::Handle>,
     tx_stop: Option<oneshot::Sender<()>>,

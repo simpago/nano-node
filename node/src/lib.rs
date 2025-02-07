@@ -21,7 +21,7 @@ pub mod pruning;
 pub mod representatives;
 pub mod stats;
 mod telemetry;
-mod tokio_runner;
+pub mod tokio_runner;
 pub mod transport;
 pub mod utils;
 pub mod wallets;

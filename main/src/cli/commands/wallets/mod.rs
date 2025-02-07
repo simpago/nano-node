@@ -33,7 +33,7 @@ pub(crate) enum WalletSubcommands {
     /// Creates a new wallet
     CreateWallet(CreateWalletArgs),
     /// Destroys a wallet
-    DestroyWallet(DestroyWalletArgs),
+    Destroy(DestroyWalletArgs),
     /// Imports keys from a file to a wallet
     ImportKeys(ImportKeysArgs),
     /// Adds a private_key to a wallet
@@ -49,7 +49,7 @@ pub(crate) enum WalletSubcommands {
     /// Decrypts a wallet (WARNING: THIS WILL PRINT YOUR PRIVATE KEY TO STDOUT!)
     DecryptWallet(DecryptWalletArgs),
     /// List all wallets and their public keys
-    ListWallets(ListWalletsArgs),
+    List(ListWalletsArgs),
     /// Removes all send IDs from the wallets (dangerous: not intended for production use)
     ClearSendIds(ClearSendIdsArgs),
 }
@@ -61,24 +61,24 @@ pub(crate) struct WalletsCommand {
 }
 
 impl WalletsCommand {
-    pub(crate) async fn run(&self) -> Result<()> {
+    pub(crate) fn run(&self) -> Result<()> {
         match &self.subcommand {
-            Some(WalletSubcommands::CreateAccount(args)) => args.create_account().await?,
-            Some(WalletSubcommands::ListWallets(args)) => args.list_wallets().await?,
-            Some(WalletSubcommands::CreateWallet(args)) => args.create_wallet().await?,
-            Some(WalletSubcommands::DestroyWallet(args)) => args.destroy_wallet().await?,
-            Some(WalletSubcommands::AddPrivateKey(args)) => args.add_key().await?,
-            Some(WalletSubcommands::ChangeWalletSeed(args)) => args.change_wallet_seed().await?,
-            Some(WalletSubcommands::ImportKeys(args)) => args.import_keys().await?,
-            Some(WalletSubcommands::RemoveAccount(args)) => args.remove_account().await?,
-            Some(WalletSubcommands::DecryptWallet(args)) => args.decrypt_wallet().await?,
+            Some(WalletSubcommands::List(args)) => args.list_wallets()?,
+            Some(WalletSubcommands::CreateWallet(args)) => args.create_wallet()?,
+            Some(WalletSubcommands::CreateAccount(args)) => args.create_account()?,
+            Some(WalletSubcommands::Destroy(args)) => args.destroy_wallet()?,
+            Some(WalletSubcommands::AddPrivateKey(args)) => args.add_key()?,
+            Some(WalletSubcommands::ChangeWalletSeed(args)) => args.change_wallet_seed()?,
+            Some(WalletSubcommands::ImportKeys(args)) => args.import_keys()?,
+            Some(WalletSubcommands::RemoveAccount(args)) => args.remove_account()?,
+            Some(WalletSubcommands::DecryptWallet(args)) => args.decrypt_wallet()?,
             Some(WalletSubcommands::GetWalletRepresentative(args)) => {
-                args.get_wallet_representative().await?
+                args.get_wallet_representative()?
             }
             Some(WalletSubcommands::SetWalletRepresentative(args)) => {
-                args.set_representative_wallet().await?
+                args.set_representative_wallet()?
             }
-            Some(WalletSubcommands::ClearSendIds(args)) => args.clear_send_ids().await?,
+            Some(WalletSubcommands::ClearSendIds(args)) => args.clear_send_ids()?,
             None => WalletsCommand::command().print_long_help()?,
         }
 

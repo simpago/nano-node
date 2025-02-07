@@ -1,10 +1,8 @@
-use crate::cli::get_path;
+use crate::cli::build_node;
 use anyhow::{anyhow, Result};
 use clap::{ArgGroup, Parser};
 use rsnano_core::{RawKey, WalletId};
-use rsnano_node::wallets::{Wallets, WalletsExt};
-use rsnano_store_lmdb::LmdbEnv;
-use std::sync::Arc;
+use rsnano_node::wallets::WalletsExt;
 
 #[derive(Parser)]
 #[command(group = ArgGroup::new("input")
@@ -28,21 +26,15 @@ pub(crate) struct ChangeWalletSeedArgs {
 }
 
 impl ChangeWalletSeedArgs {
-    pub(crate) async fn change_wallet_seed(&self) -> Result<()> {
+    pub(crate) fn change_wallet_seed(&self) -> Result<()> {
+        let node = build_node(&self.data_path, &self.network)?;
         let wallet_id = WalletId::decode_hex(&self.wallet)?;
         let seed = RawKey::decode_hex(&self.seed)?;
-        let path = get_path(&self.data_path, &self.network).join("wallets.ldb");
-        let env = Arc::new(LmdbEnv::new(&path)?);
-        let wallets = Arc::new(Wallets::new_null_with_env(
-            env,
-            tokio::runtime::Handle::current(),
-        ));
-
         let password = self.password.clone().unwrap_or_default();
 
-        wallets.ensure_wallet_is_unlocked(wallet_id, &password);
+        node.wallets.ensure_wallet_is_unlocked(wallet_id, &password);
 
-        wallets
+        node.wallets
             .change_seed(wallet_id, &seed, 0)
             .map_err(|e| anyhow!("Failed to change wallet seed: {:?}", e))?;
 

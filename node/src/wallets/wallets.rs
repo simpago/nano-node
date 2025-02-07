@@ -198,7 +198,7 @@ impl Wallets {
         });
         {
             let mut guard = self.mutex.lock().unwrap();
-            let wallet_ids = self.get_wallet_ids(&txn);
+            let wallet_ids = self.get_wallet_ids_with_tx(&txn);
             for id in wallet_ids {
                 assert!(!guard.contains_key(&id));
                 let representative = self.node_config.random_representative();
@@ -257,10 +257,15 @@ impl Wallets {
 
     pub fn wallet_ids(&self) -> Vec<WalletId> {
         let tx = self.env.tx_begin_read();
-        self.get_wallet_ids(&tx)
+        self.get_wallet_ids_with_tx(&tx)
     }
 
-    pub fn get_wallet_ids(&self, tx: &dyn Transaction) -> Vec<WalletId> {
+    pub fn get_wallet_ids(&self) -> Vec<WalletId> {
+        let tx = self.env.tx_begin_read();
+        self.iter_wallets(&tx).collect()
+    }
+
+    pub fn get_wallet_ids_with_tx(&self, tx: &dyn Transaction) -> Vec<WalletId> {
         self.iter_wallets(tx).collect()
     }
 
@@ -484,7 +489,7 @@ impl Wallets {
         let mut guard = self.mutex.lock().unwrap();
         let mut tx = self.env.tx_begin_write();
         let mut stored_items = HashSet::new();
-        let wallet_ids = self.get_wallet_ids(&tx);
+        let wallet_ids = self.get_wallet_ids_with_tx(&tx);
         for id in wallet_ids {
             // New wallet
             if !guard.contains_key(&id) {

@@ -1,10 +1,8 @@
-use crate::cli::get_path;
+use crate::cli::build_node;
 use anyhow::{anyhow, Result};
 use clap::{ArgGroup, Parser};
 use rsnano_core::{Account, WalletId};
-use rsnano_node::wallets::{Wallets, WalletsExt};
-use rsnano_store_lmdb::LmdbEnv;
-use std::sync::Arc;
+use rsnano_node::wallets::WalletsExt;
 
 #[derive(Parser)]
 #[command(group = ArgGroup::new("input")
@@ -25,21 +23,15 @@ pub(crate) struct CreateAccountArgs {
 }
 
 impl CreateAccountArgs {
-    pub(crate) async fn create_account(&self) -> Result<()> {
-        let path = get_path(&self.data_path, &self.network).join("wallets.ldb");
-        let env = Arc::new(LmdbEnv::new(&path)?);
-
-        let wallets = Arc::new(Wallets::new_null_with_env(
-            env,
-            tokio::runtime::Handle::current(),
-        ));
-
+    pub(crate) fn create_account(&self) -> Result<()> {
+        let node = build_node(&self.data_path, &self.network)?;
         let wallet = WalletId::decode_hex(&self.wallet)?;
         let password = self.password.clone().unwrap_or_default();
 
-        wallets.ensure_wallet_is_unlocked(wallet, &password);
+        node.wallets.ensure_wallet_is_unlocked(wallet, &password);
 
-        let public_key = wallets
+        let public_key = node
+            .wallets
             .deterministic_insert2(&wallet, false)
             .map_err(|e| anyhow!("Failed to insert wallet: {:?}", e))?;
 
