@@ -12,7 +12,7 @@ use std::{
     },
 };
 
-#[derive(FromPrimitive, PartialEq, Eq)]
+#[derive(FromPrimitive, PartialEq, Eq, Debug)]
 pub enum NodeState {
     Starting,
     Started,
@@ -37,14 +37,20 @@ impl NodeRunner {
         }
     }
 
+    pub fn new_null_with(node: Arc<Node>) -> Self {
+        let runner = Self::new(Arc::new(NullableRuntime::new_null()));
+        *runner.node.lock().unwrap() = Some(node);
+        runner.set_state(NodeState::Started);
+        runner
+    }
+
     pub fn start_node(
         &mut self,
         network: Networks,
         data_path: impl Into<PathBuf>,
         callbacks: NodeCallbacks,
     ) {
-        self.state
-            .store(NodeState::Starting as u8, Ordering::SeqCst);
+        self.set_state(NodeState::Starting);
 
         let (tx_stop, rx_stop) = tokio::sync::oneshot::channel::<()>();
         self.stop = Some(tx_stop);
@@ -76,6 +82,10 @@ impl NodeRunner {
         });
     }
 
+    fn set_state(&self, state: NodeState) {
+        self.state.store(state as u8, Ordering::SeqCst);
+    }
+
     pub(crate) fn stop(&mut self) {
         if let Some(tx) = self.stop.take() {
             self.state
@@ -98,5 +108,18 @@ impl Drop for NodeRunner {
         if let Some(tx_stop) = self.stop.take() {
             let _ = tx_stop.send(());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn can_be_nulled() {
+        let node = Arc::new(Node::new_null());
+        let runner = NodeRunner::new_null_with(node.clone());
+        assert!(Arc::ptr_eq(&node, &runner.node().unwrap()));
+        assert_eq!(runner.state(), NodeState::Started);
     }
 }

@@ -35,8 +35,16 @@ pub(crate) struct AppViewModel {
 }
 
 impl AppViewModel {
-    pub(crate) fn new(runtime: Arc<NullableRuntime>) -> Self {
+    pub(crate) fn with_tokio_runtime(runtime: tokio::runtime::Handle) -> Self {
+        Self::with_runtime(Arc::new(NullableRuntime::new(runtime.clone())))
+    }
+
+    pub(crate) fn with_runtime(runtime: Arc<NullableRuntime>) -> Self {
         let node_runner = NodeRunner::new(runtime);
+        Self::with_node_runner(node_runner)
+    }
+
+    pub(crate) fn with_node_runner(node_runner: NodeRunner) -> Self {
         let messages = Arc::new(RwLock::new(MessageCollection::default()));
         let msg_recorder = Arc::new(MessageRecorder::new(messages.clone()));
         let clock = Arc::new(SteadyClock::default());
@@ -54,10 +62,6 @@ impl AppViewModel {
             block_processor_info: Default::default(),
             vote_processor_info: Default::default(),
         }
-    }
-
-    pub(crate) fn with_runtime(runtime: tokio::runtime::Handle) -> Self {
-        Self::new(Arc::new(NullableRuntime::new(runtime.clone())))
     }
 
     pub(crate) fn update(&mut self) {
@@ -136,6 +140,6 @@ impl AppViewModel {
 
 impl Default for AppViewModel {
     fn default() -> Self {
-        Self::new(Arc::new(NullableRuntime::default()))
+        Self::with_runtime(Arc::new(NullableRuntime::default()))
     }
 }

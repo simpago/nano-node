@@ -1,21 +1,23 @@
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Tab {
-    Messages,
     Peers,
+    Messages,
     Queues,
+    Bootstrap,
 }
 
 impl Tab {
     pub fn name(&self) -> &'static str {
         match self {
-            Tab::Messages => "Messages",
             Tab::Peers => "Peers",
+            Tab::Messages => "Messages",
             Tab::Queues => "Queues",
+            Tab::Bootstrap => "Bootstrap",
         }
     }
 }
 
-pub static TAB_ORDER: [Tab; 3] = [Tab::Peers, Tab::Messages, Tab::Queues];
+pub static TAB_ORDER: [Tab; 4] = [Tab::Peers, Tab::Messages, Tab::Queues, Tab::Bootstrap];
 
 pub(crate) struct TabBarViewModel {
     pub selected: Tab,
@@ -59,5 +61,21 @@ impl From<Tab> for TabViewModel {
             label: value.name(),
             value,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tab_names() {
+        let model = TabBarViewModel::new();
+        assert_eq!(model.tabs.len(), 4);
+        assert_eq!(model.tabs[0].label, "Peers");
+        assert_eq!(model.tabs[0].selected, true);
+        assert_eq!(model.tabs[1].label, "Messages");
+        assert_eq!(model.tabs[1].selected, false);
+        assert_eq!(model.tabs[2].label, "Queues");
     }
 }
