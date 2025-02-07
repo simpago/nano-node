@@ -6,7 +6,7 @@ mod requesters;
 mod response_processor;
 
 pub(crate) mod state;
-pub use state::{BootstrapCounters, FrontierHeadInfo};
+pub use state::{BootstrapCounters, FrontierHeadInfo, FrontierScanConfig};
 use std::sync::Arc;
 
 pub use bootstrap_responder::*;

@@ -1,22 +1,7 @@
-use super::{heads_container::HeadsContainer, FrontierHeadsConfig};
+use super::{heads_container::HeadsContainer, FrontierScanConfig};
 use primitive_types::U512;
 use rsnano_core::{utils::ContainerInfo, Account, Frontier};
 use rsnano_nullable_clock::Timestamp;
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct FrontierScanConfig {
-    pub heads: FrontierHeadsConfig,
-    pub max_pending: usize,
-}
-
-impl Default for FrontierScanConfig {
-    fn default() -> Self {
-        Self {
-            heads: Default::default(),
-            max_pending: 16,
-        }
-    }
-}
 
 /// Divides the account space into ranges and scans each range for
 /// outdated frontiers in parallel.
@@ -26,7 +11,7 @@ pub struct FrontierScan {
 }
 
 impl FrontierScan {
-    pub fn new(config: FrontierHeadsConfig) -> Self {
+    pub fn new(config: FrontierScanConfig) -> Self {
         assert!(!config.parallelism > 0);
         Self {
             heads: HeadsContainer::with_heads(config),
@@ -37,7 +22,7 @@ impl FrontierScan {
     /// request limit reached
     #[cfg(test)]
     pub fn new_test_instance_blocked() -> Self {
-        let mut scan = Self::new(FrontierHeadsConfig {
+        let mut scan = Self::new(FrontierScanConfig {
             parallelism: 1,
             consideration_count: 1,
             ..Default::default()
@@ -136,7 +121,7 @@ mod tests {
 
     #[test]
     fn next_basic() {
-        let config = FrontierHeadsConfig {
+        let config = FrontierScanConfig {
             parallelism: 2,
             consideration_count: 3,
             ..Default::default()
@@ -163,7 +148,7 @@ mod tests {
 
     #[test]
     fn process_basic() {
-        let config = FrontierHeadsConfig {
+        let config = FrontierScanConfig {
             parallelism: 1,
             consideration_count: 3,
             candidates: 5,
@@ -198,7 +183,7 @@ mod tests {
 
     #[test]
     fn range_wrap_around() {
-        let config = FrontierHeadsConfig {
+        let config = FrontierScanConfig {
             parallelism: 1,
             consideration_count: 1,
             candidates: 1,
@@ -222,7 +207,7 @@ mod tests {
 
     #[test]
     fn cooldown() {
-        let config = FrontierHeadsConfig {
+        let config = FrontierScanConfig {
             parallelism: 1,
             consideration_count: 1,
             cooldown: Duration::from_millis(250),
@@ -246,7 +231,7 @@ mod tests {
 
     #[test]
     fn candidate_trimming() {
-        let config = FrontierHeadsConfig {
+        let config = FrontierScanConfig {
             parallelism: 1,
             consideration_count: 2,
             candidates: 3, // Only keep the lowest candidates
@@ -282,7 +267,7 @@ mod tests {
 
     #[test]
     fn heads_distribution() {
-        let config = FrontierHeadsConfig {
+        let config = FrontierScanConfig {
             parallelism: 4,
             ..Default::default()
         };
@@ -303,7 +288,7 @@ mod tests {
 
     #[test]
     fn invalid_response_ordering() {
-        let config = FrontierHeadsConfig {
+        let config = FrontierScanConfig {
             parallelism: 1,
             consideration_count: 1,
             ..Default::default()
@@ -326,7 +311,7 @@ mod tests {
 
     #[test]
     fn empty_responses() {
-        let config = FrontierHeadsConfig {
+        let config = FrontierScanConfig {
             parallelism: 1,
             consideration_count: 2,
             ..Default::default()
@@ -365,7 +350,7 @@ mod tests {
 
     #[test]
     fn heads_info() {
-        let config = FrontierHeadsConfig {
+        let config = FrontierScanConfig {
             parallelism: 4,
             ..Default::default()
         };

@@ -1,11 +1,11 @@
-use super::frontier_head::{FrontierHead, FrontierHeadsConfig};
+use super::frontier_head::{FrontierHead, FrontierScanConfig};
 use rsnano_core::Account;
 use rsnano_nullable_clock::Timestamp;
 use std::collections::BTreeMap;
 
 #[derive(Default)]
 pub(super) struct HeadsContainer {
-    config: FrontierHeadsConfig,
+    config: FrontierScanConfig,
     sequenced: Vec<Account>,
     by_start: BTreeMap<Account, FrontierHead>,
     by_timestamp: BTreeMap<Timestamp, Vec<Account>>,
@@ -13,7 +13,7 @@ pub(super) struct HeadsContainer {
 
 impl HeadsContainer {
     /// Divide account numeric range into consecutive and equal ranges
-    pub fn with_heads(config: FrontierHeadsConfig) -> Self {
+    pub fn with_heads(config: FrontierScanConfig) -> Self {
         let mut heads = Self {
             config,
             ..Default::default()
@@ -31,7 +31,7 @@ impl HeadsContainer {
         self.push_back(FrontierHead::new(start, end, self.config.clone()));
     }
 
-    fn create_head(config: FrontierHeadsConfig, index: usize) -> FrontierHead {
+    fn create_head(config: FrontierScanConfig, index: usize) -> FrontierHead {
         if config.parallelism == 1 {
             return FrontierHead::new(1, Account::MAX, config);
         }

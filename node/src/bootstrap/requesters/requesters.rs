@@ -1,9 +1,7 @@
 use crate::bootstrap::{
     state::BootstrapState, AscPullQuerySpec, BootstrapConfig, BootstrapPromise,
 };
-use crate::{
-    block_processing::BlockProcessor, stats::Stats, transport::MessageSender, utils::ThreadPoolImpl,
-};
+use crate::{block_processing::BlockProcessor, stats::Stats, transport::MessageSender};
 use rsnano_ledger::Ledger;
 use rsnano_network::bandwidth_limiter::RateLimiter;
 use rsnano_nullable_clock::SteadyClock;
@@ -26,7 +24,6 @@ use super::{
 pub(crate) struct Requesters {
     limiter: Arc<RateLimiter>,
     config: BootstrapConfig,
-    workers: Arc<ThreadPoolImpl>,
     stats: Arc<Stats>,
     message_sender: MessageSender,
     state: Arc<Mutex<BootstrapState>>,
@@ -42,7 +39,6 @@ impl Requesters {
     pub(crate) fn new(
         limiter: Arc<RateLimiter>,
         config: BootstrapConfig,
-        workers: Arc<ThreadPoolImpl>,
         stats: Arc<Stats>,
         message_sender: MessageSender,
         state: Arc<Mutex<BootstrapState>>,
@@ -54,7 +50,6 @@ impl Requesters {
         Self {
             limiter,
             config,
-            workers,
             stats,
             message_sender,
             state,
@@ -86,11 +81,9 @@ impl Requesters {
             Some(spawn_query(
                 "Bootstrap front",
                 FrontierRequester::new(
-                    self.workers.clone(),
                     self.stats.clone(),
                     self.clock.clone(),
                     self.config.frontier_rate_limit,
-                    self.config.frontier_scan.max_pending,
                     channel_waiter.clone(),
                 ),
                 runner.clone(),

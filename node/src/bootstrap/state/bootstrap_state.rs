@@ -14,6 +14,7 @@ pub(crate) struct BootstrapState {
     pub running_queries: RunningQueryContainer,
     pub frontier_scan: FrontierScan,
     pub counters: BootstrapCounters,
+    pub frontier_ack_processor_busy: bool,
 }
 
 impl BootstrapState {
@@ -21,9 +22,10 @@ impl BootstrapState {
         Self {
             candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
             scoring: PeerScoring::new(config.clone(), network),
-            frontier_scan: FrontierScan::new(config.frontier_scan.heads.clone()),
+            frontier_scan: FrontierScan::new(config.frontier_scan.clone()),
             running_queries: RunningQueryContainer::default(),
             counters: BootstrapCounters::default(),
+            frontier_ack_processor_busy: false,
         }
     }
 

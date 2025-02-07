@@ -4,15 +4,14 @@ use super::{
     requesters::Requesters,
     response_processor::{ProcessError, ResponseProcessor},
     state::{
-        BootstrapCounters, BootstrapState, CandidateAccountsConfig, FrontierHeadInfo,
-        FrontierScanConfig, QueryType,
+        BootstrapCounters, BootstrapState, CandidateAccountsConfig, FrontierHeadInfo, QueryType,
     },
+    FrontierScanConfig,
 };
 use crate::{
     block_processing::{BlockContext, BlockProcessor, LedgerNotifications},
     stats::{DetailType, Sample, StatType, Stats},
     transport::MessageSender,
-    utils::ThreadPoolImpl,
 };
 use rsnano_core::{utils::ContainerInfo, Account};
 use rsnano_ledger::{BlockStatus, Ledger};
@@ -52,6 +51,8 @@ pub struct BootstrapConfig {
     pub optimistic_request_percentage: u8,
     pub candidate_accounts: CandidateAccountsConfig,
     pub frontier_scan: FrontierScanConfig,
+    /// How many frontier acks can get queued in the processor
+    pub max_pending_frontier_responses: usize,
 }
 
 impl Default for BootstrapConfig {
@@ -76,6 +77,7 @@ impl Default for BootstrapConfig {
             optimistic_request_percentage: 75,
             candidate_accounts: Default::default(),
             frontier_scan: Default::default(),
+            max_pending_frontier_responses: 16,
         }
     }
 }
@@ -107,26 +109,23 @@ impl Bootstrapper {
         config: BootstrapConfig,
         clock: Arc<SteadyClock>,
     ) -> Self {
-        let workers = Arc::new(ThreadPoolImpl::create(1, "Bootstrap work"));
         let limiter = Arc::new(RateLimiter::new(config.rate_limit));
         let state = Arc::new(Mutex::new(BootstrapState::new(config.clone(), network)));
         let condition = Arc::new(Condvar::new());
 
-        let response_handler = ResponseProcessor::new(
+        let mut response_handler = ResponseProcessor::new(
             state.clone(),
             stats.clone(),
             block_processor.clone(),
             condition.clone(),
-            workers.clone(),
             ledger.clone(),
-            config.clone(),
         );
+        response_handler.set_max_pending_frontiers(config.max_pending_frontier_responses);
 
         let block_inspector = BlockInspector::new(state.clone(), ledger.clone(), stats.clone());
         let requesters = Requesters::new(
             limiter.clone(),
             config.clone(),
-            workers.clone(),
             stats.clone(),
             message_sender.clone(),
             state.clone(),

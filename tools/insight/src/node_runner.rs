@@ -1,4 +1,3 @@
-use crate::nullable_runtime::NullableRuntime;
 use num::FromPrimitive;
 use num_derive::FromPrimitive;
 use rsnano_core::Networks;
@@ -22,16 +21,14 @@ pub enum NodeState {
 }
 
 pub(crate) struct NodeRunner {
-    runtime: Arc<NullableRuntime>,
     node: Arc<Mutex<Option<Arc<Node>>>>,
     state: Arc<AtomicU8>,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl NodeRunner {
-    pub(crate) fn new(runtime: Arc<NullableRuntime>) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            runtime,
             node: Arc::new(Mutex::new(None)),
             state: Arc::new(AtomicU8::new(NodeState::Stopped as u8)),
             stop: None,
@@ -39,7 +36,7 @@ impl NodeRunner {
     }
 
     pub fn new_null_with(node: Arc<Node>) -> Self {
-        let runner = Self::new(Arc::new(NullableRuntime::new_null()));
+        let runner = Self::new();
         *runner.node.lock().unwrap() = Some(node);
         runner.set_state(NodeState::Started);
         runner

@@ -23,14 +23,14 @@ pub(super) struct FrontierHead {
     /// Total number of accounts processed for the current starting account
     pub accounts_processed: usize,
 
-    config: FrontierHeadsConfig,
+    config: FrontierScanConfig,
 }
 
 impl FrontierHead {
     pub fn new(
         start: impl Into<Account>,
         end: impl Into<Account>,
-        config: FrontierHeadsConfig,
+        config: FrontierScanConfig,
     ) -> Self {
         let start = start.into();
         Self {
@@ -123,14 +123,14 @@ impl FrontierHead {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct FrontierHeadsConfig {
+pub struct FrontierScanConfig {
     pub parallelism: usize,
     pub consideration_count: usize,
     pub candidates: usize,
     pub cooldown: Duration,
 }
 
-impl Default for FrontierHeadsConfig {
+impl Default for FrontierScanConfig {
     fn default() -> Self {
         Self {
             parallelism: 128,

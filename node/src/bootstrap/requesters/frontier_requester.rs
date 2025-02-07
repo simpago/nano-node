@@ -2,7 +2,6 @@ use super::channel_waiter::ChannelWaiter;
 use crate::{
     bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapPromise, PromiseResult},
     stats::{DetailType, StatType, Stats},
-    utils::ThreadPool,
 };
 use rsnano_core::{Account, BlockHash};
 use rsnano_messages::{AscPullReqType, FrontiersReqPayload};
@@ -16,8 +15,6 @@ pub(crate) struct FrontierRequester {
     stats: Arc<Stats>,
     clock: Arc<SteadyClock>,
     frontiers_limiter: RateLimiter,
-    workers: Arc<dyn ThreadPool>,
-    max_pending: usize,
     channel_waiter: ChannelWaiter,
 }
 
@@ -25,18 +22,16 @@ enum FrontierState {
     Initial,
     WaitCandidateAccounts,
     WaitLimiter,
-    WaitWorkers,
+    WaitAckProcessor,
     WaitChannel,
     WaitFrontier(Arc<Channel>),
 }
 
 impl FrontierRequester {
     pub(crate) fn new(
-        workers: Arc<dyn ThreadPool>,
         stats: Arc<Stats>,
         clock: Arc<SteadyClock>,
         rate_limit: usize,
-        max_pending: usize,
         channel_waiter: ChannelWaiter,
     ) -> Self {
         Self {
@@ -44,8 +39,6 @@ impl FrontierRequester {
             stats,
             clock,
             frontiers_limiter: RateLimiter::new(rate_limit),
-            workers,
-            max_pending,
             channel_waiter,
         }
     }
@@ -86,12 +79,12 @@ impl BootstrapPromise<AscPullQuerySpec> for FrontierRequester {
             }
             FrontierState::WaitLimiter => {
                 if self.frontiers_limiter.should_pass(1) {
-                    self.state = FrontierState::WaitWorkers;
+                    self.state = FrontierState::WaitAckProcessor;
                     return PromiseResult::Progress;
                 }
             }
-            FrontierState::WaitWorkers => {
-                if self.workers.num_queued_tasks() < self.max_pending {
+            FrontierState::WaitAckProcessor => {
+                if !boot_state.frontier_ack_processor_busy {
                     self.state = FrontierState::WaitChannel;
                     return PromiseResult::Progress;
                 }
@@ -126,13 +119,10 @@ impl BootstrapPromise<AscPullQuerySpec> for FrontierRequester {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        bootstrap::{
-            progress,
-            state::{CandidateAccountsConfig, FrontierScan},
-            BootstrapConfig,
-        },
-        utils::ThreadPoolImpl,
+    use crate::bootstrap::{
+        progress,
+        state::{CandidateAccountsConfig, FrontierScan},
+        BootstrapConfig,
     };
     use rsnano_network::Network;
     use std::sync::RwLock;
@@ -197,7 +187,7 @@ mod tests {
         requester.frontiers_limiter.reset();
         let result = requester.poll(&mut state);
         assert!(matches!(result, PromiseResult::Progress));
-        assert!(matches!(requester.state, FrontierState::WaitWorkers));
+        assert!(matches!(requester.state, FrontierState::WaitAckProcessor));
     }
 
     #[test]
@@ -254,11 +244,10 @@ mod tests {
     const TEST_RATE_LIMIT: usize = 1000;
 
     fn create_test_requester() -> FrontierRequester {
-        let workers = Arc::new(ThreadPoolImpl::new_null());
         let stats = Arc::new(Stats::default());
         let waiter = ChannelWaiter::default();
         let clock = Arc::new(SteadyClock::new_null());
-        FrontierRequester::new(workers, stats.clone(), clock, TEST_RATE_LIMIT, 1000, waiter)
+        FrontierRequester::new(stats.clone(), clock, TEST_RATE_LIMIT, waiter)
     }
 
     fn state_with_max_priorities(max: usize) -> BootstrapState {

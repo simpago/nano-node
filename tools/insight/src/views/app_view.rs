@@ -12,8 +12,8 @@ pub(crate) struct AppView {
 }
 
 impl AppView {
-    pub(crate) fn new(runtime_handle: tokio::runtime::Handle) -> Self {
-        let model = AppViewModel::with_tokio_runtime(runtime_handle);
+    pub(crate) fn new() -> Self {
+        let model = AppViewModel::new();
         Self { model }
     }
 }

@@ -1,9 +1,6 @@
 use super::frontier_worker::FrontierWorker;
 use crate::{
-    bootstrap::{
-        state::{BootstrapState, RunningQuery, VerifyResult},
-        BootstrapConfig,
-    },
+    bootstrap::state::{BootstrapState, RunningQuery, VerifyResult},
     stats::{DetailType, Direction, StatType, Stats},
     utils::{ThreadPool, ThreadPoolImpl},
 };
@@ -16,8 +13,8 @@ pub(crate) struct FrontierAckProcessor {
     stats: Arc<Stats>,
     ledger: Arc<Ledger>,
     state: Arc<Mutex<BootstrapState>>,
-    config: BootstrapConfig,
     workers: Arc<ThreadPoolImpl>,
+    pub max_pending: usize,
 }
 
 impl FrontierAckProcessor {
@@ -25,15 +22,14 @@ impl FrontierAckProcessor {
         stats: Arc<Stats>,
         ledger: Arc<Ledger>,
         state: Arc<Mutex<BootstrapState>>,
-        config: BootstrapConfig,
-        workers: Arc<ThreadPoolImpl>,
     ) -> Self {
+        let workers = Arc::new(ThreadPoolImpl::create(1, "Bootstrap work"));
         Self {
             stats,
             ledger,
             state,
-            config,
             workers,
+            max_pending: 16,
         }
     }
 
@@ -76,40 +72,25 @@ impl FrontierAckProcessor {
             frontiers.len() as u64,
         );
 
-        self.update_frontier_scan(query, &frontiers);
-
-        if self.can_spawn_worker() {
-            let ledger = self.ledger.clone();
-            let stats = self.stats.clone();
-            let state = self.state.clone();
-            self.workers.post(Box::new(move || {
-                let tx = ledger.read_txn();
-                let mut worker = FrontierWorker::new(&ledger, &tx, &stats, &state);
-                worker.process(frontiers);
-            }));
-        } else {
-            self.stats.add(
-                StatType::Bootstrap,
-                DetailType::FrontiersDropped,
-                frontiers.len() as u64,
-            );
-        }
-    }
-
-    fn update_frontier_scan(&self, query: &RunningQuery, frontiers: &[Frontier]) {
-        let mut guard = self.state.lock().unwrap();
         self.stats
             .inc(StatType::BootstrapFrontierScan, DetailType::Process);
-        let done = guard.frontier_scan.process(query.start.into(), &frontiers);
-        if done {
-            self.stats
-                .inc(StatType::BootstrapFrontierScan, DetailType::Done);
-        }
+
+        self.update_state(query, &frontiers);
+
+        let ledger = self.ledger.clone();
+        let stats = self.stats.clone();
+        let state = self.state.clone();
+        self.workers.post(Box::new(move || {
+            let tx = ledger.read_txn();
+            let mut worker = FrontierWorker::new(&ledger, &tx, &stats, &state);
+            worker.process(frontiers);
+        }));
     }
 
-    fn can_spawn_worker(&self) -> bool {
-        // Allow some overfill to avoid unnecessarily dropping responses
-        self.workers.num_queued_tasks() < self.config.frontier_scan.max_pending * 4
+    fn update_state(&self, query: &RunningQuery, frontiers: &[Frontier]) {
+        let mut guard = self.state.lock().unwrap();
+        guard.frontier_scan.process(query.start.into(), &frontiers);
+        guard.frontier_ack_processor_busy = self.workers.num_queued_tasks() >= self.max_pending;
     }
 }
 
@@ -123,9 +104,7 @@ mod tests {
         let stats = Arc::new(Stats::default());
         let ledger = Arc::new(Ledger::new_null());
         let state = Arc::new(Mutex::new(BootstrapState::new_test_instance()));
-        let config = BootstrapConfig::default();
-        let workers = Arc::new(ThreadPoolImpl::create(1, "test"));
-        let processor = FrontierAckProcessor::new(stats, ledger, state.clone(), config, workers);
+        let processor = FrontierAckProcessor::new(stats, ledger, state.clone());
 
         let query = RunningQuery {
             source: QuerySource::Frontiers,

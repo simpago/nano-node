@@ -474,7 +474,6 @@ pub enum DetailType {
     InvalidResponse,
     TimestampReset,
     ProcessingFrontiers,
-    FrontiersDropped,
     SyncAccounts,
 
     Prioritize,

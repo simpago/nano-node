@@ -4,8 +4,7 @@ use super::{
 };
 use crate::{
     channels::Channels, ledger_stats::LedgerStats, message_collection::MessageCollection,
-    message_recorder::MessageRecorder, node_runner::NodeRunner, nullable_runtime::NullableRuntime,
-    view_models::QueueViewModel,
+    message_recorder::MessageRecorder, node_runner::NodeRunner, view_models::QueueViewModel,
 };
 use rsnano_core::utils::FairQueueInfo;
 use rsnano_node::{
@@ -36,12 +35,8 @@ pub(crate) struct AppViewModel {
 }
 
 impl AppViewModel {
-    pub(crate) fn with_tokio_runtime(runtime: tokio::runtime::Handle) -> Self {
-        Self::with_runtime(Arc::new(NullableRuntime::new(runtime.clone())))
-    }
-
-    pub(crate) fn with_runtime(runtime: Arc<NullableRuntime>) -> Self {
-        let node_runner = NodeRunner::new(runtime);
+    pub(crate) fn new() -> Self {
+        let node_runner = NodeRunner::new();
         Self::with_node_runner(node_runner)
     }
 
@@ -143,6 +138,6 @@ impl AppViewModel {
 
 impl Default for AppViewModel {
     fn default() -> Self {
-        Self::with_runtime(Arc::new(NullableRuntime::default()))
+        Self::new()
     }
 }

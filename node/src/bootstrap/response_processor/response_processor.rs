@@ -1,13 +1,10 @@
 use super::{
-    super::{
-        state::{BootstrapState, QueryType, RunningQuery},
-        BootstrapConfig,
-    },
+    super::state::{BootstrapState, QueryType, RunningQuery},
     account_ack_processor::AccountAckProcessor,
     block_ack_processor::BlockAckProcessor,
     frontier_ack_processor::FrontierAckProcessor,
 };
-use crate::{block_processing::BlockProcessor, stats::Stats, utils::ThreadPoolImpl};
+use crate::{block_processing::BlockProcessor, stats::Stats};
 use rsnano_ledger::Ledger;
 use rsnano_messages::{AscPullAck, AscPullAckType};
 use rsnano_network::ChannelId;
@@ -51,15 +48,10 @@ impl ResponseProcessor {
         stats: Arc<Stats>,
         block_processor: Arc<BlockProcessor>,
         condition: Arc<Condvar>,
-        workers: Arc<ThreadPoolImpl>,
         ledger: Arc<Ledger>,
-        config: BootstrapConfig,
     ) -> Self {
-        let frontiers =
-            FrontierAckProcessor::new(stats.clone(), ledger, state.clone(), config, workers);
-
+        let frontiers = FrontierAckProcessor::new(stats.clone(), ledger, state.clone());
         let accounts = AccountAckProcessor::new(stats.clone(), state.clone());
-
         let blocks =
             BlockAckProcessor::new(state.clone(), stats, condition.clone(), block_processor);
 
@@ -70,6 +62,10 @@ impl ResponseProcessor {
             accounts,
             blocks,
         }
+    }
+
+    pub fn set_max_pending_frontiers(&mut self, max_pending: usize) {
+        self.frontiers.max_pending = max_pending;
     }
 
     pub fn process(
