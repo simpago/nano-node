@@ -18,11 +18,11 @@ pub(crate) struct Cli {
 }
 
 impl Cli {
-    pub(crate) async fn run(&self, infra: &mut CliInfrastructure) -> Result<()> {
+    pub(crate) fn run(&self, infra: &mut CliInfrastructure) -> Result<()> {
         match &self.command {
             Some(Commands::Wallets(command)) => command.run()?,
             Some(Commands::Utils(command)) => command.run(infra)?,
-            Some(Commands::Node(command)) => command.run().await?,
+            Some(Commands::Node(command)) => command.run()?,
             Some(Commands::Ledger(command)) => command.run()?,
             Some(Commands::Config(command)) => command.run()?,
             None => Cli::command().print_long_help()?,

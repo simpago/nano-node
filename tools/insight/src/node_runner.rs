@@ -11,6 +11,7 @@ use std::{
         Arc, Mutex,
     },
 };
+use tracing::error;
 
 #[derive(FromPrimitive, PartialEq, Eq, Debug)]
 pub enum NodeState {
@@ -60,7 +61,7 @@ impl NodeRunner {
         let state2 = self.state.clone();
         let data_path = data_path.into();
 
-        self.runtime.spawn(async move {
+        std::thread::spawn(move || {
             let on_started = move |n| {
                 *node.lock().unwrap() = Some(n);
                 state1.store(NodeState::Started as u8, Ordering::SeqCst);
@@ -70,13 +71,14 @@ impl NodeRunner {
                 let _ = rx_stop.await;
             };
 
-            DaemonBuilder::new(network)
+            if let Err(e) = DaemonBuilder::new(network)
                 .data_path(data_path)
                 .callbacks(callbacks)
                 .on_node_started(on_started)
                 .run(shutdown_signal)
-                .await
-                .unwrap();
+            {
+                error!("Error running node: {:?}", e);
+            }
 
             state2.store(NodeState::Stopped as u8, Ordering::SeqCst);
         });

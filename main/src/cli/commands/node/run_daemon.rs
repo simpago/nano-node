@@ -84,7 +84,7 @@ pub(crate) struct RunDaemonArgs {
 }
 
 impl RunDaemonArgs {
-    pub(crate) async fn run_daemon(&self) -> Result<()> {
+    pub(crate) fn run_daemon(&self) -> Result<()> {
         init_tracing();
         let network = self.get_network()?;
         let flags = self.get_flags();
@@ -92,7 +92,7 @@ impl RunDaemonArgs {
         if let Some(path) = self.specified_data_path() {
             daemon = daemon.data_path(path);
         }
-        daemon.run(shutdown_signal()).await
+        daemon.run(shutdown_signal())
     }
 
     pub fn specified_data_path(&self) -> Option<PathBuf> {

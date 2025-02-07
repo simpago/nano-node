@@ -1,12 +1,9 @@
-use crate::cli::get_path;
 use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
 use generate_config::GenerateConfigArgs;
 use initialize::InitializeArgs;
-use rsnano_node::{wallets::Wallets, BUILD_INFO, VERSION_STRING};
-use rsnano_store_lmdb::LmdbEnv;
+use rsnano_node::{BUILD_INFO, VERSION_STRING};
 use run_daemon::RunDaemonArgs;
-use std::{sync::Arc, time::Instant};
 
 pub(crate) mod generate_config;
 pub(crate) mod initialize;
@@ -20,8 +17,6 @@ pub(crate) enum NodeSubcommands {
     ///
     /// This command is meant to be run when the data folder is empty, to populate it with the genesis block.
     Initialize(InitializeArgs),
-    /// Run internal diagnostics.
-    Diagnostics,
     /// Prints out version.
     Version,
     /// Writes node or rpc configuration to stdout, populated with defaults suitable for this system.
@@ -38,13 +33,12 @@ pub(crate) struct NodeCommand {
 }
 
 impl NodeCommand {
-    pub(crate) async fn run(&self) -> Result<()> {
+    pub(crate) fn run(&self) -> Result<()> {
         match &self.subcommand {
-            Some(NodeSubcommands::Run(args)) => args.run_daemon().await?,
-            Some(NodeSubcommands::Initialize(args)) => args.initialize().await?,
+            Some(NodeSubcommands::Run(args)) => args.run_daemon()?,
+            Some(NodeSubcommands::Initialize(args)) => args.initialize()?,
             Some(NodeSubcommands::GenerateConfig(args)) => args.generate_config()?,
             Some(NodeSubcommands::Version) => Self::version(),
-            Some(NodeSubcommands::Diagnostics) => Self::diagnostics().await?,
             None => NodeCommand::command().print_long_help()?,
         }
 
@@ -54,29 +48,5 @@ impl NodeCommand {
     fn version() {
         println!("Version {}", VERSION_STRING);
         println!("Build Info {}", BUILD_INFO);
-    }
-
-    async fn diagnostics() -> Result<()> {
-        let path = get_path(&None, &None).join("wallets.ldb");
-        let env = Arc::new(LmdbEnv::new(&path)?);
-        let wallets = Wallets::new_null_with_env(env, tokio::runtime::Handle::current());
-
-        println!("Testing key derivation function");
-
-        wallets.kdf.hash_password("", &mut [0; 32]);
-
-        println!("Testing time retrieval latency...");
-
-        let iters = 2_000_000;
-        let start = Instant::now();
-        for _ in 0..iters {
-            let _ = Instant::now();
-        }
-        let duration = start.elapsed();
-        let avg_duration = duration.as_nanos() as f64 / iters as f64;
-
-        println!("{} nanoseconds", avg_duration);
-
-        Ok(())
     }
 }

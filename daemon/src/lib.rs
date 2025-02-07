@@ -6,7 +6,7 @@ use rsnano_node::{
 use rsnano_rpc_server::{run_rpc_server, RpcServerConfig};
 use rsnano_websocket_server::{create_websocket_server, WebsocketListenerExt};
 use std::{future::Future, path::PathBuf, sync::Arc};
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, sync::oneshot};
 
 pub struct DaemonBuilder {
     network: Networks,
@@ -43,7 +43,7 @@ impl DaemonBuilder {
         self
     }
 
-    pub async fn run<F>(self, shutdown: F) -> anyhow::Result<()>
+    pub fn run<F>(self, shutdown: F) -> anyhow::Result<()>
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -56,7 +56,10 @@ impl DaemonBuilder {
         let mut node = self.node_builder.finish()?;
 
         let websocket_server = if daemon_config.node.websocket_config.enabled {
-            Some(create_websocket_server(daemon_config.node.websocket_config, &node).unwrap())
+            Some(
+                create_websocket_server(daemon_config.node.websocket_config.clone(), &node)
+                    .unwrap(),
+            )
         } else {
             None
         };
@@ -71,27 +74,21 @@ impl DaemonBuilder {
         if let Some(mut started_callback) = self.node_started {
             started_callback(node.clone());
         }
-        let (tx_stop, rx_stop) = tokio::sync::oneshot::channel();
+        let (tx_stop, rx_stop) = oneshot::channel();
         let wait_for_shutdown = async move {
             tokio::select! {
                 _ = rx_stop =>{}
                 _ = shutdown => {}
             }
         };
-        if daemon_config.rpc_enable {
-            let socket_addr = rpc_config.listening_addr()?;
-            let listener = TcpListener::bind(socket_addr).await?;
-            run_rpc_server(
-                node.clone(),
-                listener,
-                rpc_config.enable_control,
-                tx_stop,
-                wait_for_shutdown,
-            )
-            .await?;
-        } else {
-            wait_for_shutdown.await;
-        };
+
+        node.runtime.block_on(run_rpc(
+            daemon_config,
+            rpc_config,
+            node.clone(),
+            tx_stop,
+            wait_for_shutdown,
+        ))?;
 
         if let Some(ref websocket) = websocket_server {
             websocket.stop();
@@ -101,4 +98,28 @@ impl DaemonBuilder {
         node.stop();
         Ok(())
     }
+}
+
+async fn run_rpc(
+    daemon_config: DaemonConfig,
+    rpc_config: RpcServerConfig,
+    node: Arc<Node>,
+    tx_stop: oneshot::Sender<()>,
+    wait_for_shutdown: impl Future<Output = ()> + Send + 'static,
+) -> anyhow::Result<()> {
+    if daemon_config.rpc_enable {
+        let socket_addr = rpc_config.listening_addr()?;
+        let listener = TcpListener::bind(socket_addr).await?;
+        run_rpc_server(
+            node.clone(),
+            listener,
+            rpc_config.enable_control,
+            tx_stop,
+            wait_for_shutdown,
+        )
+        .await?;
+    } else {
+        wait_for_shutdown.await;
+    };
+    Ok(())
 }

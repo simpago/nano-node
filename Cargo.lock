@@ -3570,6 +3570,7 @@ dependencies = [
  "rsnano_store_lmdb",
  "strum",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
