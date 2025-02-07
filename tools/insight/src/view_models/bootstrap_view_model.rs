@@ -29,7 +29,7 @@ pub(crate) struct FrontierHeadViewModel {
 
 fn abbrev(account: &Account) -> String {
     let mut result = account.encode_hex();
-    result.truncate(6);
+    result.truncate(4);
     result.push_str("...");
     result
 }
@@ -40,6 +40,6 @@ mod tests {
 
     #[test]
     fn abbreviate_acccount() {
-        assert_eq!(abbrev(&Account::from(0)), "000000...");
+        assert_eq!(abbrev(&Account::from(0)), "0000...");
     }
 }

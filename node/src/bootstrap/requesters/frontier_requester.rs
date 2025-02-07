@@ -127,7 +127,11 @@ impl BootstrapPromise<AscPullQuerySpec> for FrontierRequester {
 mod tests {
     use super::*;
     use crate::{
-        bootstrap::{progress, state::CandidateAccountsConfig, BootstrapConfig},
+        bootstrap::{
+            progress,
+            state::{CandidateAccountsConfig, FrontierScan},
+            BootstrapConfig,
+        },
         utils::ThreadPoolImpl,
     };
     use rsnano_network::Network;
@@ -212,6 +216,37 @@ mod tests {
         state.add_test_channel();
         let result = requester.poll(&mut state);
         assert!(matches!(result, PromiseResult::Progress));
+    }
+
+    #[test]
+    fn finish_request() {
+        let mut requester = create_test_requester();
+        let mut state = BootstrapState::new_test_instance();
+        state.add_test_channel();
+
+        let PromiseResult::Finished(spec) = progress(&mut requester, &mut state) else {
+            panic!("did not finish");
+        };
+
+        let AscPullReqType::Frontiers(frontiers) = spec.req_type else {
+            panic!("not a frontier request");
+        };
+
+        assert_eq!(frontiers.start, Account::from(1));
+        assert!(matches!(requester.state, FrontierState::Initial));
+    }
+
+    #[test]
+    fn wait_when_frontier_scan_rate_limited() {
+        let mut requester = create_test_requester();
+        let mut state = BootstrapState::new_test_instance();
+        state.add_test_channel();
+        state.frontier_scan = FrontierScan::new_test_instance_blocked();
+
+        let result = progress(&mut requester, &mut state);
+
+        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(requester.state, FrontierState::WaitFrontier(_)));
     }
 
     // Test helpers:

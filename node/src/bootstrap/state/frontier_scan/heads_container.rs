@@ -1,5 +1,4 @@
 use super::frontier_head::{FrontierHead, FrontierHeadsConfig};
-use primitive_types::U256;
 use rsnano_core::Account;
 use rsnano_nullable_clock::Timestamp;
 use std::collections::BTreeMap;
@@ -33,7 +32,11 @@ impl HeadsContainer {
     }
 
     fn create_head(config: FrontierHeadsConfig, index: usize) -> FrontierHead {
-        let range_size = Account::MAX.number() / config.parallelism;
+        if config.parallelism == 1 {
+            return FrontierHead::new(1, Account::MAX, config);
+        }
+
+        let range_size = Account::MAX.number() / config.parallelism + 1;
 
         let mut start = range_size * index;
         let end = if index == config.parallelism - 1 {

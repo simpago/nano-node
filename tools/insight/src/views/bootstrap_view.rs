@@ -13,27 +13,30 @@ impl<'a> BootstrapView<'a> {
 
     pub fn show(&mut self, ctx: &egui::Context) {
         CentralPanel::default().show(ctx, |ui| {
-            ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+            ScrollArea::both().show(ui, |ui| {
                 ui.heading("Frontier heads");
-                for head in &self.model.frontier_heads {
+                for heads in self.model.frontier_heads.chunks(4) {
                     ui.horizontal(|ui| {
-                        StripBuilder::new(ui)
-                            .size(Size::exact(100.0))
-                            .size(Size::exact(300.0))
-                            .size(Size::remainder())
-                            .horizontal(|mut strip| {
-                                strip.cell(|ui| {
-                                    ui.label(&head.start);
+                        for head in heads {
+                            StripBuilder::new(ui)
+                                .size(Size::exact(50.0))
+                                .size(Size::exact(120.0))
+                                .size(Size::exact(100.0))
+                                .horizontal(|mut strip| {
+                                    strip.cell(|ui| {
+                                        ui.label(&head.start);
+                                    });
+                                    strip.cell(|ui| {
+                                        ui.add(
+                                            ProgressBar::new(head.done_normalized)
+                                                .text(&head.current),
+                                        );
+                                    });
+                                    strip.cell(|ui| {
+                                        ui.label(&head.end);
+                                    });
                                 });
-                                strip.cell(|ui| {
-                                    ui.add(
-                                        ProgressBar::new(head.done_normalized).text(&head.current),
-                                    );
-                                });
-                                strip.cell(|ui| {
-                                    ui.label(&head.end);
-                                });
-                            });
+                        }
                     });
                 }
             });

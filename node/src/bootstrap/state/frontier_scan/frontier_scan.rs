@@ -26,11 +26,24 @@ pub struct FrontierScan {
 }
 
 impl FrontierScan {
-    pub fn new(config: FrontierScanConfig) -> Self {
-        assert!(!config.heads.parallelism > 0);
+    pub fn new(config: FrontierHeadsConfig) -> Self {
+        assert!(!config.parallelism > 0);
         Self {
-            heads: HeadsContainer::with_heads(config.heads.clone()),
+            heads: HeadsContainer::with_heads(config),
         }
+    }
+
+    /// Creates a test instance that doesn't progress, because max
+    /// request limit reached
+    #[cfg(test)]
+    pub fn new_test_instance_blocked() -> Self {
+        let mut scan = Self::new(FrontierHeadsConfig {
+            parallelism: 1,
+            consideration_count: 1,
+            ..Default::default()
+        });
+        scan.next(Timestamp::new_test_instance());
+        scan
     }
 
     pub fn next(&mut self, now: Timestamp) -> Account {
@@ -123,12 +136,9 @@ mod tests {
 
     #[test]
     fn next_basic() {
-        let config = FrontierScanConfig {
-            heads: FrontierHeadsConfig {
-                parallelism: 2,
-                consideration_count: 3,
-                ..Default::default()
-            },
+        let config = FrontierHeadsConfig {
+            parallelism: 2,
+            consideration_count: 3,
             ..Default::default()
         };
         let mut scan = FrontierScan::new(config);
@@ -138,11 +148,11 @@ mod tests {
         let first = scan.next(now);
         assert_eq!(first, Account::from(1));
 
-        // Second call should return second head, account number 0x7FF... (half the range)
+        // Second call should return second head, account number 0x800... (half the range)
         let second = scan.next(now);
         assert_eq!(
             second,
-            Account::decode_hex("7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+            Account::decode_hex("8000000000000000000000000000000000000000000000000000000000000000")
                 .unwrap()
         );
 
@@ -153,13 +163,10 @@ mod tests {
 
     #[test]
     fn process_basic() {
-        let config = FrontierScanConfig {
-            heads: FrontierHeadsConfig {
-                parallelism: 1,
-                consideration_count: 3,
-                candidates: 5,
-                ..Default::default()
-            },
+        let config = FrontierHeadsConfig {
+            parallelism: 1,
+            consideration_count: 3,
+            candidates: 5,
             ..Default::default()
         };
         let mut scan = FrontierScan::new(config);
@@ -191,13 +198,10 @@ mod tests {
 
     #[test]
     fn range_wrap_around() {
-        let config = FrontierScanConfig {
-            heads: FrontierHeadsConfig {
-                parallelism: 1,
-                consideration_count: 1,
-                candidates: 1,
-                ..Default::default()
-            },
+        let config = FrontierHeadsConfig {
+            parallelism: 1,
+            consideration_count: 1,
+            candidates: 1,
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
@@ -218,13 +222,10 @@ mod tests {
 
     #[test]
     fn cooldown() {
-        let config = FrontierScanConfig {
-            heads: FrontierHeadsConfig {
-                parallelism: 1,
-                consideration_count: 1,
-                cooldown: Duration::from_millis(250),
-                ..Default::default()
-            },
+        let config = FrontierHeadsConfig {
+            parallelism: 1,
+            consideration_count: 1,
+            cooldown: Duration::from_millis(250),
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
@@ -245,13 +246,10 @@ mod tests {
 
     #[test]
     fn candidate_trimming() {
-        let config = FrontierScanConfig {
-            heads: FrontierHeadsConfig {
-                parallelism: 1,
-                consideration_count: 2,
-                candidates: 3, // Only keep the lowest candidates
-                ..Default::default()
-            },
+        let config = FrontierHeadsConfig {
+            parallelism: 1,
+            consideration_count: 2,
+            candidates: 3, // Only keep the lowest candidates
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
@@ -284,11 +282,8 @@ mod tests {
 
     #[test]
     fn heads_distribution() {
-        let config = FrontierScanConfig {
-            heads: FrontierHeadsConfig {
-                parallelism: 4,
-                ..Default::default()
-            },
+        let config = FrontierHeadsConfig {
+            parallelism: 4,
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
@@ -308,12 +303,9 @@ mod tests {
 
     #[test]
     fn invalid_response_ordering() {
-        let config = FrontierScanConfig {
-            heads: FrontierHeadsConfig {
-                parallelism: 1,
-                consideration_count: 1,
-                ..Default::default()
-            },
+        let config = FrontierHeadsConfig {
+            parallelism: 1,
+            consideration_count: 1,
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
@@ -334,12 +326,9 @@ mod tests {
 
     #[test]
     fn empty_responses() {
-        let config = FrontierScanConfig {
-            heads: FrontierHeadsConfig {
-                parallelism: 1,
-                consideration_count: 2,
-                ..Default::default()
-            },
+        let config = FrontierHeadsConfig {
+            parallelism: 1,
+            consideration_count: 2,
             ..Default::default()
         };
         let now = Timestamp::new_test_instance();
@@ -376,11 +365,8 @@ mod tests {
 
     #[test]
     fn heads_info() {
-        let config = FrontierScanConfig {
-            heads: FrontierHeadsConfig {
-                parallelism: 4,
-                ..Default::default()
-            },
+        let config = FrontierHeadsConfig {
+            parallelism: 4,
             ..Default::default()
         };
         let scan = FrontierScan::new(config);
@@ -392,32 +378,32 @@ mod tests {
             heads[0],
             frontier_head_info(
                 "0000000000000000000000000000000000000000000000000000000000000001",
-                "3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+                "4000000000000000000000000000000000000000000000000000000000000000",
                 "0000000000000000000000000000000000000000000000000000000000000001"
             )
         );
         assert_eq!(
             heads[1],
             frontier_head_info(
-                "3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
-                "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE",
-                "3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+                "4000000000000000000000000000000000000000000000000000000000000000",
+                "8000000000000000000000000000000000000000000000000000000000000000",
+                "4000000000000000000000000000000000000000000000000000000000000000",
             )
         );
         assert_eq!(
             heads[2],
             frontier_head_info(
-                "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE",
-                "BFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD",
-                "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE",
+                "8000000000000000000000000000000000000000000000000000000000000000",
+                "C000000000000000000000000000000000000000000000000000000000000000",
+                "8000000000000000000000000000000000000000000000000000000000000000",
             )
         );
         assert_eq!(
             heads[3],
             frontier_head_info(
-                "BFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD",
+                "C000000000000000000000000000000000000000000000000000000000000000",
                 "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
-                "BFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD",
+                "C000000000000000000000000000000000000000000000000000000000000000",
             )
         );
     }

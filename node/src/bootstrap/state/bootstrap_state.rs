@@ -20,7 +20,7 @@ impl BootstrapState {
         Self {
             candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
             scoring: PeerScoring::new(config.clone(), network),
-            frontier_scan: FrontierScan::new(config.frontier_scan.clone()),
+            frontier_scan: FrontierScan::new(config.frontier_scan.heads.clone()),
             running_queries: RunningQueryContainer::default(),
         }
     }
