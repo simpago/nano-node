@@ -4,7 +4,8 @@ use super::{
     requesters::Requesters,
     response_processor::{ProcessError, ResponseProcessor},
     state::{
-        BootstrapState, CandidateAccountsConfig, FrontierHeadInfo, FrontierScanConfig, QueryType,
+        BootstrapCounters, BootstrapState, CandidateAccountsConfig, FrontierHeadInfo,
+        FrontierScanConfig, QueryType,
     },
 };
 use crate::{
@@ -166,6 +167,10 @@ impl Bootstrapper {
 
     pub fn frontier_heads(&self) -> Vec<FrontierHeadInfo> {
         self.state.lock().unwrap().frontier_scan.heads()
+    }
+
+    pub fn counters(&self) -> BootstrapCounters {
+        self.state.lock().unwrap().counters.clone()
     }
 
     pub fn prioritized(&self, account: &Account) -> bool {

@@ -88,7 +88,7 @@ impl AppViewModel {
             self.confirming_set = node.confirming_set.info();
             self.block_processor_info = node.block_processor.info();
             self.vote_processor_info = node.vote_processor_queue.info();
-            self.bootstrap.update(&node.bootstrapper);
+            self.bootstrap.update(&node.bootstrapper, now);
         }
 
         self.message_table.update_message_counts();

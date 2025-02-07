@@ -12,7 +12,7 @@ impl Tab {
             Tab::Peers => "Peers",
             Tab::Messages => "Messages",
             Tab::Queues => "Queues",
-            Tab::Bootstrap => "Bootstrap",
+            Tab::Bootstrap => "Frontier Scan",
         }
     }
 }

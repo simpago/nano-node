@@ -32,7 +32,11 @@ impl<'a> FrontierWorker<'a> {
     pub fn process(&mut self, frontiers: Vec<Frontier>) {
         let outdated = self.checker.get_outdated_accounts(&frontiers);
         self.update_stats(&frontiers, &outdated);
+
         let mut guard = self.state.lock().unwrap();
+        guard.counters.received_frontiers += frontiers.len();
+        guard.counters.outdated_accounts_found += outdated.accounts.len();
+
         for account in outdated.accounts {
             // Use the lowest possible priority here
             guard
@@ -108,5 +112,7 @@ mod tests {
             guard.candidate_accounts.priority(&account),
             CandidateAccounts::PRIORITY_CUTOFF
         );
+        assert_eq!(guard.counters.outdated_accounts_found, 1);
+        assert_eq!(guard.counters.received_frontiers, 1);
     }
 }

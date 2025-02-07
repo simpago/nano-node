@@ -1,6 +1,7 @@
 use crate::view_models::BootstrapViewModel;
 use eframe::egui::{self, CentralPanel, ProgressBar, ScrollArea};
 use egui_extras::{Size, StripBuilder};
+use num_format::{Locale, ToFormattedString};
 
 pub(crate) struct BootstrapView<'a> {
     model: &'a BootstrapViewModel,
@@ -14,7 +15,22 @@ impl<'a> BootstrapView<'a> {
     pub fn show(&mut self, ctx: &egui::Context) {
         CentralPanel::default().show(ctx, |ui| {
             ScrollArea::both().show(ui, |ui| {
-                ui.heading("Frontier heads");
+                ui.horizontal(|ui| {
+                    ui.heading(format!("{} frontiers/s", self.model.frontiers_rate()));
+                    ui.add_space(100.0);
+                    ui.heading(format!("{} outdated/s", self.model.outdated_rate()));
+                    ui.add_space(50.0);
+                    ui.label(format!(
+                        "{} frontiers total",
+                        self.model.frontiers_total.to_formatted_string(&Locale::en)
+                    ));
+                    ui.add_space(50.0);
+                    ui.label(format!(
+                        "{} outdated total",
+                        self.model.outdated_total.to_formatted_string(&Locale::en)
+                    ));
+                });
+
                 for heads in self.model.frontier_heads.chunks(4) {
                     ui.horizontal(|ui| {
                         for head in heads {

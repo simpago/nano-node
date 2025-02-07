@@ -13,6 +13,7 @@ pub(crate) struct BootstrapState {
     pub scoring: PeerScoring,
     pub running_queries: RunningQueryContainer,
     pub frontier_scan: FrontierScan,
+    pub counters: BootstrapCounters,
 }
 
 impl BootstrapState {
@@ -22,6 +23,7 @@ impl BootstrapState {
             scoring: PeerScoring::new(config.clone(), network),
             frontier_scan: FrontierScan::new(config.frontier_scan.heads.clone()),
             running_queries: RunningQueryContainer::default(),
+            counters: BootstrapCounters::default(),
         }
     }
 
@@ -114,4 +116,10 @@ impl BootstrapState {
             .node("peers", self.scoring.container_info())
             .finish()
     }
+}
+
+#[derive(Default, Clone)]
+pub struct BootstrapCounters {
+    pub received_frontiers: usize,
+    pub outdated_accounts_found: usize,
 }

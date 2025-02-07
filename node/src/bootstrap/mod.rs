@@ -4,8 +4,9 @@ mod bootstrapper;
 mod cleanup;
 mod requesters;
 mod response_processor;
-pub(crate) mod state;
 
+pub(crate) mod state;
+pub use state::{BootstrapCounters, FrontierHeadInfo};
 use std::sync::Arc;
 
 pub use bootstrap_responder::*;
