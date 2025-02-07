@@ -1,8 +1,5 @@
 use crate::{
-    utils::{
-        BufferWriter, Deserialize, FixedSizeSerialize, MutStreamAdapter, Serialize, Stream,
-        StreamExt,
-    },
+    utils::{BufferWriter, Deserialize, MutStreamAdapter, Serialize, Stream, StreamExt},
     BlockHash,
 };
 
@@ -36,12 +33,6 @@ impl Serialize for ConfirmationHeightInfo {
     fn serialize(&self, writer: &mut dyn BufferWriter) {
         writer.write_u64_ne_safe(self.height);
         self.frontier.serialize(writer);
-    }
-}
-
-impl FixedSizeSerialize for ConfirmationHeightInfo {
-    fn serialized_size() -> usize {
-        std::mem::size_of::<u64>() + BlockHash::serialized_size()
     }
 }
 

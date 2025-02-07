@@ -72,22 +72,13 @@ pub use unchecked_info::{UncheckedInfo, UncheckedKey};
 
 mod kdf;
 pub use kdf::KeyDerivationFunction;
-use utils::{BufferWriter, Deserialize, Serialize, Stream};
-
+use std::sync::LazyLock;
 use std::{
-    fmt::{Debug, Display, Write},
+    fmt::{Debug, Display},
     str::FromStr,
     sync::Mutex,
 };
-use std::{num::ParseIntError, sync::LazyLock};
-
-pub fn encode_hex(i: u128) -> String {
-    let mut result = String::with_capacity(32);
-    for byte in i.to_be_bytes() {
-        write!(&mut result, "{:02X}", byte).unwrap();
-    }
-    result
-}
+use utils::{BufferWriter, Deserialize, Serialize, Stream};
 
 pub fn write_hex_bytes(bytes: &[u8], f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
     for &byte in bytes {
@@ -98,10 +89,6 @@ pub fn write_hex_bytes(bytes: &[u8], f: &mut std::fmt::Formatter) -> Result<(), 
 
 pub fn to_hex_string(i: u64) -> String {
     format!("{:016X}", i)
-}
-
-pub fn u64_from_hex_str(s: impl AsRef<str>) -> Result<u64, ParseIntError> {
-    u64::from_str_radix(s.as_ref(), 16)
 }
 
 u256_struct!(HashOrAccount);

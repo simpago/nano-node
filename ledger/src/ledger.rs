@@ -403,14 +403,6 @@ impl Ledger {
         result
     }
 
-    pub fn block_text(&self, hash: &BlockHash) -> anyhow::Result<String> {
-        let txn = self.store.tx_begin_read();
-        match self.any().get_block(&txn, hash) {
-            Some(block) => block.to_json(),
-            None => Ok(String::new()),
-        }
-    }
-
     pub fn random_blocks(&self, tx: &dyn Transaction, count: usize) -> Vec<SavedBlock> {
         let mut result = Vec::with_capacity(count);
         let starting_hash = BlockHash::random();

@@ -1,9 +1,8 @@
 use crate::{
-    utils::{BufferWriter, Deserialize, FixedSizeSerialize, Serialize, Stream},
+    utils::{Deserialize, Stream},
     Account, Amount, Epoch,
 };
 use num::FromPrimitive;
-use std::mem::size_of;
 
 /// Information on an uncollected send
 /// This struct captures the data stored in a pending table entry
@@ -46,20 +45,6 @@ impl PendingInfo {
 
     pub fn new_test_instance() -> Self {
         Self::new(Account::from(3), Amount::raw(4), Epoch::Epoch2)
-    }
-}
-
-impl Serialize for PendingInfo {
-    fn serialize(&self, stream: &mut dyn BufferWriter) {
-        self.source.serialize(stream);
-        self.amount.serialize(stream);
-        stream.write_u8_safe(self.epoch as u8);
-    }
-}
-
-impl FixedSizeSerialize for PendingInfo {
-    fn serialized_size() -> usize {
-        Account::serialized_size() + Amount::serialized_size() + size_of::<u8>()
     }
 }
 
