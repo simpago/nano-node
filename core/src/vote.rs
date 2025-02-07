@@ -1,6 +1,6 @@
 use super::{
     utils::{BufferWriter, Deserialize, FixedSizeSerialize, Stream},
-    Account, BlockHash, BlockHashBuilder, FullHash, PrivateKey, Signature,
+    Account, BlockHash, BlockHashBuilder, PrivateKey, Signature,
 };
 use crate::{utils::Serialize, Amount, PublicKey};
 use anyhow::Result;
@@ -122,40 +122,6 @@ impl Vote {
         Duration::from_millis(1 << (self.duration_bits() + 4))
     }
 
-    fn serialize_json(&self) -> serde_json::Value {
-        let mut values = serde_json::Map::new();
-        values.insert(
-            "account".to_string(),
-            serde_json::Value::String(Account::from(self.voting_account).encode_account()),
-        );
-        values.insert(
-            "signature".to_string(),
-            serde_json::Value::String(self.signature.encode_hex()),
-        );
-        values.insert(
-            "sequence".to_string(),
-            serde_json::Value::String(self.timestamp().to_string()),
-        );
-        values.insert(
-            "timestamp".to_string(),
-            serde_json::Value::String(self.timestamp().to_string()),
-        );
-        values.insert(
-            "duration".to_string(),
-            serde_json::Value::String(self.duration_bits().to_string()),
-        );
-        let mut blocks = Vec::new();
-        for hash in &self.hashes {
-            blocks.push(serde_json::Value::String(hash.to_string()));
-        }
-        values.insert("blocks".to_string(), serde_json::Value::Array(blocks));
-        serde_json::Value::Object(values)
-    }
-
-    pub fn to_json(&self) -> String {
-        self.serialize_json().to_string()
-    }
-
     pub fn hash(&self) -> BlockHash {
         let mut builder = BlockHashBuilder::new().update(HASH_PREFIX);
 
@@ -213,16 +179,6 @@ impl PartialEq for Vote {
 }
 
 impl Eq for Vote {}
-
-impl FullHash for Vote {
-    fn full_hash(&self) -> BlockHash {
-        BlockHashBuilder::new()
-            .update(self.hash().as_bytes())
-            .update(self.voting_account.as_bytes())
-            .update(self.signature.as_bytes())
-            .build()
-    }
-}
 
 fn packed_timestamp(timestamp: u64, duration: u8) -> u64 {
     debug_assert!(duration <= Vote::DURATION_MAX);

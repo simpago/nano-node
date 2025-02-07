@@ -257,11 +257,6 @@ impl From<&BlockHash> for Root {
     }
 }
 
-pub trait FullHash {
-    /// Generates a hash that includes the signature an PoW field
-    fn full_hash(&self) -> BlockHash;
-}
-
 #[derive(PartialEq, Eq, Debug, Copy, Clone, PartialOrd, Ord)]
 pub struct NoValue {}
 

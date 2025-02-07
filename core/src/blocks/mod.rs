@@ -31,8 +31,8 @@ pub use builders::*;
 
 use crate::{
     utils::{BufferWriter, Deserialize, MemoryStream, Stream, UnixTimestamp},
-    Account, Amount, BlockHash, BlockHashBuilder, Epoch, Epochs, FullHash, Link, PrivateKey,
-    PublicKey, QualifiedRoot, Root, Signature,
+    Account, Amount, BlockHash, Epoch, Epochs, Link, PrivateKey, PublicKey, QualifiedRoot, Root,
+    Signature,
 };
 use num::FromPrimitive;
 use std::{
@@ -98,7 +98,7 @@ impl BlockSubType {
     }
 }
 
-pub trait BlockBase: FullHash {
+pub trait BlockBase {
     fn block_type(&self) -> BlockType;
     fn account_field(&self) -> Option<Account>;
     fn hash(&self) -> BlockHash;
@@ -123,16 +123,6 @@ pub trait BlockBase: FullHash {
         QualifiedRoot::new(self.root(), self.previous())
     }
     fn valid_predecessor(&self, block_type: BlockType) -> bool;
-}
-
-impl<T: BlockBase> FullHash for T {
-    fn full_hash(&self) -> BlockHash {
-        BlockHashBuilder::new()
-            .update(self.hash().as_bytes())
-            .update(self.signature().as_bytes())
-            .update(self.work().to_ne_bytes())
-            .build()
-    }
 }
 
 pub fn serialized_block_size(block_type: BlockType) -> usize {
@@ -285,12 +275,6 @@ impl From<SavedBlock> for serde_json::Value {
             );
         }
         result
-    }
-}
-
-impl FullHash for Block {
-    fn full_hash(&self) -> BlockHash {
-        self.as_block().full_hash()
     }
 }
 

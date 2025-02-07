@@ -227,7 +227,7 @@ fn epoch_open_pending() {
     // Open block should be inserted into unchecked
     let blocks = node1.unchecked.get(&key1.account().into());
     assert_eq!(blocks.len(), 1);
-    assert_eq!(blocks[0].block.full_hash(), epoch_open.full_hash());
+    assert_eq!(blocks[0].block.hash(), epoch_open.hash());
     // New block to process epoch open
     node1
         .block_processor
