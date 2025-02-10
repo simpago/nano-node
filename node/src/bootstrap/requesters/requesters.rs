@@ -14,7 +14,7 @@ use std::{
 };
 
 use super::asc_pull_query_sender::AscPullQuerySender;
-use super::requester_runner::BootstrapPromiseRunner;
+use super::requester_runner::{BootstrapPromiseRunner, SendAscPullQueryPromise};
 use super::{
     channel_waiter::ChannelWaiter, dependency_requester::DependencyRequester,
     frontier_requester::FrontierRequester, priority::PriorityRequester,
@@ -150,14 +150,15 @@ impl Requesters {
             message_sender: self.message_sender.clone(),
             clock: self.clock.clone(),
             config: self.config.clone(),
-            state: self.state.clone(),
             stats: self.stats.clone(),
         };
+
+        let send_promise = SendAscPullQueryPromise::new(query_factory, query_sender);
 
         std::thread::Builder::new()
             .name(name.into())
             .spawn(Box::new(move || {
-                runner.run_queries(query_factory, query_sender)
+                runner.run(send_promise);
             }))
             .unwrap()
     }

@@ -17,12 +17,11 @@ pub(crate) struct AscPullQuerySender {
     pub message_sender: MessageSender,
     pub clock: Arc<SteadyClock>,
     pub config: BootstrapConfig,
-    pub state: Arc<Mutex<BootstrapState>>,
     pub stats: Arc<Stats>,
 }
 
 impl AscPullQuerySender {
-    pub fn send(&mut self, spec: AscPullQuerySpec) {
+    pub fn send(&mut self, spec: AscPullQuerySpec, state: &mut BootstrapState) {
         let id = thread_rng().next_u64();
         let now = self.clock.now();
         let query = RunningQuery::from_spec(id, &spec, now, self.config.request_timeout);
@@ -32,8 +31,7 @@ impl AscPullQuerySender {
             req_type: spec.req_type,
         };
 
-        let mut guard = self.state.lock().unwrap();
-        guard.running_queries.insert(query);
+        state.running_queries.insert(query);
         let message = Message::AscPullReq(request);
 
         let sent =
@@ -53,12 +51,12 @@ impl AscPullQuerySender {
         if sent {
             // After the request has been sent, the peer has a limited time to respond
             let response_cutoff = now + self.config.request_timeout;
-            guard.set_response_cutoff(id, response_cutoff);
+            state.set_response_cutoff(id, response_cutoff);
         } else {
-            guard.remove_query(id);
+            state.remove_query(id);
         }
         if sent && spec.cooldown_account {
-            guard.candidate_accounts.timestamp_set(&spec.account, now);
+            state.candidate_accounts.timestamp_set(&spec.account, now);
         }
     }
 }

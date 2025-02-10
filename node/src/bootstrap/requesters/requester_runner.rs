@@ -1,7 +1,5 @@
-use crate::bootstrap::PollResult;
-use crate::bootstrap::{
-    state::BootstrapState, AscPullQuerySpec, BootstrapConfig, BootstrapPromise,
-};
+use crate::bootstrap::{state::BootstrapState, BootstrapConfig, BootstrapPromise};
+use crate::bootstrap::{AscPullQuerySpec, PollResult};
 use std::{
     cmp::min,
     sync::{
@@ -25,22 +23,9 @@ pub(crate) struct BootstrapPromiseRunner {
 impl BootstrapPromiseRunner {
     const INITIAL_INTERVAL: Duration = Duration::from_millis(5);
 
-    pub fn run_queries<T: BootstrapPromise<AscPullQuerySpec>>(
-        &self,
-        mut query_factory: T,
-        mut query_sender: AscPullQuerySender,
-    ) {
-        loop {
-            let Some(spec) = self.wait_for(&mut query_factory) else {
-                return;
-            };
-            query_sender.send(spec);
-        }
-    }
-
-    fn wait_for<A, T>(&self, action: &mut A) -> Option<T>
+    pub fn run<P, T>(&self, mut promise: P) -> Option<T>
     where
-        A: BootstrapPromise<T>,
+        P: BootstrapPromise<T>,
     {
         let mut interval = Self::INITIAL_INTERVAL;
         let mut guard = self.state.lock().unwrap();
@@ -49,7 +34,7 @@ impl BootstrapPromiseRunner {
                 return None;
             }
 
-            match self.progress(action, &mut guard, interval) {
+            match self.progress(&mut promise, &mut guard, interval) {
                 Ok(result) => return Some(result),
                 Err(i) => interval = i,
             }
@@ -75,6 +60,9 @@ impl BootstrapPromiseRunner {
         loop {
             match action.poll(state) {
                 PollResult::Progress => {
+                    if self.stopped.load(Ordering::SeqCst) {
+                        return Err(Self::INITIAL_INTERVAL);
+                    }
                     reset_wait_interval = true;
                 }
                 PollResult::Wait => {
@@ -86,6 +74,42 @@ impl BootstrapPromiseRunner {
                     return Err(wait_interval);
                 }
                 PollResult::Finished(result) => return Ok(result),
+            }
+        }
+    }
+}
+
+pub(crate) struct SendAscPullQueryPromise<T>
+where
+    T: BootstrapPromise<AscPullQuerySpec>,
+{
+    query_promise: T,
+    sender: AscPullQuerySender,
+}
+
+impl<T> SendAscPullQueryPromise<T>
+where
+    T: BootstrapPromise<AscPullQuerySpec>,
+{
+    pub(crate) fn new(query_promise: T, sender: AscPullQuerySender) -> Self {
+        Self {
+            query_promise,
+            sender,
+        }
+    }
+}
+
+impl<T> BootstrapPromise<()> for SendAscPullQueryPromise<T>
+where
+    T: BootstrapPromise<AscPullQuerySpec>,
+{
+    fn poll(&mut self, state: &mut BootstrapState) -> PollResult<()> {
+        match self.query_promise.poll(state) {
+            PollResult::Progress => PollResult::Progress,
+            PollResult::Wait => PollResult::Wait,
+            PollResult::Finished(spec) => {
+                self.sender.send(spec, state);
+                PollResult::Progress
             }
         }
     }
