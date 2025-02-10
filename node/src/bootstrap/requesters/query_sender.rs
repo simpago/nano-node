@@ -1,6 +1,6 @@
 use crate::{
     bootstrap::{
-        state::{BootstrapState, QueryType, RunningQuery},
+        state::{BootstrapState, RunningQuery},
         AscPullQuerySpec, BootstrapConfig,
     },
     stats::{DetailType, StatType, Stats},
@@ -24,6 +24,7 @@ impl QuerySender {
     pub fn send(&mut self, spec: AscPullQuerySpec, state: &mut BootstrapState) -> Option<u64> {
         let id = thread_rng().next_u64();
         let now = self.clock.now();
+        let query_type = spec.query_type();
         let mut query = RunningQuery::from_spec(id, &spec, now, self.config.request_timeout);
 
         let message = Message::AscPullReq(AscPullReq {
@@ -37,7 +38,6 @@ impl QuerySender {
 
         if sent {
             self.stats.inc(StatType::Bootstrap, DetailType::Request);
-            let query_type = QueryType::from(&message);
             self.stats
                 .inc(StatType::BootstrapRequest, query_type.into());
 

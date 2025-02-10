@@ -3,9 +3,7 @@ use super::{
     cleanup::BootstrapCleanup,
     requesters::Requesters,
     response_processor::{ProcessError, ResponseProcessor},
-    state::{
-        BootstrapCounters, BootstrapState, CandidateAccountsConfig, FrontierHeadInfo, QueryType,
-    },
+    state::{BootstrapCounters, BootstrapState, CandidateAccountsConfig, FrontierHeadInfo},
     FrontierScanConfig,
 };
 use crate::{
@@ -15,7 +13,7 @@ use crate::{
 };
 use rsnano_core::{utils::ContainerInfo, Account};
 use rsnano_ledger::{BlockStatus, Ledger};
-use rsnano_messages::{AscPullAck, AscPullReqType, BlocksAckPayload, HashType, Message};
+use rsnano_messages::{AscPullAck, BlocksAckPayload};
 use rsnano_network::{bandwidth_limiter::RateLimiter, ChannelId, Network};
 use rsnano_nullable_clock::SteadyClock;
 use std::{
@@ -310,22 +308,5 @@ impl BootstrapExt for Arc<Bootstrapper> {
             .unwrap();
 
         *self.threads.lock().unwrap() = Some(Threads { cleanup: timeout });
-    }
-}
-
-impl From<&Message> for QueryType {
-    fn from(value: &Message) -> Self {
-        if let Message::AscPullReq(req) = value {
-            match &req.req_type {
-                AscPullReqType::Blocks(b) => match b.start_type {
-                    HashType::Account => QueryType::BlocksByAccount,
-                    HashType::Block => QueryType::BlocksByHash,
-                },
-                AscPullReqType::AccountInfo(_) => QueryType::AccountInfoByHash,
-                AscPullReqType::Frontiers(_) => QueryType::Frontiers,
-            }
-        } else {
-            QueryType::Invalid
-        }
     }
 }

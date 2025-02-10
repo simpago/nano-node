@@ -33,22 +33,6 @@ impl RunningQueryContainer {
         self.by_id.get(&id)
     }
 
-    pub fn modify(&mut self, id: u64, mut f: impl FnMut(&mut RunningQuery)) -> bool {
-        let Some(query) = self.by_id.get_mut(&id) else {
-            return false;
-        };
-
-        let old_id = query.id;
-        let old_account = query.account;
-        let old_hash = query.hash;
-        f(query);
-        assert_eq!(query.id, old_id, "query id must not be changed");
-        assert_eq!(query.account, old_account, "account must not be changed");
-        assert_eq!(query.hash, old_hash, "hash must not be changed");
-
-        true
-    }
-
     pub fn count_by_account(&self, account: &Account, source: QuerySource) -> usize {
         self.iter_account(account)
             .filter(|i| i.source == source)
@@ -150,8 +134,6 @@ impl RunningQueryContainer {
 mod tests {
     use super::*;
     use crate::{bootstrap::state::QueryType, stats::DetailType};
-    use rsnano_nullable_clock::Timestamp;
-    use std::time::Duration;
 
     #[test]
     fn empty() {
@@ -228,60 +210,6 @@ mod tests {
 
         assert_eq!(container.len(), 1);
         assert_eq!(container.get(query_b.id), Some(&query_b));
-    }
-
-    #[test]
-    fn modify() {
-        let mut container = RunningQueryContainer::default();
-        let query = RunningQuery::new_test_instance();
-        container.insert(query.clone());
-        let new_cutoff = Timestamp::new_test_instance() + Duration::from_secs(999);
-        let modified = container.modify(query.id, |q| q.response_cutoff = new_cutoff);
-        assert!(modified);
-        assert_eq!(
-            container.get(query.id),
-            Some(&RunningQuery {
-                response_cutoff: new_cutoff,
-                ..query
-            })
-        );
-    }
-
-    #[test]
-    fn modify_non_existant() {
-        let mut container = RunningQueryContainer::default();
-        let modified = container.modify(123, |_| unreachable!());
-        assert!(!modified);
-    }
-
-    #[test]
-    #[should_panic]
-    fn modify_panics_when_account_changed() {
-        let mut container = RunningQueryContainer::default();
-        let query = RunningQuery::new_test_instance();
-        container.insert(query.clone());
-
-        container.modify(query.id, |q| q.account = Account::from(1000));
-    }
-
-    #[test]
-    #[should_panic]
-    fn modify_panics_when_hash_changed() {
-        let mut container = RunningQueryContainer::default();
-        let query = RunningQuery::new_test_instance();
-        container.insert(query.clone());
-
-        container.modify(query.id, |q| q.hash = BlockHash::from(1000));
-    }
-
-    #[test]
-    #[should_panic]
-    fn modify_panics_when_id_changed() {
-        let mut container = RunningQueryContainer::default();
-        let query = RunningQuery::new_test_instance();
-        container.insert(query.clone());
-
-        container.modify(query.id, |q| q.id = 1000);
     }
 
     #[test]

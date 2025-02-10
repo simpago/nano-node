@@ -6,13 +6,14 @@ mod requesters;
 mod response_processor;
 
 pub(crate) mod state;
+use state::QueryType;
 pub use state::{BootstrapCounters, FrontierHeadInfo, FrontierScanConfig};
 use std::sync::Arc;
 
 pub use bootstrap_responder::*;
 pub use bootstrapper::*;
 use rsnano_core::{Account, BlockHash};
-use rsnano_messages::{AscPullReqType, FrontiersReqPayload};
+use rsnano_messages::{AscPullReqType, FrontiersReqPayload, HashType};
 use rsnano_network::Channel;
 
 pub(self) trait BootstrapPromise<T> {
@@ -46,6 +47,17 @@ impl AscPullQuerySpec {
             account: Account::from(100),
             hash: BlockHash::from(200),
             cooldown_account: false,
+        }
+    }
+
+    pub fn query_type(&self) -> QueryType {
+        match &self.req_type {
+            AscPullReqType::Blocks(b) => match b.start_type {
+                HashType::Account => QueryType::BlocksByAccount,
+                HashType::Block => QueryType::BlocksByHash,
+            },
+            AscPullReqType::AccountInfo(_) => QueryType::AccountInfoByHash,
+            AscPullReqType::Frontiers(_) => QueryType::Frontiers,
         }
     }
 }
