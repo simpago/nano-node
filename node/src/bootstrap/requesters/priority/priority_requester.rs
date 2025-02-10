@@ -1,14 +1,19 @@
-use super::channel_waiter::ChannelWaiter;
+use super::priority_pull_count_decider::PriorityPullCountDecider;
+use super::priority_pull_type_decider::PriorityPullTypeDecider;
 use super::priority_query_factory::PriorityQueryFactory;
+use crate::bootstrap::requesters::channel_waiter::ChannelWaiter;
+use crate::bootstrap::BootstrapConfig;
 use crate::bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapPromise, PromiseResult};
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
     stats::{DetailType, StatType, Stats},
 };
+use rsnano_ledger::Ledger;
 use rsnano_network::Channel;
+use rsnano_nullable_clock::SteadyClock;
 use std::sync::Arc;
 
-pub(super) struct PriorityRequester {
+pub(crate) struct PriorityRequester {
     state: PriorityState,
     block_processor: Arc<BlockProcessor>,
     stats: Arc<Stats>,
@@ -18,12 +23,19 @@ pub(super) struct PriorityRequester {
 }
 
 impl PriorityRequester {
-    pub(super) fn new(
+    pub(crate) fn new(
         block_processor: Arc<BlockProcessor>,
         stats: Arc<Stats>,
         channel_waiter: ChannelWaiter,
-        query_factory: PriorityQueryFactory,
+        clock: Arc<SteadyClock>,
+        ledger: Arc<Ledger>,
+        config: &BootstrapConfig,
     ) -> Self {
+        let pull_type_decider = PriorityPullTypeDecider::new(config.optimistic_request_percentage);
+        let pull_count_decider = PriorityPullCountDecider::new(config.max_pull_count);
+        let query_factory =
+            PriorityQueryFactory::new(clock, ledger, pull_type_decider, pull_count_decider);
+
         Self {
             state: PriorityState::Initial,
             block_processor,

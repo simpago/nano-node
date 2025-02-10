@@ -13,13 +13,10 @@ use std::{
     thread::JoinHandle,
 };
 
-use super::priority_pull_count_decider::PriorityPullCountDecider;
-use super::priority_pull_type_decider::PriorityPullTypeDecider;
-use super::priority_query_factory::PriorityQueryFactory;
 use super::requester_runner::RequesterRunner;
 use super::{
     channel_waiter::ChannelWaiter, dependency_requester::DependencyRequester,
-    frontier_requester::FrontierRequester, priority_requester::PriorityRequester,
+    frontier_requester::FrontierRequester, priority::PriorityRequester,
 };
 
 /// Manages the threads that send out AscPullReqs
@@ -95,23 +92,13 @@ impl Requesters {
         };
 
         let priorities = if self.config.enable_scan {
-            let pull_type_decider =
-                PriorityPullTypeDecider::new(self.config.optimistic_request_percentage);
-
-            let pull_count_decider = PriorityPullCountDecider::new(self.config.max_pull_count);
-
-            let query_factory = PriorityQueryFactory::new(
-                self.clock.clone(),
-                self.ledger.clone(),
-                pull_type_decider,
-                pull_count_decider,
-            );
-
             let mut requester = PriorityRequester::new(
                 self.block_processor.clone(),
                 self.stats.clone(),
                 channel_waiter.clone(),
-                query_factory,
+                self.clock.clone(),
+                self.ledger.clone(),
+                &self.config,
             );
             requester.block_processor_threshold = self.config.block_processor_theshold;
 
