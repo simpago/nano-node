@@ -33,6 +33,8 @@ pub(crate) struct RequesterRunner {
 }
 
 impl RequesterRunner {
+    const INITIAL_INTERVAL: Duration = Duration::from_millis(5);
+
     pub fn run_queries<T: BootstrapPromise<AscPullQuerySpec>>(
         &self,
         mut query_factory: T,
@@ -50,30 +52,16 @@ impl RequesterRunner {
     where
         A: BootstrapPromise<T>,
     {
-        const INITIAL_INTERVAL: Duration = Duration::from_millis(5);
-        let mut interval = INITIAL_INTERVAL;
+        let mut interval = Self::INITIAL_INTERVAL;
         let mut guard = self.state.lock().unwrap();
         loop {
             if self.stopped.load(Ordering::SeqCst) {
                 return None;
             }
 
-            let mut reset_wait_interval = false;
-            loop {
-                match action.poll(&mut *guard) {
-                    PromiseResult::Progress => {
-                        reset_wait_interval = true;
-                    }
-                    PromiseResult::Wait => {
-                        interval = if reset_wait_interval {
-                            INITIAL_INTERVAL
-                        } else {
-                            min(interval * 2, self.config.throttle_wait)
-                        };
-                        break;
-                    }
-                    PromiseResult::Finished(result) => return Some(result),
-                }
+            match self.progress(action, &mut guard, interval) {
+                Ok(result) => return Some(result),
+                Err(i) => interval = i,
             }
 
             guard = self
@@ -81,6 +69,34 @@ impl RequesterRunner {
                 .wait_timeout_while(guard, interval, |_| !self.stopped.load(Ordering::SeqCst))
                 .unwrap()
                 .0;
+        }
+    }
+
+    fn progress<A, T>(
+        &self,
+        action: &mut A,
+        state: &mut BootstrapState,
+        mut wait_interval: Duration,
+    ) -> Result<T, Duration>
+    where
+        A: BootstrapPromise<T>,
+    {
+        let mut reset_wait_interval = false;
+        loop {
+            match action.poll(state) {
+                PromiseResult::Progress => {
+                    reset_wait_interval = true;
+                }
+                PromiseResult::Wait => {
+                    wait_interval = if reset_wait_interval {
+                        Self::INITIAL_INTERVAL
+                    } else {
+                        min(wait_interval * 2, self.config.throttle_wait)
+                    };
+                    return Err(wait_interval);
+                }
+                PromiseResult::Finished(result) => return Ok(result),
+            }
         }
     }
 
@@ -120,4 +136,9 @@ impl RequesterRunner {
             guard.candidate_accounts.timestamp_set(&spec.account, now);
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 }

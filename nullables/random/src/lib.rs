@@ -30,7 +30,6 @@ impl NullableRng {
 
 impl RngCore for NullableRng {
     fn next_u32(&mut self) -> u32 {
-        println!("next u32");
         match &mut self.strategy {
             RngStrategy::Thread => thread_rng().next_u32(),
             RngStrategy::Nulled(i) => i.next_u32(),
@@ -38,7 +37,6 @@ impl RngCore for NullableRng {
     }
 
     fn next_u64(&mut self) -> u64 {
-        println!("next u64");
         match &mut self.strategy {
             RngStrategy::Thread => thread_rng().next_u64(),
             RngStrategy::Nulled(i) => i.next_u64(),
@@ -46,7 +44,6 @@ impl RngCore for NullableRng {
     }
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
-        println!("fill bytes");
         match &mut self.strategy {
             RngStrategy::Thread => thread_rng().fill_bytes(dest),
             RngStrategy::Nulled(i) => i.fill_bytes(dest),
@@ -54,7 +51,6 @@ impl RngCore for NullableRng {
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-        println!("try fill bytes");
         match &mut self.strategy {
             RngStrategy::Thread => thread_rng().try_fill_bytes(dest),
             RngStrategy::Nulled(i) => i.try_fill_bytes(dest),
