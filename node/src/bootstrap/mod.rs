@@ -25,6 +25,7 @@ pub(self) enum PromiseResult<T> {
     Finished(T),
 }
 
+#[derive(PartialEq, Eq, Debug)]
 pub(crate) struct AscPullQuerySpec {
     pub channel: Arc<Channel>,
     pub req_type: AscPullReqType,
