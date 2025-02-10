@@ -10,7 +10,7 @@ pub struct BootstrapToml {
     pub block_processor_threshold: Option<usize>,
     pub database_rate_limit: Option<usize>,
     pub database_warmup_ratio: Option<usize>,
-    pub max_pull_count: Option<usize>,
+    pub max_pull_count: Option<u8>,
     pub channel_limit: Option<usize>,
     pub rate_limit: Option<usize>,
     pub throttle_coefficient: Option<usize>,

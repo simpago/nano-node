@@ -150,7 +150,7 @@ pub struct BlocksAckPayload(VecDeque<Block>);
 
 impl BlocksAckPayload {
     pub fn new(blocks: VecDeque<Block>) -> Self {
-        if blocks.len() > Self::MAX_BLOCKS {
+        if blocks.len() > Self::MAX_BLOCKS as usize {
             panic!(
                 "too many blocks for BlocksAckPayload. Maximum is {}, but was {}",
                 Self::MAX_BLOCKS,
@@ -167,7 +167,7 @@ impl BlocksAckPayload {
     }
 
     /* Header allows for 16 bit extensions; 65535 bytes / 500 bytes (block size with some future margin) ~ 131 */
-    pub const MAX_BLOCKS: usize = 128;
+    pub const MAX_BLOCKS: u8 = 128;
 
     pub fn blocks(&self) -> &VecDeque<Block> {
         &self.0
@@ -175,7 +175,7 @@ impl BlocksAckPayload {
 
     pub fn deserialize(&mut self, stream: &mut dyn Stream) -> anyhow::Result<()> {
         while let Ok(current) = Block::deserialize(stream) {
-            if self.0.len() >= Self::MAX_BLOCKS {
+            if self.0.len() >= Self::MAX_BLOCKS as usize {
                 bail!("too many blocks")
             }
             self.0.push_back(current);

@@ -215,7 +215,7 @@ mod tests {
         enable_dependency_walker = false
         block_processor_threshold = 999
         database_rate_limit = 999
-        max_pull_count = 999
+        max_pull_count = 255
         channel_limit = 999
         rate_limit = 999
         throttle_coefficient = 999

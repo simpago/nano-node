@@ -49,7 +49,7 @@ pub struct BootstrapResponder {
 
 impl BootstrapResponder {
     /** Maximum number of blocks to send in a single response, cannot be higher than capacity of a single `asc_pull_ack` message */
-    pub const MAX_BLOCKS: usize = BlocksAckPayload::MAX_BLOCKS;
+    pub const MAX_BLOCKS: u8 = BlocksAckPayload::MAX_BLOCKS as u8;
     pub const MAX_FRONTIERS: usize = AscPullAck::MAX_FRONTIERS;
 
     pub(crate) fn new(
@@ -149,7 +149,7 @@ impl BootstrapResponder {
 
     fn verify(&self, message: &AscPullReq) -> bool {
         match &message.req_type {
-            AscPullReqType::Blocks(i) => i.count > 0 && i.count as usize <= Self::MAX_BLOCKS,
+            AscPullReqType::Blocks(i) => i.count > 0 && i.count <= Self::MAX_BLOCKS,
             AscPullReqType::AccountInfo(i) => !i.target.is_zero(),
             AscPullReqType::Frontiers(i) => i.count > 0 && i.count as usize <= Self::MAX_FRONTIERS,
         }
@@ -233,7 +233,7 @@ impl BootstrapResponderImpl {
         id: u64,
         request: BlocksReqPayload,
     ) -> AscPullAck {
-        let count = min(request.count as usize, BootstrapResponder::MAX_BLOCKS);
+        let count = min(request.count, BootstrapResponder::MAX_BLOCKS);
 
         match request.start_type {
             HashType::Account => {
@@ -325,9 +325,9 @@ impl BootstrapResponderImpl {
         tx: &LmdbReadTransaction,
         id: u64,
         start_block: BlockHash,
-        count: usize,
+        count: u8,
     ) -> AscPullAck {
-        let blocks = self.prepare_blocks(tx, start_block, count);
+        let blocks = self.prepare_blocks(tx, start_block, count as usize);
         let response_payload = BlocksAckPayload::new(blocks);
 
         AscPullAck {

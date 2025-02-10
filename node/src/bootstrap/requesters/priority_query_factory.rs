@@ -1,22 +1,24 @@
-use super::priority_pull_type_decider::{PriorityPullType, PriorityPullTypeDecider};
+use super::{
+    priority_pull_count_decider::PriorityPullCountDecider,
+    priority_pull_type_decider::{PriorityPullType, PriorityPullTypeDecider},
+};
 use crate::bootstrap::{
     state::{BootstrapState, PriorityResult},
-    AscPullQuerySpec, BootstrapResponder,
+    AscPullQuerySpec,
 };
-use num::clamp;
 use rsnano_core::{Account, BlockHash, HashOrAccount};
 use rsnano_ledger::Ledger;
-use rsnano_messages::{AscPullReqType, BlocksAckPayload, BlocksReqPayload, HashType};
+use rsnano_messages::{AscPullReqType, BlocksReqPayload, HashType};
 use rsnano_network::Channel;
 use rsnano_nullable_clock::SteadyClock;
-use std::{cmp::min, sync::Arc};
+use std::sync::Arc;
 
 /// Creates a query for the next priority account
 pub(super) struct PriorityQueryFactory {
     clock: Arc<SteadyClock>,
     ledger: Arc<Ledger>,
-    pub max_pull_count: usize,
     pull_type_decider: PriorityPullTypeDecider,
+    pull_count_decider: PriorityPullCountDecider,
 }
 
 impl PriorityQueryFactory {
@@ -24,12 +26,13 @@ impl PriorityQueryFactory {
         clock: Arc<SteadyClock>,
         ledger: Arc<Ledger>,
         pull_type_decider: PriorityPullTypeDecider,
+        pull_count_decider: PriorityPullCountDecider,
     ) -> Self {
         Self {
             clock,
             ledger,
-            max_pull_count: BlocksAckPayload::MAX_BLOCKS,
             pull_type_decider,
+            pull_count_decider,
         }
     }
 
@@ -91,7 +94,7 @@ impl PriorityQueryFactory {
         let req_type = AscPullReqType::Blocks(BlocksReqPayload {
             start_type: pull_start.start_type,
             start: pull_start.start,
-            count: self.pull_count(&next),
+            count: self.pull_count_decider.pull_count(next.priority),
         });
 
         // Only cooldown accounts that are likely to have more blocks
@@ -106,19 +109,6 @@ impl PriorityQueryFactory {
             account: next.account,
             cooldown_account,
         }
-    }
-
-    fn pull_count(&self, next: &PriorityResult) -> u8 {
-        // Decide how many blocks to request
-        const MIN_PULL_COUNT: usize = 2;
-        let pull_count = clamp(
-            f64::from(next.priority) as usize,
-            MIN_PULL_COUNT,
-            BootstrapResponder::MAX_BLOCKS,
-        );
-
-        // Limit the max number of blocks to pull
-        min(pull_count, self.max_pull_count) as u8
     }
 }
 
@@ -344,7 +334,9 @@ mod tests {
         let account = input.prioritized_account.unwrap_or_default();
         let ledger = create_ledger(account, input.head, input.confirmed.as_ref());
         let pull_type_decider = PriorityPullTypeDecider::new_null_with(input.pull_type);
-        let mut factory = PriorityQueryFactory::new(clock, ledger, pull_type_decider);
+        let pull_count_decider = PriorityPullCountDecider::default();
+        let mut factory =
+            PriorityQueryFactory::new(clock, ledger, pull_type_decider, pull_count_decider);
         let mut state = BootstrapState::new_test_instance();
 
         if let Some(account) = &input.prioritized_account {

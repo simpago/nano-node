@@ -40,7 +40,7 @@ pub struct BootstrapConfig {
     pub database_rate_limit: usize,
     pub frontier_rate_limit: usize,
     pub database_warmup_ratio: usize,
-    pub max_pull_count: usize,
+    pub max_pull_count: u8,
     pub request_timeout: Duration,
     pub throttle_coefficient: usize,
     pub throttle_wait: Duration,

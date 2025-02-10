@@ -7,3 +7,5 @@ pub(crate) use candidate_accounts::{
     CandidateAccounts, CandidateAccountsConfig, PriorityDownResult, PriorityResult,
     PriorityUpResult,
 };
+
+pub(crate) use priority::Priority;
