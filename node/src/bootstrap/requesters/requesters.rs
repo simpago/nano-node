@@ -147,12 +147,12 @@ impl Requesters {
     where
         T: BootstrapPromise<AscPullQuerySpec> + Send + 'static,
     {
-        let query_sender = QuerySender {
-            message_sender: self.message_sender.clone(),
-            clock: self.clock.clone(),
-            config: self.config.clone(),
-            stats: self.stats.clone(),
-        };
+        let mut query_sender = QuerySender::new(
+            self.message_sender.clone(),
+            self.clock.clone(),
+            self.stats.clone(),
+        );
+        query_sender.set_request_timeout(self.config.request_timeout);
 
         let send_promise = SendQueriesPromise::new(query_factory, query_sender);
 

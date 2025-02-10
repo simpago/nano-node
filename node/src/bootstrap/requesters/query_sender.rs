@@ -1,7 +1,7 @@
 use crate::{
     bootstrap::{
         state::{BootstrapState, RunningQuery},
-        AscPullQuerySpec, BootstrapConfig,
+        AscPullQuerySpec,
     },
     stats::{DetailType, StatType, Stats},
     transport::MessageSender,
@@ -10,22 +10,39 @@ use rand::{thread_rng, RngCore};
 use rsnano_messages::{AscPullReq, Message};
 use rsnano_network::TrafficType;
 use rsnano_nullable_clock::SteadyClock;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 /// Sends an AscPullReq message
 pub(crate) struct QuerySender {
-    pub message_sender: MessageSender,
-    pub clock: Arc<SteadyClock>,
-    pub config: BootstrapConfig,
-    pub stats: Arc<Stats>,
+    message_sender: MessageSender,
+    clock: Arc<SteadyClock>,
+    request_timeout: Duration,
+    stats: Arc<Stats>,
 }
 
 impl QuerySender {
+    pub(crate) fn new(
+        message_sender: MessageSender,
+        clock: Arc<SteadyClock>,
+        stats: Arc<Stats>,
+    ) -> Self {
+        Self {
+            message_sender,
+            clock,
+            stats,
+            request_timeout: Duration::from_secs(15),
+        }
+    }
+
+    pub fn set_request_timeout(&mut self, timeout: Duration) {
+        self.request_timeout = timeout;
+    }
+
     pub fn send(&mut self, spec: AscPullQuerySpec, state: &mut BootstrapState) -> Option<u64> {
         let id = thread_rng().next_u64();
         let now = self.clock.now();
         let query_type = spec.query_type();
-        let mut query = RunningQuery::from_spec(id, &spec, now, self.config.request_timeout);
+        let mut query = RunningQuery::from_spec(id, &spec, now, self.request_timeout);
 
         let message = Message::AscPullReq(AscPullReq {
             id,
@@ -42,7 +59,7 @@ impl QuerySender {
                 .inc(StatType::BootstrapRequest, query_type.into());
 
             // After the request has been sent, the peer has a limited time to respond
-            query.response_cutoff = now + self.config.request_timeout;
+            query.response_cutoff = now + self.request_timeout;
             state.running_queries.insert(query);
 
             if spec.cooldown_account {
@@ -69,12 +86,7 @@ mod tests {
         let message_sender = MessageSender::new_null();
         let send_tracker = message_sender.track();
         let clock = Arc::new(SteadyClock::new_null());
-        let mut query_sender = QuerySender {
-            message_sender,
-            clock,
-            config: Default::default(),
-            stats: Arc::new(Stats::default()),
-        };
+        let mut query_sender = QuerySender::new(message_sender, clock, Arc::new(Stats::default()));
 
         let spec = AscPullQuerySpec::new_test_instance();
         let channel_id = spec.channel.channel_id();
@@ -97,12 +109,7 @@ mod tests {
         let message_sender = MessageSender::new_null();
         let clock = Arc::new(SteadyClock::new_null());
         let now = clock.now();
-        let mut query_sender = QuerySender {
-            message_sender,
-            clock,
-            config: Default::default(),
-            stats: Arc::new(Stats::default()),
-        };
+        let mut query_sender = QuerySender::new(message_sender, clock, Arc::new(Stats::default()));
 
         let spec = AscPullQuerySpec::new_test_instance();
         let mut state = BootstrapState::new_test_instance();
@@ -113,7 +120,7 @@ mod tests {
         assert!(state.running_queries.contains(id));
         assert_eq!(
             state.running_queries.get(id).unwrap().response_cutoff,
-            now + query_sender.config.request_timeout
+            now + query_sender.request_timeout
         );
     }
 }
