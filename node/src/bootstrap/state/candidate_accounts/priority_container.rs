@@ -10,7 +10,7 @@ pub(super) struct PriorityEntry {
     pub account: Account,
     pub priority: Priority,
     pub fails: usize,
-    pub timestamp: Option<Timestamp>,
+    pub last_request: Option<Timestamp>,
 }
 
 impl PriorityEntry {
@@ -19,7 +19,7 @@ impl PriorityEntry {
             account,
             priority,
             fails: 0,
-            timestamp: None,
+            last_request: None,
         }
     }
 
@@ -29,7 +29,7 @@ impl PriorityEntry {
             account: Account::from(7),
             priority: Priority::new(3.0),
             fails: 0,
-            timestamp: None,
+            last_request: None,
         }
     }
 }
@@ -92,9 +92,9 @@ impl PriorityContainer {
         Some(self.remove_account(&lowest_prio_account))
     }
 
-    pub fn change_timestamp(&mut self, account: &Account, timestamp: Option<Timestamp>) {
+    pub fn set_last_request(&mut self, account: &Account, timestamp: Option<Timestamp>) {
         if let Some(entry) = self.by_account.get_mut(account) {
-            entry.timestamp = timestamp;
+            entry.last_request = timestamp;
         }
     }
 
@@ -130,7 +130,7 @@ impl PriorityContainer {
             .flatten()
             .map(|account| self.by_account.get(account).unwrap())
             .find(|entry| {
-                if let Some(ts) = entry.timestamp {
+                if let Some(ts) = entry.last_request {
                     if ts > cutoff {
                         return false;
                     }
@@ -258,9 +258,9 @@ mod tests {
         priorities.insert(PriorityEntry::new(account, Priority::new(2.5)));
         let now = Timestamp::new_test_instance();
 
-        priorities.change_timestamp(&account, Some(now));
+        priorities.set_last_request(&account, Some(now));
 
-        assert_eq!(priorities.get(&account).unwrap().timestamp, Some(now));
+        assert_eq!(priorities.get(&account).unwrap().last_request, Some(now));
     }
 
     mod next_priority {
@@ -306,9 +306,9 @@ mod tests {
             let now = Timestamp::new_test_instance();
             let a = PriorityEntry::new(Account::from(1), Priority::new(2.5));
             let mut b = PriorityEntry::new(Account::from(2), Priority::new(10.0));
-            b.timestamp = Some(now);
+            b.last_request = Some(now);
             let mut c = PriorityEntry::new(Account::from(3), Priority::new(3.5));
-            c.timestamp = Some(now - Duration::from_secs(60));
+            c.last_request = Some(now - Duration::from_secs(60));
             let mut priorities = PriorityContainer::default();
             priorities.insert(a);
             priorities.insert(b);

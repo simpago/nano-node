@@ -68,7 +68,7 @@ impl BlockAckProcessor {
                                 stats.inc(StatType::Bootstrap, DetailType::TimestampReset);
                                 {
                                     let mut guard = state.lock().unwrap();
-                                    guard.candidate_accounts.timestamp_reset(&account);
+                                    guard.candidate_accounts.reset_last_request(&account);
                                 }
                                 condition.notify_all();
                             }),
@@ -111,7 +111,7 @@ impl BlockAckProcessor {
                         PriorityDownResult::InvalidAccount => {}
                     }
 
-                    guard.candidate_accounts.timestamp_reset(&query.account);
+                    guard.candidate_accounts.reset_last_request(&query.account);
                 }
                 self.condition.notify_all();
                 true

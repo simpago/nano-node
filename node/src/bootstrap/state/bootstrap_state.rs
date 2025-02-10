@@ -95,17 +95,6 @@ impl BootstrapState {
         blocking
     }
 
-    pub fn set_response_cutoff(&mut self, id: u64, response_cutoff: Timestamp) {
-        self.running_queries.modify(id, |query| {
-            // After the request has been sent, the peer has a limited time to respond
-            query.response_cutoff = response_cutoff;
-        });
-    }
-
-    pub fn remove_query(&mut self, id: u64) {
-        self.running_queries.remove(id);
-    }
-
     pub fn container_info(&self) -> ContainerInfo {
         ContainerInfo::builder()
             .leaf(

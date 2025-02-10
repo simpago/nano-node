@@ -207,15 +207,15 @@ impl CandidateAccounts {
         false
     }
 
-    pub fn timestamp_set(&mut self, account: &Account, now: Timestamp) {
+    pub fn set_last_request(&mut self, account: &Account, now: Timestamp) {
         debug_assert!(!account.is_zero());
-        self.priorities.change_timestamp(account, Some(now));
+        self.priorities.set_last_request(account, Some(now));
     }
 
-    pub fn timestamp_reset(&mut self, account: &Account) {
+    pub fn reset_last_request(&mut self, account: &Account) {
         debug_assert!(!account.is_zero());
 
-        self.priorities.change_timestamp(account, None);
+        self.priorities.set_last_request(account, None);
     }
 
     /// Sets information about the account chain that contains the block hash
@@ -625,7 +625,7 @@ mod tests {
     #[test]
     fn timestamp_set_for_unknown_account_does_nothing() {
         let mut candidates = CandidateAccounts::default();
-        candidates.timestamp_set(&Account::from(1), Timestamp::new_test_instance());
+        candidates.set_last_request(&Account::from(1), Timestamp::new_test_instance());
         assert_eq!(candidates.priority_len(), 0);
     }
 
@@ -635,9 +635,9 @@ mod tests {
         let account = Account::from(1);
         candidates.priority_set_initial(&account);
         let new_timestamp = Timestamp::new_test_instance() + Duration::from_secs(1000);
-        candidates.timestamp_set(&account, new_timestamp);
+        candidates.set_last_request(&account, new_timestamp);
         assert_eq!(
-            candidates.priorities.get(&account).unwrap().timestamp,
+            candidates.priorities.get(&account).unwrap().last_request,
             Some(new_timestamp)
         );
     }
@@ -647,8 +647,11 @@ mod tests {
         let mut candidates = CandidateAccounts::default();
         let account = Account::from(1);
         candidates.priority_set_initial(&account);
-        candidates.timestamp_reset(&account);
-        assert_eq!(candidates.priorities.get(&account).unwrap().timestamp, None);
+        candidates.reset_last_request(&account);
+        assert_eq!(
+            candidates.priorities.get(&account).unwrap().last_request,
+            None
+        );
     }
 
     #[test]
@@ -713,7 +716,7 @@ mod tests {
                 priority: CandidateAccounts::PRIORITY_INITIAL,
                 fails: 0
             }
-        );
+        )
     }
 
     #[test]
@@ -722,7 +725,7 @@ mod tests {
         let now = Timestamp::new_test_instance();
         let account = Account::from(1);
         candidates.priority_up(&account);
-        candidates.timestamp_set(&account, now);
+        candidates.set_last_request(&account, now);
         let next = candidates.next_priority(now, |_| true);
         assert_eq!(next, PriorityResult::default());
     }
@@ -736,8 +739,8 @@ mod tests {
         candidates.priority_set(&account1, Priority::new(100.0));
         candidates.priority_set(&account2, Priority::new(1.0));
         let now = Timestamp::new_test_instance();
-        candidates.timestamp_set(&account1, now - config.cooldown + Duration::from_millis(1));
-        candidates.timestamp_set(&account2, now - config.cooldown);
+        candidates.set_last_request(&account1, now - config.cooldown + Duration::from_millis(1));
+        candidates.set_last_request(&account2, now - config.cooldown);
         let next = candidates.next_priority(now, |_| true);
         assert_eq!(
             next,
