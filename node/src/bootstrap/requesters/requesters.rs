@@ -28,7 +28,7 @@ pub(crate) struct Requesters {
     stats: Arc<Stats>,
     message_sender: MessageSender,
     state: Arc<Mutex<BootstrapState>>,
-    condition: Arc<Condvar>,
+    stopped_notification: Arc<Condvar>,
     clock: Arc<SteadyClock>,
     threads: Mutex<Option<RequesterThreads>>,
     stopped: Arc<AtomicBool>,
@@ -43,7 +43,7 @@ impl Requesters {
         stats: Arc<Stats>,
         message_sender: MessageSender,
         state: Arc<Mutex<BootstrapState>>,
-        condition: Arc<Condvar>,
+        stopped_notification: Arc<Condvar>,
         clock: Arc<SteadyClock>,
         ledger: Arc<Ledger>,
         block_processor: Arc<BlockProcessor>,
@@ -54,7 +54,7 @@ impl Requesters {
             stats,
             message_sender,
             state,
-            condition,
+            stopped_notification,
             clock,
             ledger,
             block_processor,
@@ -70,8 +70,8 @@ impl Requesters {
 
         let runner = Arc::new(BootstrapPromiseRunner {
             state: self.state.clone(),
-            config: self.config.clone(),
-            condition: self.condition.clone(),
+            throttle_wait: self.config.throttle_wait,
+            stopped_notification: self.stopped_notification.clone(),
             stopped: self.stopped.clone(),
         });
 
@@ -130,7 +130,7 @@ impl Requesters {
             let _guard = self.state.lock().unwrap();
             self.stopped.store(true, Ordering::SeqCst);
         }
-        self.condition.notify_all();
+        self.stopped_notification.notify_all();
 
         let threads = self.threads.lock().unwrap().take();
         if let Some(mut threads) = threads {

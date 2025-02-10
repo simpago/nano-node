@@ -84,7 +84,7 @@ pub struct Bootstrapper {
     stats: Arc<Stats>,
     threads: Mutex<Option<Threads>>,
     state: Arc<Mutex<BootstrapState>>,
-    condition: Arc<Condvar>,
+    stopped_notification: Arc<Condvar>,
     config: BootstrapConfig,
     clock: Arc<SteadyClock>,
     response_handler: ResponseProcessor,
@@ -109,13 +109,13 @@ impl Bootstrapper {
     ) -> Self {
         let limiter = Arc::new(RateLimiter::new(config.rate_limit));
         let state = Arc::new(Mutex::new(BootstrapState::new(config.clone(), network)));
-        let condition = Arc::new(Condvar::new());
+        let stopped_notification = Arc::new(Condvar::new());
 
         let mut response_handler = ResponseProcessor::new(
             state.clone(),
             stats.clone(),
             block_processor.clone(),
-            condition.clone(),
+            stopped_notification.clone(),
             ledger.clone(),
         );
         response_handler.set_max_pending_frontiers(config.max_pending_frontier_responses);
@@ -127,7 +127,7 @@ impl Bootstrapper {
             stats.clone(),
             message_sender.clone(),
             state.clone(),
-            condition.clone(),
+            stopped_notification.clone(),
             clock.clone(),
             ledger.clone(),
             block_processor.clone(),
@@ -136,7 +136,7 @@ impl Bootstrapper {
         Self {
             threads: Mutex::new(None),
             state,
-            condition,
+            stopped_notification,
             config,
             stats,
             clock,
@@ -152,7 +152,7 @@ impl Bootstrapper {
             let _guard = self.state.lock().unwrap();
             self.stopped.store(true, Ordering::SeqCst);
         }
-        self.condition.notify_all();
+        self.stopped_notification.notify_all();
 
         self.requesters.stop();
 
@@ -185,7 +185,7 @@ impl Bootstrapper {
             cleanup.cleanup(&mut guard);
 
             guard = self
-                .condition
+                .stopped_notification
                 .wait_timeout_while(guard, Duration::from_secs(1), |_| {
                     !self.stopped.load(Ordering::SeqCst)
                 })
@@ -235,7 +235,7 @@ impl Bootstrapper {
 
     fn blocks_processed(&self, batch: &[(BlockStatus, Arc<BlockContext>)]) {
         self.block_inspector.inspect(batch);
-        self.condition.notify_all();
+        self.stopped_notification.notify_all();
     }
 
     pub fn container_info(&self) -> ContainerInfo {

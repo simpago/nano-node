@@ -1,4 +1,4 @@
-use crate::bootstrap::{state::BootstrapState, BootstrapConfig, BootstrapPromise, PollResult};
+use crate::bootstrap::{state::BootstrapState, BootstrapPromise, PollResult};
 use std::{
     cmp::min,
     sync::{
@@ -12,9 +12,9 @@ use std::{
 /// the peered node
 pub(crate) struct BootstrapPromiseRunner {
     pub state: Arc<Mutex<BootstrapState>>,
-    pub config: BootstrapConfig,
+    pub throttle_wait: Duration,
     pub stopped: Arc<AtomicBool>,
-    pub condition: Arc<Condvar>,
+    pub stopped_notification: Arc<Condvar>,
 }
 
 impl BootstrapPromiseRunner {
@@ -37,7 +37,7 @@ impl BootstrapPromiseRunner {
             }
 
             guard = self
-                .condition
+                .stopped_notification
                 .wait_timeout_while(guard, interval, |_| !self.stopped.load(Ordering::SeqCst))
                 .unwrap()
                 .0;
@@ -66,12 +66,70 @@ impl BootstrapPromiseRunner {
                     wait_interval = if reset_wait_interval {
                         Self::INITIAL_INTERVAL
                     } else {
-                        min(wait_interval * 2, self.config.throttle_wait)
+                        min(wait_interval * 2, self.throttle_wait)
                     };
                     return Err(wait_interval);
                 }
                 PollResult::Finished(result) => return Ok(result),
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rsnano_core::utils::OneShotNotification;
+    use std::thread::spawn;
+
+    #[test]
+    fn abort_promise_when_stopped() {
+        let state = Arc::new(Mutex::new(BootstrapState::new_test_instance()));
+        let stopped = Arc::new(AtomicBool::new(false));
+        let stopped_notification = Arc::new(Condvar::new());
+
+        let runner = BootstrapPromiseRunner {
+            state: state.clone(),
+            throttle_wait: Duration::from_millis(100),
+            stopped: stopped.clone(),
+            stopped_notification: stopped_notification.clone(),
+        };
+
+        let promise = StubPromise::new();
+        let polled = promise.polled.clone();
+        let finished = Arc::new(OneShotNotification::new());
+        let finished2 = finished.clone();
+
+        spawn(move || {
+            runner.run(promise);
+            finished2.notify();
+        });
+
+        polled.wait();
+        {
+            let _guard = state.lock().unwrap();
+            stopped.store(true, Ordering::SeqCst);
+        }
+        stopped_notification.notify_all();
+        finished.wait();
+    }
+
+    struct StubPromise {
+        polled: Arc<OneShotNotification>,
+    }
+
+    impl StubPromise {
+        fn new() -> Self {
+            Self {
+                polled: Arc::new(OneShotNotification::new()),
+            }
+        }
+    }
+
+    impl BootstrapPromise<()> for StubPromise {
+        fn poll(&mut self, _state: &mut BootstrapState) -> PollResult<()> {
+            self.polled.notify();
+            PollResult::Wait
         }
     }
 }
