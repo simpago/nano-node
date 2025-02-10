@@ -1,6 +1,6 @@
-use super::priority_pull_count_decider::PriorityPullCountDecider;
-use super::priority_pull_type_decider::PriorityPullTypeDecider;
-use super::priority_query_factory::PriorityQueryFactory;
+use super::pull_count_decider::PullCountDecider;
+use super::pull_type_decider::PullTypeDecider;
+use super::query_factory::QueryFactory;
 use crate::bootstrap::requesters::channel_waiter::ChannelWaiter;
 use crate::bootstrap::BootstrapConfig;
 use crate::bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapPromise, PollResult};
@@ -19,7 +19,7 @@ pub(crate) struct PriorityRequester {
     stats: Arc<Stats>,
     channel_waiter: ChannelWaiter,
     pub block_processor_threshold: usize,
-    query_factory: PriorityQueryFactory,
+    query_factory: QueryFactory,
     clock: Arc<SteadyClock>,
 }
 
@@ -32,10 +32,9 @@ impl PriorityRequester {
         ledger: Arc<Ledger>,
         config: &BootstrapConfig,
     ) -> Self {
-        let pull_type_decider = PriorityPullTypeDecider::new(config.optimistic_request_percentage);
-        let pull_count_decider = PriorityPullCountDecider::new(config.max_pull_count);
-        let query_factory =
-            PriorityQueryFactory::new(ledger, pull_type_decider, pull_count_decider);
+        let pull_type_decider = PullTypeDecider::new(config.optimistic_request_percentage);
+        let pull_count_decider = PullCountDecider::new(config.max_pull_count);
+        let query_factory = QueryFactory::new(ledger, pull_type_decider, pull_count_decider);
 
         Self {
             state: PriorityState::Initial,

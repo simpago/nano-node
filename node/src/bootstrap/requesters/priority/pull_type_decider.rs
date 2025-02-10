@@ -2,7 +2,7 @@ use rand::Rng;
 use rsnano_nullable_random::NullableRng;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum PriorityPullType {
+pub(super) enum PullType {
     /// Optimistic requests start from the (possibly unconfirmed) account frontier
     /// and are vulnerable to bootstrap poisoning.
     Optimistic,
@@ -12,19 +12,19 @@ pub(super) enum PriorityPullType {
 }
 
 /// Decides whether to make an optimistic of a safe priority pull request
-pub(super) struct PriorityPullTypeDecider {
+pub(super) struct PullTypeDecider {
     optimistic_request_percentage: u8,
     rng: NullableRng,
 }
 
-impl PriorityPullTypeDecider {
+impl PullTypeDecider {
     const DEFAULT_OPTIMISTIC_REQUEST_PERCENTAGE: u8 = 75;
 
     #[allow(dead_code)]
-    pub fn new_null_with(result: PriorityPullType) -> Self {
+    pub fn new_null_with(result: PullType) -> Self {
         let rnd_result = match result {
-            PriorityPullType::Optimistic => 0,
-            PriorityPullType::Safe => 100,
+            PullType::Optimistic => 0,
+            PullType::Safe => 100,
         };
         Self::with(
             rng_that_returns(rnd_result),
@@ -48,16 +48,16 @@ impl PriorityPullTypeDecider {
     /// and are vulnerable to bootstrap poisoning.
     /// Safe requests start from the confirmed frontier and given enough time
     /// will eventually resolve forks
-    pub fn decide_pull_type(&mut self) -> PriorityPullType {
+    pub fn decide_pull_type(&mut self) -> PullType {
         if self.rng.gen_range(0..100) < self.optimistic_request_percentage {
-            PriorityPullType::Optimistic
+            PullType::Optimistic
         } else {
-            PriorityPullType::Safe
+            PullType::Safe
         }
     }
 }
 
-impl Default for PriorityPullTypeDecider {
+impl Default for PullTypeDecider {
     fn default() -> Self {
         Self::new(Self::DEFAULT_OPTIMISTIC_REQUEST_PERCENTAGE)
     }
@@ -82,37 +82,33 @@ mod tests {
     #[test]
     fn decide_optimistic() {
         let rng = rng_that_returns(75);
-        let mut decider = PriorityPullTypeDecider::with(rng, 75);
-        assert_eq!(decider.decide_pull_type(), PriorityPullType::Optimistic);
-        assert_eq!(decider.decide_pull_type(), PriorityPullType::Optimistic);
-        assert_eq!(decider.decide_pull_type(), PriorityPullType::Optimistic);
+        let mut decider = PullTypeDecider::with(rng, 75);
+        assert_eq!(decider.decide_pull_type(), PullType::Optimistic);
+        assert_eq!(decider.decide_pull_type(), PullType::Optimistic);
+        assert_eq!(decider.decide_pull_type(), PullType::Optimistic);
     }
 
     #[test]
     fn decide_safe() {
         let rng = rng_that_returns(76);
-        let mut decider = PriorityPullTypeDecider::with(rng, 75);
-        assert_eq!(decider.decide_pull_type(), PriorityPullType::Safe);
-        assert_eq!(decider.decide_pull_type(), PriorityPullType::Safe);
-        assert_eq!(decider.decide_pull_type(), PriorityPullType::Safe);
+        let mut decider = PullTypeDecider::with(rng, 75);
+        assert_eq!(decider.decide_pull_type(), PullType::Safe);
+        assert_eq!(decider.decide_pull_type(), PullType::Safe);
+        assert_eq!(decider.decide_pull_type(), PullType::Safe);
     }
 
     #[test]
     fn can_be_nulled() {
-        let mut optimistic_decider =
-            PriorityPullTypeDecider::new_null_with(PriorityPullType::Optimistic);
-        let mut safe_decider = PriorityPullTypeDecider::new_null_with(PriorityPullType::Safe);
+        let mut optimistic_decider = PullTypeDecider::new_null_with(PullType::Optimistic);
+        let mut safe_decider = PullTypeDecider::new_null_with(PullType::Safe);
 
-        assert_eq!(
-            optimistic_decider.decide_pull_type(),
-            PriorityPullType::Optimistic
-        );
-        assert_eq!(safe_decider.decide_pull_type(), PriorityPullType::Safe);
+        assert_eq!(optimistic_decider.decide_pull_type(), PullType::Optimistic);
+        assert_eq!(safe_decider.decide_pull_type(), PullType::Safe);
     }
 
     #[test]
     fn default() {
-        let mut decider = PriorityPullTypeDecider::default();
+        let mut decider = PullTypeDecider::default();
         let _ = decider.decide_pull_type();
     }
 }

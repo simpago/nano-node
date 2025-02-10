@@ -4,11 +4,11 @@ use rsnano_messages::BlocksAckPayload;
 use std::cmp::min;
 
 /// Decides how many blocks to pull
-pub(super) struct PriorityPullCountDecider {
+pub(super) struct PullCountDecider {
     pub max_pull_count: u8,
 }
 
-impl PriorityPullCountDecider {
+impl PullCountDecider {
     pub fn new(max_pull_count: u8) -> Self {
         Self { max_pull_count }
     }
@@ -28,7 +28,7 @@ impl PriorityPullCountDecider {
     }
 }
 
-impl Default for PriorityPullCountDecider {
+impl Default for PullCountDecider {
     fn default() -> Self {
         Self::new(BlocksAckPayload::MAX_BLOCKS)
     }
@@ -36,7 +36,7 @@ impl Default for PriorityPullCountDecider {
 
 #[cfg(test)]
 mod tests {
-    use super::PriorityPullCountDecider;
+    use super::PullCountDecider;
     use crate::bootstrap::{state::Priority, BootstrapResponder};
 
     #[test]
@@ -59,12 +59,12 @@ mod tests {
     #[test]
     fn configured_max() {
         let max = 5;
-        let decider = PriorityPullCountDecider::new(max);
+        let decider = PullCountDecider::new(max);
         assert_eq!(decider.pull_count(Priority::new(999.0)), max);
     }
 
     fn assert_pull_count(priority: Priority, expected: u8) {
-        let decider = PriorityPullCountDecider::default();
+        let decider = PullCountDecider::default();
         assert_eq!(decider.pull_count(priority), expected);
     }
 }

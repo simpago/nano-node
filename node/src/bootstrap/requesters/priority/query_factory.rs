@@ -1,6 +1,6 @@
 use super::{
-    priority_pull_count_decider::PriorityPullCountDecider,
-    priority_pull_type_decider::{PriorityPullType, PriorityPullTypeDecider},
+    pull_count_decider::PullCountDecider,
+    pull_type_decider::{PullType, PullTypeDecider},
 };
 use crate::bootstrap::{
     state::{BootstrapState, PriorityResult},
@@ -14,17 +14,17 @@ use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
 /// Creates a query for the next priority account
-pub(super) struct PriorityQueryFactory {
+pub(super) struct QueryFactory {
     ledger: Arc<Ledger>,
-    pull_type_decider: PriorityPullTypeDecider,
-    pull_count_decider: PriorityPullCountDecider,
+    pull_type_decider: PullTypeDecider,
+    pull_count_decider: PullCountDecider,
 }
 
-impl PriorityQueryFactory {
+impl QueryFactory {
     pub(super) fn new(
         ledger: Arc<Ledger>,
-        pull_type_decider: PriorityPullTypeDecider,
-        pull_count_decider: PriorityPullCountDecider,
+        pull_type_decider: PullTypeDecider,
+        pull_count_decider: PullCountDecider,
     ) -> Self {
         Self {
             ledger,
@@ -66,7 +66,7 @@ impl PriorityQueryFactory {
         &self,
         next: &PriorityResult,
         channel: Arc<Channel>,
-        pull_type: PriorityPullType,
+        pull_type: PullType,
         head: BlockHash,
         confirmed_frontier: BlockHash,
     ) -> AscPullQuerySpec {
@@ -100,7 +100,7 @@ struct PullStart {
 
 impl PullStart {
     fn new(
-        pull_type: PriorityPullType,
+        pull_type: PullType,
         account: Account,
         head: BlockHash,
         confirmed_frontier: BlockHash,
@@ -110,8 +110,8 @@ impl PullStart {
             PullStart::account(account)
         } else {
             match pull_type {
-                PriorityPullType::Optimistic => PullStart::block(head, head),
-                PriorityPullType::Safe => PullStart::safe(account, confirmed_frontier),
+                PullType::Optimistic => PullStart::block(head, head),
+                PullType::Safe => PullStart::safe(account, confirmed_frontier),
             }
         }
     }
@@ -152,7 +152,7 @@ mod tests {
             prioritized_account: None,
             head: None,
             confirmed: None,
-            pull_type: PriorityPullType::Optimistic,
+            pull_type: PullType::Optimistic,
         });
 
         assert!(query.is_none());
@@ -169,7 +169,7 @@ mod tests {
                 prioritized_account: Some(account),
                 head: None,
                 confirmed: None,
-                pull_type: PriorityPullType::Optimistic,
+                pull_type: PullType::Optimistic,
             })
             .unwrap();
 
@@ -198,7 +198,7 @@ mod tests {
                 prioritized_account: Some(account),
                 head: Some(head),
                 confirmed: None,
-                pull_type: PriorityPullType::Optimistic,
+                pull_type: PullType::Optimistic,
             })
             .unwrap();
 
@@ -229,7 +229,7 @@ mod tests {
                 prioritized_account: Some(account),
                 head: None,
                 confirmed: None,
-                pull_type: PriorityPullType::Safe,
+                pull_type: PullType::Safe,
             })
             .unwrap();
 
@@ -258,7 +258,7 @@ mod tests {
                 prioritized_account: Some(account),
                 head: Some(BlockHash::from(111)),
                 confirmed: Some(frontier),
-                pull_type: PriorityPullType::Safe,
+                pull_type: PullType::Safe,
             })
             .unwrap();
 
@@ -286,7 +286,7 @@ mod tests {
                 prioritized_account: Some(account),
                 head: Some(BlockHash::from(111)),
                 confirmed: None,
-                pull_type: PriorityPullType::Safe,
+                pull_type: PullType::Safe,
             })
             .unwrap();
 
@@ -310,9 +310,9 @@ mod tests {
     fn create_query(input: &TestInput) -> Option<AscPullQuerySpec> {
         let account = input.prioritized_account.unwrap_or_default();
         let ledger = create_ledger(account, input.head, input.confirmed);
-        let pull_type_decider = PriorityPullTypeDecider::new_null_with(input.pull_type);
-        let pull_count_decider = PriorityPullCountDecider::default();
-        let mut factory = PriorityQueryFactory::new(ledger, pull_type_decider, pull_count_decider);
+        let pull_type_decider = PullTypeDecider::new_null_with(input.pull_type);
+        let pull_count_decider = PullCountDecider::default();
+        let mut factory = QueryFactory::new(ledger, pull_type_decider, pull_count_decider);
         let mut state = BootstrapState::new_test_instance();
 
         if let Some(account) = &input.prioritized_account {
@@ -357,7 +357,7 @@ mod tests {
         prioritized_account: Option<Account>,
         head: Option<BlockHash>,
         confirmed: Option<BlockHash>,
-        pull_type: PriorityPullType,
+        pull_type: PullType,
     }
 
     fn test_channel() -> Arc<Channel> {
