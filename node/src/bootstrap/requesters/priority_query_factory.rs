@@ -1,9 +1,9 @@
+use super::priority_pull_type_decider::{PriorityPullType, PriorityPullTypeDecider};
 use crate::bootstrap::{
     state::{BootstrapState, PriorityResult},
     AscPullQuerySpec, BootstrapResponder,
 };
 use num::clamp;
-use rand::{thread_rng, Rng};
 use rsnano_core::{Account, BlockHash, HashOrAccount};
 use rsnano_ledger::Ledger;
 use rsnano_messages::{AscPullReqType, BlocksAckPayload, BlocksReqPayload, HashType};
@@ -15,21 +15,25 @@ pub(super) struct PriorityQueryFactory {
     clock: Arc<SteadyClock>,
     ledger: Arc<Ledger>,
     pub max_pull_count: usize,
-    pub optimistic_request_percentage: u8,
+    pull_type_decider: PriorityPullTypeDecider,
 }
 
 impl PriorityQueryFactory {
-    pub(super) fn new(clock: Arc<SteadyClock>, ledger: Arc<Ledger>) -> Self {
+    pub(super) fn new(
+        clock: Arc<SteadyClock>,
+        ledger: Arc<Ledger>,
+        pull_type_decider: PriorityPullTypeDecider,
+    ) -> Self {
         Self {
             clock,
             ledger,
             max_pull_count: BlocksAckPayload::MAX_BLOCKS,
-            optimistic_request_percentage: 75,
+            pull_type_decider,
         }
     }
 
     pub fn next_priority_query(
-        &self,
+        &mut self,
         state: &mut BootstrapState,
         channel: Arc<Channel>,
     ) -> Option<AscPullQuerySpec> {
@@ -40,7 +44,7 @@ impl PriorityQueryFactory {
             return None;
         }
         let (head, confirmed_frontier, conf_height) = self.get_account_infos(&next.account);
-        let pull_type = self.decide_pull_type();
+        let pull_type = self.pull_type_decider.decide_pull_type();
 
         Some(self.create_priority_query(
             &next,
@@ -114,20 +118,6 @@ impl PriorityQueryFactory {
         // Limit the max number of blocks to pull
         min(pull_count, self.max_pull_count) as u8
     }
-
-    /// Probabilistically choose between requesting blocks from account frontier
-    /// or confirmed frontier.
-    /// Optimistic requests start from the (possibly unconfirmed) account frontier
-    /// and are vulnerable to bootstrap poisoning.
-    /// Safe requests start from the confirmed frontier and given enough time
-    /// will eventually resolve forks
-    fn decide_pull_type(&self) -> PriorityPullType {
-        if thread_rng().gen_range(0..100) < self.optimistic_request_percentage {
-            PriorityPullType::Optimistic
-        } else {
-            PriorityPullType::Safe
-        }
-    }
 }
 
 struct PullStart {
@@ -178,14 +168,4 @@ impl PullStart {
             hash,
         }
     }
-}
-
-#[derive(Clone, Copy)]
-enum PriorityPullType {
-    /// Optimistic requests start from the (possibly unconfirmed) account frontier
-    /// and are vulnerable to bootstrap poisoning.
-    Optimistic,
-    /// Safe requests start from the confirmed frontier and given enough time
-    /// will eventually resolve forks
-    Safe,
 }

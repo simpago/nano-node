@@ -1,4 +1,4 @@
-use rand::{rngs::ThreadRng, CryptoRng, RngCore};
+use rand::{thread_rng, CryptoRng, RngCore};
 
 pub struct NullableRng {
     strategy: RngStrategy,
@@ -23,38 +23,47 @@ impl NullableRng {
 
     pub fn thread_rng() -> Self {
         Self {
-            strategy: RngStrategy::Thread(rand::thread_rng()),
-        }
-    }
-
-    fn as_rng_core(&mut self) -> &mut dyn RngCore {
-        match &mut self.strategy {
-            RngStrategy::Thread(i) => i,
-            RngStrategy::Nulled(i) => i,
+            strategy: RngStrategy::Thread,
         }
     }
 }
 
 impl RngCore for NullableRng {
     fn next_u32(&mut self) -> u32 {
-        self.as_rng_core().next_u32()
+        println!("next u32");
+        match &mut self.strategy {
+            RngStrategy::Thread => thread_rng().next_u32(),
+            RngStrategy::Nulled(i) => i.next_u32(),
+        }
     }
 
     fn next_u64(&mut self) -> u64 {
-        self.as_rng_core().next_u64()
+        println!("next u64");
+        match &mut self.strategy {
+            RngStrategy::Thread => thread_rng().next_u64(),
+            RngStrategy::Nulled(i) => i.next_u64(),
+        }
     }
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.as_rng_core().fill_bytes(dest)
+        println!("fill bytes");
+        match &mut self.strategy {
+            RngStrategy::Thread => thread_rng().fill_bytes(dest),
+            RngStrategy::Nulled(i) => i.fill_bytes(dest),
+        }
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-        self.as_rng_core().try_fill_bytes(dest)
+        println!("try fill bytes");
+        match &mut self.strategy {
+            RngStrategy::Thread => thread_rng().try_fill_bytes(dest),
+            RngStrategy::Nulled(i) => i.try_fill_bytes(dest),
+        }
     }
 }
 
 enum RngStrategy {
-    Thread(ThreadRng),
+    Thread,
     Nulled(RngStub),
 }
 

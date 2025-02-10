@@ -25,6 +25,7 @@ rsnano_nullable_tcp = { path = "../nullables/tcp" }
 rsnano_nullable_lmdb = { path = "../nullables/lmdb" }
 rsnano_nullable_http_client = { path = "../nullables/http_client" }
 rsnano_nullable_clock = { path = "../nullables/clock" }
+rsnano_nullable_random = { path = "../nullables/random" }
 rsnano_ledger = { path = "../ledger" }
 rsnano_websocket_messages = { path = "../websocket_messages" }
 anyhow = "1"

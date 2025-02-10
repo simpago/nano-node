@@ -13,6 +13,7 @@ use std::{
     thread::JoinHandle,
 };
 
+use super::priority_pull_type_decider::PriorityPullTypeDecider;
 use super::priority_query_factory::PriorityQueryFactory;
 use super::requester_runner::RequesterRunner;
 use super::{
@@ -93,10 +94,15 @@ impl Requesters {
         };
 
         let priorities = if self.config.enable_scan {
-            let mut query_factory =
-                PriorityQueryFactory::new(self.clock.clone(), self.ledger.clone());
+            let pull_type_decider =
+                PriorityPullTypeDecider::new(self.config.optimistic_request_percentage);
+
+            let mut query_factory = PriorityQueryFactory::new(
+                self.clock.clone(),
+                self.ledger.clone(),
+                pull_type_decider,
+            );
             query_factory.max_pull_count = self.config.max_pull_count;
-            query_factory.optimistic_request_percentage = self.config.optimistic_request_percentage;
 
             let mut requester = PriorityRequester::new(
                 self.block_processor.clone(),

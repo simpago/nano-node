@@ -148,13 +148,10 @@ impl RunningQueryContainer {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
-    use rsnano_nullable_clock::Timestamp;
-
-    use crate::{bootstrap::state::QueryType, stats::DetailType};
-
     use super::*;
+    use crate::{bootstrap::state::QueryType, stats::DetailType};
+    use rsnano_nullable_clock::Timestamp;
+    use std::time::Duration;
 
     #[test]
     fn empty() {

@@ -3691,6 +3691,7 @@ dependencies = [
  "rsnano_nullable_fs",
  "rsnano_nullable_http_client",
  "rsnano_nullable_lmdb",
+ "rsnano_nullable_random",
  "rsnano_nullable_tcp",
  "rsnano_output_tracker",
  "rsnano_store_lmdb",

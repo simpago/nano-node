@@ -61,7 +61,7 @@ impl BootstrapState {
         }
     }
 
-    fn count_tags_by_hash(&self, hash: &BlockHash, source: QuerySource) -> usize {
+    fn count_queries_by_hash(&self, hash: &BlockHash, source: QuerySource) -> usize {
         self.running_queries
             .iter_hash(hash)
             .filter(|i| i.source == source)
@@ -86,7 +86,7 @@ impl BootstrapState {
     pub fn next_blocking(&self) -> BlockHash {
         let blocking = self
             .candidate_accounts
-            .next_blocking(|hash| self.count_tags_by_hash(hash, QuerySource::Dependencies) == 0);
+            .next_blocking(|hash| self.count_queries_by_hash(hash, QuerySource::Dependencies) == 0);
 
         if blocking.is_zero() {
             return blocking;
