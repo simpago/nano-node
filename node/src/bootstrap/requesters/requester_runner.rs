@@ -1,16 +1,7 @@
-use crate::bootstrap::state::{QueryType, RunningQuery};
+use crate::bootstrap::PollResult;
 use crate::bootstrap::{
     state::BootstrapState, AscPullQuerySpec, BootstrapConfig, BootstrapPromise,
 };
-use crate::{
-    bootstrap::PollResult,
-    stats::{DetailType, StatType, Stats},
-    transport::MessageSender,
-};
-use rand::{thread_rng, RngCore};
-use rsnano_messages::{AscPullReq, Message};
-use rsnano_network::TrafficType;
-use rsnano_nullable_clock::SteadyClock;
 use std::{
     cmp::min,
     sync::{
@@ -20,31 +11,30 @@ use std::{
     time::Duration,
 };
 
+use super::asc_pull_query_sender::AscPullQuerySender;
+
 /// Calls a requester to create a bootstrap request and then sends it to
 /// the peered node
-pub(crate) struct RequesterRunner {
-    pub message_sender: MessageSender,
+pub(crate) struct BootstrapPromiseRunner {
     pub state: Arc<Mutex<BootstrapState>>,
-    pub clock: Arc<SteadyClock>,
     pub config: BootstrapConfig,
-    pub stats: Arc<Stats>,
     pub stopped: Arc<AtomicBool>,
     pub condition: Arc<Condvar>,
 }
 
-impl RequesterRunner {
+impl BootstrapPromiseRunner {
     const INITIAL_INTERVAL: Duration = Duration::from_millis(5);
 
     pub fn run_queries<T: BootstrapPromise<AscPullQuerySpec>>(
         &self,
         mut query_factory: T,
-        mut message_sender: MessageSender,
+        mut query_sender: AscPullQuerySender,
     ) {
         loop {
             let Some(spec) = self.wait_for(&mut query_factory) else {
                 return;
             };
-            self.send_request(spec, &mut message_sender);
+            query_sender.send(spec);
         }
     }
 
@@ -99,46 +89,4 @@ impl RequesterRunner {
             }
         }
     }
-
-    fn send_request(&self, spec: AscPullQuerySpec, message_sender: &mut MessageSender) {
-        let id = thread_rng().next_u64();
-        let now = self.clock.now();
-        let query = RunningQuery::from_spec(id, &spec, now, self.config.request_timeout);
-
-        let request = AscPullReq {
-            id,
-            req_type: spec.req_type,
-        };
-
-        let mut guard = self.state.lock().unwrap();
-        guard.running_queries.insert(query);
-        let message = Message::AscPullReq(request);
-        let sent = message_sender.try_send(&spec.channel, &message, TrafficType::BootstrapRequests);
-
-        if sent {
-            self.stats.inc(StatType::Bootstrap, DetailType::Request);
-            let query_type = QueryType::from(&message);
-            self.stats
-                .inc(StatType::BootstrapRequest, query_type.into());
-        } else {
-            self.stats
-                .inc(StatType::Bootstrap, DetailType::RequestFailed);
-        }
-
-        if sent {
-            // After the request has been sent, the peer has a limited time to respond
-            let response_cutoff = now + self.config.request_timeout;
-            guard.set_response_cutoff(id, response_cutoff);
-        } else {
-            guard.remove_query(id);
-        }
-        if sent && spec.cooldown_account {
-            guard.candidate_accounts.timestamp_set(&spec.account, now);
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 }

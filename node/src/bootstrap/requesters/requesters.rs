@@ -13,7 +13,8 @@ use std::{
     thread::JoinHandle,
 };
 
-use super::requester_runner::RequesterRunner;
+use super::asc_pull_query_sender::AscPullQuerySender;
+use super::requester_runner::BootstrapPromiseRunner;
 use super::{
     channel_waiter::ChannelWaiter, dependency_requester::DependencyRequester,
     frontier_requester::FrontierRequester, priority::PriorityRequester,
@@ -66,18 +67,15 @@ impl Requesters {
         let max_requests = self.config.max_requests;
         let channel_waiter = ChannelWaiter::new(limiter.clone(), max_requests);
 
-        let runner = Arc::new(RequesterRunner {
-            message_sender: self.message_sender.clone(),
+        let runner = Arc::new(BootstrapPromiseRunner {
             state: self.state.clone(),
-            clock: self.clock.clone(),
             config: self.config.clone(),
-            stats: self.stats.clone(),
             condition: self.condition.clone(),
             stopped: self.stopped.clone(),
         });
 
         let frontiers = if self.config.enable_frontier_scan {
-            Some(spawn_query(
+            Some(self.spawn_query(
                 "Bootstrap front",
                 FrontierRequester::new(
                     self.stats.clone(),
@@ -102,13 +100,13 @@ impl Requesters {
             );
             requester.block_processor_threshold = self.config.block_processor_theshold;
 
-            Some(spawn_query("Bootstrap", requester, runner.clone()))
+            Some(self.spawn_query("Bootstrap", requester, runner.clone()))
         } else {
             None
         };
 
         let dependencies = if self.config.enable_dependency_walker {
-            Some(spawn_query(
+            Some(self.spawn_query(
                 "Bootstrap walkr",
                 DependencyRequester::new(self.stats.clone(), channel_waiter),
                 runner.clone(),
@@ -138,6 +136,31 @@ impl Requesters {
             threads.join();
         }
     }
+
+    fn spawn_query<T>(
+        &self,
+        name: impl Into<String>,
+        query_factory: T,
+        runner: Arc<BootstrapPromiseRunner>,
+    ) -> JoinHandle<()>
+    where
+        T: BootstrapPromise<AscPullQuerySpec> + Send + 'static,
+    {
+        let query_sender = AscPullQuerySender {
+            message_sender: self.message_sender.clone(),
+            clock: self.clock.clone(),
+            config: self.config.clone(),
+            state: self.state.clone(),
+            stats: self.stats.clone(),
+        };
+
+        std::thread::Builder::new()
+            .name(name.into())
+            .spawn(Box::new(move || {
+                runner.run_queries(query_factory, query_sender)
+            }))
+            .unwrap()
+    }
 }
 
 pub struct RequesterThreads {
@@ -158,21 +181,4 @@ impl RequesterThreads {
             frontiers.join().unwrap();
         }
     }
-}
-
-fn spawn_query<T>(
-    name: impl Into<String>,
-    query_factory: T,
-    runner: Arc<RequesterRunner>,
-) -> JoinHandle<()>
-where
-    T: BootstrapPromise<AscPullQuerySpec> + Send + 'static,
-{
-    let message_sender = runner.message_sender.clone();
-    std::thread::Builder::new()
-        .name(name.into())
-        .spawn(Box::new(move || {
-            runner.run_queries(query_factory, message_sender)
-        }))
-        .unwrap()
 }
