@@ -10,6 +10,7 @@ use rand::{thread_rng, RngCore};
 use rsnano_messages::{AscPullReq, Message};
 use rsnano_network::TrafficType;
 use rsnano_nullable_clock::SteadyClock;
+use rsnano_output_tracker::{OutputListenerMt, OutputTrackerMt};
 use std::{sync::Arc, time::Duration};
 
 /// Sends an AscPullReq message
@@ -18,6 +19,7 @@ pub(crate) struct QuerySender {
     clock: Arc<SteadyClock>,
     request_timeout: Duration,
     stats: Arc<Stats>,
+    send_listener: OutputListenerMt<AscPullQuerySpec>,
 }
 
 impl QuerySender {
@@ -31,7 +33,17 @@ impl QuerySender {
             clock,
             stats,
             request_timeout: Duration::from_secs(15),
+            send_listener: OutputListenerMt::new(),
         }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn new_null() -> Self {
+        Self::new(
+            MessageSender::new_null(),
+            Arc::new(SteadyClock::new_null()),
+            Arc::new(Stats::default()),
+        )
     }
 
     pub fn set_request_timeout(&mut self, timeout: Duration) {
@@ -39,6 +51,10 @@ impl QuerySender {
     }
 
     pub fn send(&mut self, spec: AscPullQuerySpec, state: &mut BootstrapState) -> Option<u64> {
+        if self.send_listener.is_tracked() {
+            self.send_listener.emit(spec.clone());
+        }
+
         let id = thread_rng().next_u64();
         let now = self.clock.now();
         let query_type = spec.query_type();
@@ -74,6 +90,10 @@ impl QuerySender {
                 .inc(StatType::Bootstrap, DetailType::RequestFailed);
             None
         }
+    }
+
+    pub fn track(&self) -> Arc<OutputTrackerMt<AscPullQuerySpec>> {
+        self.send_listener.track()
     }
 }
 
@@ -153,6 +173,18 @@ mod tests {
         assert_eq!(state.running_queries.len(), 0);
         assert_eq!(state.candidate_accounts.priority_len(), 0);
         assert_eq!(state.candidate_accounts.blocked_len(), 0);
+    }
+
+    #[test]
+    fn can_track_sends() {
+        let mut fixture = create_fixture();
+        let spec = AscPullQuerySpec::new_test_instance();
+        let mut state = BootstrapState::new_test_instance();
+
+        let tracker = fixture.query_sender.track();
+        fixture.query_sender.send(spec.clone(), &mut state);
+
+        assert_eq!(tracker.output(), [spec]);
     }
 
     fn create_fixture() -> Fixture {
