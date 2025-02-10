@@ -1,4 +1,4 @@
-use crate::bootstrap::{state::BootstrapState, BootstrapPromise, PromiseResult};
+use crate::bootstrap::{state::BootstrapState, BootstrapPromise, PollResult};
 use rsnano_network::{bandwidth_limiter::RateLimiter, Channel};
 use std::sync::Arc;
 
@@ -29,24 +29,24 @@ impl ChannelWaiter {
 }
 
 impl BootstrapPromise<Arc<Channel>> for ChannelWaiter {
-    fn poll(&mut self, boot_state: &mut BootstrapState) -> PromiseResult<Arc<Channel>> {
+    fn poll(&mut self, boot_state: &mut BootstrapState) -> PollResult<Arc<Channel>> {
         match self.state {
             ChannelWaitState::Initial => {
                 self.state = ChannelWaitState::WaitRunningQueries;
-                return PromiseResult::Progress;
+                return PollResult::Progress;
             }
             ChannelWaitState::WaitRunningQueries => {
                 // Limit the number of in-flight requests
                 if boot_state.running_queries.len() < self.max_requests {
                     self.state = ChannelWaitState::WaitLimiter;
-                    return PromiseResult::Progress;
+                    return PollResult::Progress;
                 }
             }
             ChannelWaitState::WaitLimiter => {
                 // Wait until more requests can be sent
                 if self.limiter.should_pass(1) {
                     self.state = ChannelWaitState::WaitChannel;
-                    return PromiseResult::Progress;
+                    return PollResult::Progress;
                 }
             }
             ChannelWaitState::WaitChannel => {
@@ -54,12 +54,12 @@ impl BootstrapPromise<Arc<Channel>> for ChannelWaiter {
                 let channel = boot_state.scoring.channel();
                 if let Some(channel) = channel {
                     self.state = ChannelWaitState::Initial;
-                    return PromiseResult::Finished(channel);
+                    return PollResult::Finished(channel);
                 }
             }
         }
 
-        PromiseResult::Wait
+        PollResult::Wait
     }
 }
 
@@ -90,11 +90,11 @@ mod tests {
 
         let found = loop {
             match waiter.poll(&mut state) {
-                PromiseResult::Progress => {}
-                PromiseResult::Wait => {
+                PollResult::Progress => {}
+                PollResult::Wait => {
                     panic!("Should never wait")
                 }
-                PromiseResult::Finished(c) => break c,
+                PollResult::Finished(c) => break c,
             }
         };
 
@@ -107,19 +107,19 @@ mod tests {
         let mut waiter = ChannelWaiter::new(limiter, 1);
         let mut state = BootstrapState::new_test_instance();
 
-        assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress)); // initial
+        assert!(matches!(waiter.poll(&mut state), PollResult::Progress)); // initial
 
         state
             .running_queries
             .insert(RunningQuery::new_test_instance());
 
-        assert!(matches!(waiter.poll(&mut state), PromiseResult::Wait));
+        assert!(matches!(waiter.poll(&mut state), PollResult::Wait));
         assert!(matches!(waiter.state, ChannelWaitState::WaitRunningQueries));
 
-        assert!(matches!(waiter.poll(&mut state), PromiseResult::Wait));
+        assert!(matches!(waiter.poll(&mut state), PollResult::Wait));
 
         state.running_queries.clear();
-        assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress));
+        assert!(matches!(waiter.poll(&mut state), PollResult::Progress));
     }
 
     #[test]
@@ -129,19 +129,19 @@ mod tests {
         let mut waiter = ChannelWaiter::new(limiter.clone(), MAX_TEST_REQUESTS);
         let mut state = BootstrapState::new_test_instance();
 
-        assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress)); // initial
-        assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress)); // running queries
+        assert!(matches!(waiter.poll(&mut state), PollResult::Progress)); // initial
+        assert!(matches!(waiter.poll(&mut state), PollResult::Progress)); // running queries
 
         let result = waiter.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
         assert!(matches!(waiter.state, ChannelWaitState::WaitLimiter));
 
         let result = waiter.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
 
         limiter.reset();
         let result = waiter.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Progress));
+        assert!(matches!(result, PollResult::Progress));
         assert!(matches!(waiter.state, ChannelWaitState::WaitChannel));
     }
 
@@ -151,16 +151,16 @@ mod tests {
         let mut waiter = ChannelWaiter::new(limiter, MAX_TEST_REQUESTS);
         let mut state = BootstrapState::new_test_instance();
 
-        assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress)); // initial
-        assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress)); // running queries
-        assert!(matches!(waiter.poll(&mut state), PromiseResult::Progress)); // limiter
+        assert!(matches!(waiter.poll(&mut state), PollResult::Progress)); // initial
+        assert!(matches!(waiter.poll(&mut state), PollResult::Progress)); // running queries
+        assert!(matches!(waiter.poll(&mut state), PollResult::Progress)); // limiter
 
         let result = waiter.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
         assert!(matches!(waiter.state, ChannelWaitState::WaitChannel));
 
         let result = waiter.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
     }
 
     const TEST_RATE_LIMIT: usize = 4;

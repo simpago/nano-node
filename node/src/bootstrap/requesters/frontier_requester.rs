@@ -1,6 +1,6 @@
 use super::channel_waiter::ChannelWaiter;
 use crate::{
-    bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapPromise, PromiseResult},
+    bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapPromise, PollResult},
     stats::{DetailType, StatType, Stats},
 };
 use rsnano_core::{Account, BlockHash};
@@ -63,38 +63,38 @@ impl FrontierRequester {
 }
 
 impl BootstrapPromise<AscPullQuerySpec> for FrontierRequester {
-    fn poll(&mut self, boot_state: &mut BootstrapState) -> PromiseResult<AscPullQuerySpec> {
+    fn poll(&mut self, boot_state: &mut BootstrapState) -> PollResult<AscPullQuerySpec> {
         match self.state {
             FrontierState::Initial => {
                 self.stats
                     .inc(StatType::Bootstrap, DetailType::LoopFrontiers);
                 self.state = FrontierState::WaitCandidateAccounts;
-                return PromiseResult::Progress;
+                return PollResult::Progress;
             }
             FrontierState::WaitCandidateAccounts => {
                 if !boot_state.candidate_accounts.priority_half_full() {
                     self.state = FrontierState::WaitLimiter;
-                    return PromiseResult::Progress;
+                    return PollResult::Progress;
                 }
             }
             FrontierState::WaitLimiter => {
                 if self.frontiers_limiter.should_pass(1) {
                     self.state = FrontierState::WaitAckProcessor;
-                    return PromiseResult::Progress;
+                    return PollResult::Progress;
                 }
             }
             FrontierState::WaitAckProcessor => {
                 if !boot_state.frontier_ack_processor_busy {
                     self.state = FrontierState::WaitChannel;
-                    return PromiseResult::Progress;
+                    return PollResult::Progress;
                 }
             }
             FrontierState::WaitChannel => match self.channel_waiter.poll(boot_state) {
-                PromiseResult::Wait => return PromiseResult::Wait,
-                PromiseResult::Progress => return PromiseResult::Progress,
-                PromiseResult::Finished(channel) => {
+                PollResult::Wait => return PollResult::Wait,
+                PollResult::Progress => return PollResult::Progress,
+                PollResult::Finished(channel) => {
                     self.state = FrontierState::WaitFrontier(channel);
-                    return PromiseResult::Progress;
+                    return PollResult::Progress;
                 }
             },
             FrontierState::WaitFrontier(ref channel) => {
@@ -105,14 +105,14 @@ impl BootstrapPromise<AscPullQuerySpec> for FrontierRequester {
                         .inc(StatType::BootstrapNext, DetailType::NextFrontier);
                     let spec = Self::create_query_spec(channel, start);
                     self.state = FrontierState::Initial;
-                    return PromiseResult::Finished(spec);
+                    return PollResult::Finished(spec);
                 } else {
                     self.stats
                         .inc(StatType::BootstrapFrontierScan, DetailType::NextNone);
                 }
             }
         }
-        PromiseResult::Wait
+        PollResult::Wait
     }
 }
 
@@ -133,7 +133,7 @@ mod tests {
         let mut state = BootstrapState::new_test_instance();
         state.add_test_channel();
 
-        let PromiseResult::Finished(result) = progress(&mut requester, &mut state) else {
+        let PollResult::Finished(result) = progress(&mut requester, &mut state) else {
             panic!("promise did not finish!")
         };
 
@@ -150,7 +150,7 @@ mod tests {
 
         // Should wait because candidate accounts are full enough
         let result = progress(&mut requester, &mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
         assert!(matches!(
             requester.state,
             FrontierState::WaitCandidateAccounts
@@ -158,12 +158,12 @@ mod tests {
 
         // Running again continues waiting
         let result = requester.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
 
         // If the accounts are cleared, continue
         state.candidate_accounts.clear();
         let result = requester.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Progress));
+        assert!(matches!(result, PollResult::Progress));
         assert!(matches!(requester.state, FrontierState::WaitLimiter));
     }
 
@@ -176,17 +176,17 @@ mod tests {
         requester.frontiers_limiter.should_pass(TEST_RATE_LIMIT);
 
         let result = progress(&mut requester, &mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
         assert!(matches!(requester.state, FrontierState::WaitLimiter));
 
         // Running again continues waiting
         let result = requester.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
 
         // Continue when the limiter is emptied
         requester.frontiers_limiter.reset();
         let result = requester.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Progress));
+        assert!(matches!(result, PollResult::Progress));
         assert!(matches!(requester.state, FrontierState::WaitAckProcessor));
     }
 
@@ -196,16 +196,16 @@ mod tests {
         let mut state = BootstrapState::new_test_instance();
 
         let result = progress(&mut requester, &mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
         assert!(matches!(requester.state, FrontierState::WaitChannel));
 
         // Running again continues waiting
         let result = requester.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
 
         state.add_test_channel();
         let result = requester.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Progress));
+        assert!(matches!(result, PollResult::Progress));
     }
 
     #[test]
@@ -214,7 +214,7 @@ mod tests {
         let mut state = BootstrapState::new_test_instance();
         state.add_test_channel();
 
-        let PromiseResult::Finished(spec) = progress(&mut requester, &mut state) else {
+        let PollResult::Finished(spec) = progress(&mut requester, &mut state) else {
             panic!("did not finish");
         };
 
@@ -235,7 +235,7 @@ mod tests {
 
         let result = progress(&mut requester, &mut state);
 
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
         assert!(matches!(requester.state, FrontierState::WaitFrontier(_)));
     }
 

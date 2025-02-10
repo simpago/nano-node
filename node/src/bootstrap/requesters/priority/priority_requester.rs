@@ -3,7 +3,7 @@ use super::priority_pull_type_decider::PriorityPullTypeDecider;
 use super::priority_query_factory::PriorityQueryFactory;
 use crate::bootstrap::requesters::channel_waiter::ChannelWaiter;
 use crate::bootstrap::BootstrapConfig;
-use crate::bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapPromise, PromiseResult};
+use crate::bootstrap::{state::BootstrapState, AscPullQuerySpec, BootstrapPromise, PollResult};
 use crate::{
     block_processing::{BlockProcessor, BlockSource},
     stats::{DetailType, StatType, Stats},
@@ -61,27 +61,27 @@ enum PriorityState {
 }
 
 impl BootstrapPromise<AscPullQuerySpec> for PriorityRequester {
-    fn poll(&mut self, state: &mut BootstrapState) -> PromiseResult<AscPullQuerySpec> {
+    fn poll(&mut self, state: &mut BootstrapState) -> PollResult<AscPullQuerySpec> {
         match self.state {
             PriorityState::Initial => {
                 self.stats.inc(StatType::Bootstrap, DetailType::Loop);
                 self.state = PriorityState::WaitBlockProcessor;
-                PromiseResult::Progress
+                PollResult::Progress
             }
             PriorityState::WaitBlockProcessor => {
                 if self.block_processor_free() {
                     self.state = PriorityState::WaitChannel;
-                    PromiseResult::Progress
+                    PollResult::Progress
                 } else {
-                    PromiseResult::Wait
+                    PollResult::Wait
                 }
             }
             PriorityState::WaitChannel => match self.channel_waiter.poll(state) {
-                PromiseResult::Progress => PromiseResult::Progress,
-                PromiseResult::Wait => PromiseResult::Wait,
-                PromiseResult::Finished(channel) => {
+                PollResult::Progress => PollResult::Progress,
+                PollResult::Wait => PollResult::Wait,
+                PollResult::Finished(channel) => {
                     self.state = PriorityState::WaitPriority(channel);
-                    PromiseResult::Progress
+                    PollResult::Progress
                 }
             },
             PriorityState::WaitPriority(ref channel) => {
@@ -90,9 +90,9 @@ impl BootstrapPromise<AscPullQuerySpec> for PriorityRequester {
                         .next_priority_query(state, channel.clone(), self.clock.now())
                 {
                     self.state = PriorityState::Initial;
-                    PromiseResult::Finished(query)
+                    PollResult::Finished(query)
                 } else {
-                    PromiseResult::Wait
+                    PollResult::Wait
                 }
             }
         }
@@ -110,7 +110,7 @@ mod tests {
                 channel_waiter::ChannelWaiter, priority::priority_requester::PriorityState,
             },
             state::BootstrapState,
-            BootstrapConfig, PromiseResult,
+            BootstrapConfig, PollResult,
         },
         stats::Stats,
     };
@@ -127,7 +127,7 @@ mod tests {
         state.candidate_accounts.priority_up(&account);
 
         let mut requester = create_requester();
-        let PromiseResult::Finished(result) = progress(&mut requester, &mut state) else {
+        let PollResult::Finished(result) = progress(&mut requester, &mut state) else {
             panic!("Finished expected");
         };
 
@@ -143,7 +143,7 @@ mod tests {
 
         let result = progress(&mut requester, &mut state);
 
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
         assert!(matches!(requester.state, PriorityState::WaitBlockProcessor));
     }
 
@@ -154,7 +154,7 @@ mod tests {
 
         let result = progress(&mut requester, &mut state);
 
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
         assert!(matches!(requester.state, PriorityState::WaitChannel));
     }
 
@@ -166,7 +166,7 @@ mod tests {
 
         let result = progress(&mut requester, &mut state);
 
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
         assert!(matches!(requester.state, PriorityState::WaitPriority(_)));
     }
 

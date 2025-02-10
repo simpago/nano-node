@@ -1,6 +1,6 @@
 use super::channel_waiter::ChannelWaiter;
 use crate::bootstrap::state::BootstrapState;
-use crate::bootstrap::{AscPullQuerySpec, BootstrapPromise, PromiseResult};
+use crate::bootstrap::{AscPullQuerySpec, BootstrapPromise, PollResult};
 use crate::stats::{DetailType, StatType, Stats};
 use rsnano_network::Channel;
 use std::sync::Arc;
@@ -28,20 +28,20 @@ impl DependencyRequester {
 }
 
 impl BootstrapPromise<AscPullQuerySpec> for DependencyRequester {
-    fn poll(&mut self, state: &mut BootstrapState) -> PromiseResult<AscPullQuerySpec> {
+    fn poll(&mut self, state: &mut BootstrapState) -> PollResult<AscPullQuerySpec> {
         match self.state {
             DependencyState::Initial => {
                 self.stats
                     .inc(StatType::Bootstrap, DetailType::LoopDependencies);
                 self.state = DependencyState::WaitChannel;
-                PromiseResult::Progress
+                PollResult::Progress
             }
             DependencyState::WaitChannel => match self.channel_waiter.poll(state) {
-                PromiseResult::Wait => PromiseResult::Wait,
-                PromiseResult::Progress => PromiseResult::Progress,
-                PromiseResult::Finished(channel) => {
+                PollResult::Wait => PollResult::Wait,
+                PollResult::Progress => PollResult::Progress,
+                PollResult::Finished(channel) => {
                     self.state = DependencyState::WaitBlocking(channel);
-                    PromiseResult::Progress
+                    PollResult::Progress
                 }
             },
             DependencyState::WaitBlocking(ref channel) => {
@@ -49,9 +49,9 @@ impl BootstrapPromise<AscPullQuerySpec> for DependencyRequester {
                     self.stats
                         .inc(StatType::BootstrapNext, DetailType::NextBlocking);
                     self.state = DependencyState::Initial;
-                    PromiseResult::Finished(spec)
+                    PollResult::Finished(spec)
                 } else {
-                    PromiseResult::Wait
+                    PollResult::Wait
                 }
             }
         }
@@ -78,7 +78,7 @@ mod tests {
 
         let result = progress(&mut requester, &mut state);
 
-        let PromiseResult::Finished(spec) = result else {
+        let PollResult::Finished(spec) = result else {
             panic!("poll did not finish");
         };
 
@@ -91,12 +91,12 @@ mod tests {
         let mut state = BootstrapState::new_test_instance();
 
         let result = progress(&mut requester, &mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
         assert!(matches!(requester.state, DependencyState::WaitChannel));
 
         state.add_test_channel();
         let result = requester.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Progress));
+        assert!(matches!(result, PollResult::Progress));
         assert!(matches!(requester.state, DependencyState::WaitBlocking(_)));
     }
 
@@ -107,7 +107,7 @@ mod tests {
         state.add_test_channel();
 
         let result = progress(&mut requester, &mut state);
-        assert!(matches!(result, PromiseResult::Wait));
+        assert!(matches!(result, PollResult::Wait));
         assert!(matches!(requester.state, DependencyState::WaitBlocking(_)));
 
         let account = Account::from(1);
@@ -116,7 +116,7 @@ mod tests {
         state.candidate_accounts.block(account, dependency);
 
         let result = requester.poll(&mut state);
-        assert!(matches!(result, PromiseResult::Finished(_)));
+        assert!(matches!(result, PollResult::Finished(_)));
         assert!(matches!(requester.state, DependencyState::Initial));
     }
 

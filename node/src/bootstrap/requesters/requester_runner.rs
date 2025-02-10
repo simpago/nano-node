@@ -3,7 +3,7 @@ use crate::bootstrap::{
     state::BootstrapState, AscPullQuerySpec, BootstrapConfig, BootstrapPromise,
 };
 use crate::{
-    bootstrap::PromiseResult,
+    bootstrap::PollResult,
     stats::{DetailType, StatType, Stats},
     transport::MessageSender,
 };
@@ -84,10 +84,10 @@ impl RequesterRunner {
         let mut reset_wait_interval = false;
         loop {
             match action.poll(state) {
-                PromiseResult::Progress => {
+                PollResult::Progress => {
                     reset_wait_interval = true;
                 }
-                PromiseResult::Wait => {
+                PollResult::Wait => {
                     wait_interval = if reset_wait_interval {
                         Self::INITIAL_INTERVAL
                     } else {
@@ -95,7 +95,7 @@ impl RequesterRunner {
                     };
                     return Err(wait_interval);
                 }
-                PromiseResult::Finished(result) => return Ok(result),
+                PollResult::Finished(result) => return Ok(result),
             }
         }
     }

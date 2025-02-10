@@ -16,10 +16,10 @@ use rsnano_messages::{AscPullReqType, FrontiersReqPayload};
 use rsnano_network::Channel;
 
 pub(self) trait BootstrapPromise<T> {
-    fn poll(&mut self, state: &mut state::BootstrapState) -> PromiseResult<T>;
+    fn poll(&mut self, state: &mut state::BootstrapState) -> PollResult<T>;
 }
 
-pub(self) enum PromiseResult<T> {
+pub(self) enum PollResult<T> {
     Progress,
     Wait,
     Finished(T),
@@ -54,10 +54,10 @@ impl AscPullQuerySpec {
 pub(self) fn progress<T>(
     requester: &mut impl BootstrapPromise<T>,
     state: &mut state::BootstrapState,
-) -> PromiseResult<T> {
+) -> PollResult<T> {
     loop {
         match requester.poll(state) {
-            PromiseResult::Progress => {}
+            PollResult::Progress => {}
             result => return result,
         }
     }
