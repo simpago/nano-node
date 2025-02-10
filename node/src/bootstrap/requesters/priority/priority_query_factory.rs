@@ -44,28 +44,21 @@ impl PriorityQueryFactory {
         if next.account.is_zero() {
             return None;
         }
-        let (head, confirmed_frontier, conf_height) = self.get_account_infos(&next.account);
+        let (head, confirmed_frontier) = self.get_account_info(&next.account);
         let pull_type = self.pull_type_decider.decide_pull_type();
 
-        Some(self.create_priority_query(
-            &next,
-            channel,
-            pull_type,
-            head,
-            confirmed_frontier,
-            conf_height,
-        ))
+        Some(self.create_priority_query(&next, channel, pull_type, head, confirmed_frontier))
     }
 
-    fn get_account_infos(&self, account: &Account) -> (BlockHash, BlockHash, u64) {
+    fn get_account_info(&self, account: &Account) -> (BlockHash, BlockHash) {
         let tx = self.ledger.read_txn();
         let account_info = self.ledger.store.account.get(&tx, account);
         let head = account_info.map(|i| i.head).unwrap_or_default();
 
         if let Some(conf_info) = self.ledger.store.confirmation_height.get(&tx, account) {
-            (head, conf_info.frontier, conf_info.height)
+            (head, conf_info.frontier)
         } else {
-            (head, BlockHash::zero(), 0)
+            (head, BlockHash::zero())
         }
     }
 
@@ -76,17 +69,8 @@ impl PriorityQueryFactory {
         pull_type: PriorityPullType,
         head: BlockHash,
         confirmed_frontier: BlockHash,
-        conf_height: u64,
     ) -> AscPullQuerySpec {
-        let pull_start = {
-            PullStart::new(
-                pull_type,
-                next.account,
-                head,
-                confirmed_frontier,
-                conf_height,
-            )
-        };
+        let pull_start = { PullStart::new(pull_type, next.account, head, confirmed_frontier) };
         let req_type = AscPullReqType::Blocks(BlocksReqPayload {
             start_type: pull_start.start_type,
             start: pull_start.start,
@@ -120,7 +104,6 @@ impl PullStart {
         account: Account,
         head: BlockHash,
         confirmed_frontier: BlockHash,
-        conf_height: u64,
     ) -> Self {
         // Check if the account picked has blocks, if it does, start the pull from the highest block
         if head.is_zero() {
@@ -128,16 +111,16 @@ impl PullStart {
         } else {
             match pull_type {
                 PriorityPullType::Optimistic => PullStart::block(head, head),
-                PriorityPullType::Safe => PullStart::safe(account, confirmed_frontier, conf_height),
+                PriorityPullType::Safe => PullStart::safe(account, confirmed_frontier),
             }
         }
     }
 
-    fn safe(account: Account, confirmed_frontier: BlockHash, conf_height: u64) -> Self {
+    fn safe(account: Account, confirmed_frontier: BlockHash) -> Self {
         if confirmed_frontier.is_zero() {
             PullStart::account(account)
         } else {
-            PullStart::block(confirmed_frontier, conf_height.into())
+            PullStart::block(confirmed_frontier, confirmed_frontier)
         }
     }
 
@@ -270,12 +253,11 @@ mod tests {
         fn account_in_ledger_and_confirmed() {
             let account = Account::from(42);
             let frontier = BlockHash::from(7);
-            let height = 123;
 
             let query = create_query(&TestInput {
                 prioritized_account: Some(account),
                 head: Some(BlockHash::from(111)),
-                confirmed: Some(ConfirmationHeightInfo::new(height, frontier)),
+                confirmed: Some(frontier),
                 pull_type: PriorityPullType::Safe,
             })
             .unwrap();
@@ -285,7 +267,7 @@ mod tests {
                 AscPullQuerySpec {
                     channel: test_channel(),
                     account,
-                    hash: height.into(),
+                    hash: frontier,
                     cooldown_account: true,
                     req_type: AscPullReqType::Blocks(BlocksReqPayload {
                         start_type: HashType::Block,
@@ -327,7 +309,7 @@ mod tests {
 
     fn create_query(input: &TestInput) -> Option<AscPullQuerySpec> {
         let account = input.prioritized_account.unwrap_or_default();
-        let ledger = create_ledger(account, input.head, input.confirmed.as_ref());
+        let ledger = create_ledger(account, input.head, input.confirmed);
         let pull_type_decider = PriorityPullTypeDecider::new_null_with(input.pull_type);
         let pull_count_decider = PriorityPullCountDecider::default();
         let mut factory = PriorityQueryFactory::new(ledger, pull_type_decider, pull_count_decider);
@@ -344,7 +326,7 @@ mod tests {
     fn create_ledger(
         account: Account,
         head: Option<BlockHash>,
-        confirmed: Option<&ConfirmationHeightInfo>,
+        confirmed: Option<BlockHash>,
     ) -> Arc<Ledger> {
         let mut ledger_builder = Ledger::new_null_builder();
 
@@ -358,8 +340,14 @@ mod tests {
             );
         }
 
-        if let Some(conf_info) = confirmed {
-            ledger_builder = ledger_builder.confirmation_height(&account, conf_info)
+        if let Some(frontier) = confirmed {
+            ledger_builder = ledger_builder.confirmation_height(
+                &account,
+                &ConfirmationHeightInfo {
+                    height: 123,
+                    frontier,
+                },
+            )
         }
 
         Arc::new(ledger_builder.finish())
@@ -368,7 +356,7 @@ mod tests {
     struct TestInput {
         prioritized_account: Option<Account>,
         head: Option<BlockHash>,
-        confirmed: Option<ConfirmationHeightInfo>,
+        confirmed: Option<BlockHash>,
         pull_type: PriorityPullType,
     }
 
