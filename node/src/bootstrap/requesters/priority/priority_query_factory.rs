@@ -10,12 +10,11 @@ use rsnano_core::{Account, BlockHash, HashOrAccount};
 use rsnano_ledger::Ledger;
 use rsnano_messages::{AscPullReqType, BlocksReqPayload, HashType};
 use rsnano_network::Channel;
-use rsnano_nullable_clock::SteadyClock;
+use rsnano_nullable_clock::Timestamp;
 use std::sync::Arc;
 
 /// Creates a query for the next priority account
 pub(super) struct PriorityQueryFactory {
-    clock: Arc<SteadyClock>,
     ledger: Arc<Ledger>,
     pull_type_decider: PriorityPullTypeDecider,
     pull_count_decider: PriorityPullCountDecider,
@@ -23,13 +22,11 @@ pub(super) struct PriorityQueryFactory {
 
 impl PriorityQueryFactory {
     pub(super) fn new(
-        clock: Arc<SteadyClock>,
         ledger: Arc<Ledger>,
         pull_type_decider: PriorityPullTypeDecider,
         pull_count_decider: PriorityPullCountDecider,
     ) -> Self {
         Self {
-            clock,
             ledger,
             pull_type_decider,
             pull_count_decider,
@@ -40,9 +37,8 @@ impl PriorityQueryFactory {
         &mut self,
         state: &mut BootstrapState,
         channel: Arc<Channel>,
+        now: Timestamp,
     ) -> Option<AscPullQuerySpec> {
-        let now = self.clock.now();
-
         let next = state.next_priority(now);
 
         if next.account.is_zero() {
@@ -330,20 +326,19 @@ mod tests {
     }
 
     fn create_query(input: &TestInput) -> Option<AscPullQuerySpec> {
-        let clock = Arc::new(SteadyClock::new_null());
         let account = input.prioritized_account.unwrap_or_default();
         let ledger = create_ledger(account, input.head, input.confirmed.as_ref());
         let pull_type_decider = PriorityPullTypeDecider::new_null_with(input.pull_type);
         let pull_count_decider = PriorityPullCountDecider::default();
-        let mut factory =
-            PriorityQueryFactory::new(clock, ledger, pull_type_decider, pull_count_decider);
+        let mut factory = PriorityQueryFactory::new(ledger, pull_type_decider, pull_count_decider);
         let mut state = BootstrapState::new_test_instance();
 
         if let Some(account) = &input.prioritized_account {
             state.candidate_accounts.priority_up(account);
         }
 
-        factory.next_priority_query(&mut state, test_channel())
+        let now = Timestamp::new_test_instance();
+        factory.next_priority_query(&mut state, test_channel(), now)
     }
 
     fn create_ledger(
