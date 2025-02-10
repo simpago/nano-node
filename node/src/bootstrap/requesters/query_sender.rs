@@ -80,22 +80,22 @@ impl QuerySender {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transport::SendEvent;
+    use rsnano_nullable_clock::Timestamp;
+    use rsnano_output_tracker::OutputTrackerMt;
 
     #[test]
     fn send_message() {
-        let message_sender = MessageSender::new_null();
-        let send_tracker = message_sender.track();
-        let clock = Arc::new(SteadyClock::new_null());
-        let mut query_sender = QuerySender::new(message_sender, clock, Arc::new(Stats::default()));
+        let mut fixture = create_fixture();
 
         let spec = AscPullQuerySpec::new_test_instance();
         let channel_id = spec.channel.channel_id();
         let mut state = BootstrapState::new_test_instance();
 
-        let id = query_sender.send(spec, &mut state);
+        let id = fixture.query_sender.send(spec, &mut state);
         assert!(id.is_some());
 
-        let output = send_tracker.output();
+        let output = fixture.send_tracker.output();
         assert_eq!(output.len(), 1, "no message sent!");
         assert_eq!(output[0].channel_id, channel_id);
         assert_eq!(output[0].traffic_type, TrafficType::BootstrapRequests);
@@ -106,21 +106,73 @@ mod tests {
 
     #[test]
     fn insert_into_running_queries() {
-        let message_sender = MessageSender::new_null();
-        let clock = Arc::new(SteadyClock::new_null());
-        let now = clock.now();
-        let mut query_sender = QuerySender::new(message_sender, clock, Arc::new(Stats::default()));
+        let mut fixture = create_fixture();
 
         let spec = AscPullQuerySpec::new_test_instance();
         let mut state = BootstrapState::new_test_instance();
+        state.candidate_accounts.priority_up(&spec.account);
 
-        let id = query_sender.send(spec, &mut state).unwrap();
+        let id = fixture.query_sender.send(spec.clone(), &mut state).unwrap();
 
         assert_eq!(state.running_queries.len(), 1);
         assert!(state.running_queries.contains(id));
         assert_eq!(
             state.running_queries.get(id).unwrap().response_cutoff,
-            now + query_sender.request_timeout
+            fixture.now + fixture.query_sender.request_timeout
         );
+        assert_eq!(state.candidate_accounts.last_request(&spec.account), None);
+    }
+
+    #[test]
+    fn cool_down_account() {
+        let mut fixture = create_fixture();
+        let mut spec = AscPullQuerySpec::new_test_instance();
+        spec.cooldown_account = true;
+
+        let mut state = BootstrapState::new_test_instance();
+        state.candidate_accounts.priority_up(&spec.account);
+
+        fixture.query_sender.send(spec.clone(), &mut state).unwrap();
+
+        assert_eq!(
+            state.candidate_accounts.last_request(&spec.account),
+            Some(fixture.now)
+        );
+    }
+
+    #[test]
+    fn when_channel_unavailable_should_not_send() {
+        let mut fixture = create_fixture();
+        let spec = AscPullQuerySpec::new_test_instance();
+        let mut state = BootstrapState::new_test_instance();
+
+        spec.channel.close();
+        let id = fixture.query_sender.send(spec.clone(), &mut state);
+
+        assert_eq!(id, None);
+        assert_eq!(state.running_queries.len(), 0);
+        assert_eq!(state.candidate_accounts.priority_len(), 0);
+        assert_eq!(state.candidate_accounts.blocked_len(), 0);
+    }
+
+    fn create_fixture() -> Fixture {
+        let message_sender = MessageSender::new_null();
+        let send_tracker = message_sender.track();
+
+        let clock = Arc::new(SteadyClock::new_null());
+        let now = clock.now();
+        let query_sender = QuerySender::new(message_sender, clock, Arc::new(Stats::default()));
+
+        Fixture {
+            query_sender,
+            send_tracker,
+            now,
+        }
+    }
+
+    struct Fixture {
+        query_sender: QuerySender,
+        send_tracker: Arc<OutputTrackerMt<SendEvent>>,
+        now: Timestamp,
     }
 }

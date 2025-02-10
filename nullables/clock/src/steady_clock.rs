@@ -18,7 +18,11 @@ impl SteadyClock {
         }
     }
 
-    pub fn new_null_with(offsets: impl IntoIterator<Item = Duration>) -> Self {
+    pub fn new_null_with(now: Timestamp) -> Self {
+        Self::new_null_with_offsets([Duration::from_millis(now.0 as u64)])
+    }
+
+    pub fn new_null_with_offsets(offsets: impl IntoIterator<Item = Duration>) -> Self {
         let mut last = DEFAULT_STUB_DURATION;
         let mut nows = VecDeque::new();
         nows.push_back(last);
@@ -85,6 +89,8 @@ impl Timestamp {
     pub fn checked_sub(&self, rhs: Duration) -> Option<Self> {
         self.0.checked_sub(rhs.as_millis() as i64).map(Self)
     }
+
+    pub const DEFAULT_STUB_NOW: Timestamp = Timestamp(DEFAULT_STUB_DURATION);
 }
 
 impl Add<Duration> for Timestamp {
@@ -170,7 +176,7 @@ mod tests {
 
         #[test]
         fn configure_multiple_responses() {
-            let clock = SteadyClock::new_null_with([
+            let clock = SteadyClock::new_null_with_offsets([
                 Duration::from_secs(1),
                 Duration::from_secs(10),
                 Duration::from_secs(3),

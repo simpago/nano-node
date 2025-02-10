@@ -26,7 +26,7 @@ pub(self) enum PollResult<T> {
     Finished(T),
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub(crate) struct AscPullQuerySpec {
     pub channel: Arc<Channel>,
     pub req_type: AscPullReqType,

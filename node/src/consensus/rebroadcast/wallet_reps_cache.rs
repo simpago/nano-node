@@ -110,7 +110,7 @@ mod tests {
     fn dont_refresh_if_refresh_interval_not_reached() {
         let wallet_reps = test_wallet_reps();
         let mut cache = WalletRepsCache::new(wallet_reps.clone());
-        let clock = SteadyClock::new_null_with([Duration::from_millis(100)]);
+        let clock = SteadyClock::new_null_with_offsets([Duration::from_millis(100)]);
         cache.set_clock(clock);
 
         cache.refresh_if_needed();
@@ -124,7 +124,7 @@ mod tests {
     fn refresh_if_refresh_interval_reached() {
         let wallet_reps = test_wallet_reps();
         let mut cache = WalletRepsCache::new(wallet_reps.clone());
-        let clock = SteadyClock::new_null_with([WalletRepsCache::REFRESH_INTERVAL]);
+        let clock = SteadyClock::new_null_with_offsets([WalletRepsCache::REFRESH_INTERVAL]);
         cache.set_clock(clock);
 
         cache.refresh_if_needed();

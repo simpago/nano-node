@@ -207,6 +207,14 @@ impl CandidateAccounts {
         false
     }
 
+    #[allow(dead_code)]
+    pub fn last_request(&self, account: &Account) -> Option<Timestamp> {
+        self.priorities
+            .get(account)
+            .map(|i| i.last_request)
+            .flatten()
+    }
+
     pub fn set_last_request(&mut self, account: &Account, now: Timestamp) {
         debug_assert!(!account.is_zero());
         self.priorities.set_last_request(account, Some(now));
@@ -623,23 +631,20 @@ mod tests {
     }
 
     #[test]
-    fn timestamp_set_for_unknown_account_does_nothing() {
+    fn set_last_request_for_unknown_account_does_nothing() {
         let mut candidates = CandidateAccounts::default();
         candidates.set_last_request(&Account::from(1), Timestamp::new_test_instance());
         assert_eq!(candidates.priority_len(), 0);
     }
 
     #[test]
-    fn timestamp_set() {
+    fn set_last_request() {
         let mut candidates = CandidateAccounts::default();
         let account = Account::from(1);
         candidates.priority_set_initial(&account);
         let new_timestamp = Timestamp::new_test_instance() + Duration::from_secs(1000);
         candidates.set_last_request(&account, new_timestamp);
-        assert_eq!(
-            candidates.priorities.get(&account).unwrap().last_request,
-            Some(new_timestamp)
-        );
+        assert_eq!(candidates.last_request(&account), Some(new_timestamp))
     }
 
     #[test]
