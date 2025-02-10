@@ -1,5 +1,4 @@
-use crate::bootstrap::{state::BootstrapState, BootstrapConfig, BootstrapPromise};
-use crate::bootstrap::{AscPullQuerySpec, PollResult};
+use crate::bootstrap::{state::BootstrapState, BootstrapConfig, BootstrapPromise, PollResult};
 use std::{
     cmp::min,
     sync::{
@@ -8,8 +7,6 @@ use std::{
     },
     time::Duration,
 };
-
-use super::asc_pull_query_sender::AscPullQuerySender;
 
 /// Calls a requester to create a bootstrap request and then sends it to
 /// the peered node
@@ -74,42 +71,6 @@ impl BootstrapPromiseRunner {
                     return Err(wait_interval);
                 }
                 PollResult::Finished(result) => return Ok(result),
-            }
-        }
-    }
-}
-
-pub(crate) struct SendAscPullQueryPromise<T>
-where
-    T: BootstrapPromise<AscPullQuerySpec>,
-{
-    query_promise: T,
-    sender: AscPullQuerySender,
-}
-
-impl<T> SendAscPullQueryPromise<T>
-where
-    T: BootstrapPromise<AscPullQuerySpec>,
-{
-    pub(crate) fn new(query_promise: T, sender: AscPullQuerySender) -> Self {
-        Self {
-            query_promise,
-            sender,
-        }
-    }
-}
-
-impl<T> BootstrapPromise<()> for SendAscPullQueryPromise<T>
-where
-    T: BootstrapPromise<AscPullQuerySpec>,
-{
-    fn poll(&mut self, state: &mut BootstrapState) -> PollResult<()> {
-        match self.query_promise.poll(state) {
-            PollResult::Progress => PollResult::Progress,
-            PollResult::Wait => PollResult::Wait,
-            PollResult::Finished(spec) => {
-                self.sender.send(spec, state);
-                PollResult::Progress
             }
         }
     }

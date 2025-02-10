@@ -13,8 +13,9 @@ use std::{
     thread::JoinHandle,
 };
 
-use super::asc_pull_query_sender::AscPullQuerySender;
-use super::requester_runner::{BootstrapPromiseRunner, SendAscPullQueryPromise};
+use super::bootstrap_promise_runner::BootstrapPromiseRunner;
+use super::query_sender::QuerySender;
+use super::send_queries_promise::SendQueriesPromise;
 use super::{
     channel_waiter::ChannelWaiter, dependency_requester::DependencyRequester,
     frontier_requester::FrontierRequester, priority::PriorityRequester,
@@ -146,14 +147,14 @@ impl Requesters {
     where
         T: BootstrapPromise<AscPullQuerySpec> + Send + 'static,
     {
-        let query_sender = AscPullQuerySender {
+        let query_sender = QuerySender {
             message_sender: self.message_sender.clone(),
             clock: self.clock.clone(),
             config: self.config.clone(),
             stats: self.stats.clone(),
         };
 
-        let send_promise = SendAscPullQueryPromise::new(query_factory, query_sender);
+        let send_promise = SendQueriesPromise::new(query_factory, query_sender);
 
         std::thread::Builder::new()
             .name(name.into())

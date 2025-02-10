@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-
 use crate::{
     bootstrap::{
         state::{BootstrapState, QueryType, RunningQuery},
@@ -12,15 +10,17 @@ use rand::{thread_rng, RngCore};
 use rsnano_messages::{AscPullReq, Message};
 use rsnano_network::TrafficType;
 use rsnano_nullable_clock::SteadyClock;
+use std::sync::Arc;
 
-pub(crate) struct AscPullQuerySender {
+/// Sends a AscPullReq message
+pub(crate) struct QuerySender {
     pub message_sender: MessageSender,
     pub clock: Arc<SteadyClock>,
     pub config: BootstrapConfig,
     pub stats: Arc<Stats>,
 }
 
-impl AscPullQuerySender {
+impl QuerySender {
     pub fn send(&mut self, spec: AscPullQuerySpec, state: &mut BootstrapState) {
         let id = thread_rng().next_u64();
         let now = self.clock.now();
