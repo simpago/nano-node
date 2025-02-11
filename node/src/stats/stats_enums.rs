@@ -464,7 +464,6 @@ pub enum DetailType {
     Timeout,
     NothingNew,
     AccountInfoEmpty,
-    FrontiersEmpty,
     LoopDatabase,
     LoopDependencies,
     LoopFrontiers,

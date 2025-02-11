@@ -33,13 +33,6 @@ impl ChannelWaiter {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn new_test_instance() -> Self {
-        let network = Arc::new(RwLock::new(Network::new_test_instance()));
-        let limiter = Arc::new(RateLimiter::new(1024));
-        Self::new(network, limiter, 1024)
-    }
-
     fn candidate_channels(network: &Network) -> Vec<ChannelId> {
         network
             .channels()
