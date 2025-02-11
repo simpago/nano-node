@@ -10,13 +10,12 @@ use rsnano_messages::{AscPullAck, AscPullAckType};
 use rsnano_network::ChannelId;
 use rsnano_nullable_clock::Timestamp;
 use std::{
-    sync::{Arc, Condvar, Mutex},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
 pub(crate) struct ResponseProcessor {
     state: Arc<Mutex<BootstrapState>>,
-    state_changed: Arc<Condvar>,
     frontiers: FrontierAckProcessor,
     accounts: AccountAckProcessor,
     blocks: BlockAckProcessor,
@@ -47,17 +46,14 @@ impl ResponseProcessor {
         state: Arc<Mutex<BootstrapState>>,
         stats: Arc<Stats>,
         block_processor: Arc<BlockProcessor>,
-        state_changed: Arc<Condvar>,
         ledger: Arc<Ledger>,
     ) -> Self {
         let frontiers = FrontierAckProcessor::new(stats.clone(), ledger, state.clone());
         let accounts = AccountAckProcessor::new(stats.clone(), state.clone());
-        let blocks =
-            BlockAckProcessor::new(state.clone(), stats, state_changed.clone(), block_processor);
+        let blocks = BlockAckProcessor::new(state.clone(), stats, block_processor);
 
         Self {
             state,
-            state_changed,
             frontiers,
             accounts,
             blocks,
@@ -77,7 +73,6 @@ impl ResponseProcessor {
         let query = self.take_running_query_for(&response)?;
         self.process_response(&query, response)?;
         self.update_peer_scoring(channel_id);
-        self.state_changed.notify_all();
         Ok(ProcessInfo::new(&query, now))
     }
 

@@ -32,7 +32,11 @@ impl BootstrapPromiseRunner {
                 Err(i) => interval = i,
             }
 
-            state = self.state_changed.wait_timeout(state, interval).unwrap().0;
+            state = self
+                .state_changed
+                .wait_timeout_while(state, interval, |s| !s.stopped)
+                .unwrap()
+                .0;
         }
     }
 

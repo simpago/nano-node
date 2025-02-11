@@ -5,12 +5,11 @@ use crate::{
 };
 use rsnano_messages::BlocksAckPayload;
 use rsnano_network::ChannelId;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 
 pub(crate) struct BlockAckProcessor {
     state: Arc<Mutex<BootstrapState>>,
     stats: Arc<Stats>,
-    state_changed: Arc<Condvar>,
     block_processor: Arc<BlockProcessor>,
 }
 
@@ -18,13 +17,11 @@ impl BlockAckProcessor {
     pub(crate) fn new(
         state: Arc<Mutex<BootstrapState>>,
         stats: Arc<Stats>,
-        state_changed: Arc<Condvar>,
         block_processor: Arc<BlockProcessor>,
     ) -> Self {
         Self {
             state,
             stats,
-            state_changed,
             block_processor,
         }
     }
@@ -58,7 +55,6 @@ impl BlockAckProcessor {
                         // It's the last block submitted for this account chain, reset timestamp to allow more requests
                         let stats = self.stats.clone();
                         let state = self.state.clone();
-                        let state_changed = self.state_changed.clone();
                         let account = query.account;
                         self.block_processor.add_with_callback(
                             block,
@@ -70,7 +66,6 @@ impl BlockAckProcessor {
                                     let mut guard = state.lock().unwrap();
                                     guard.candidate_accounts.reset_last_request(&account);
                                 }
-                                state_changed.notify_all();
                             }),
                         );
                     } else {
@@ -113,7 +108,6 @@ impl BlockAckProcessor {
 
                     guard.candidate_accounts.reset_last_request(&query.account);
                 }
-                self.state_changed.notify_all();
                 true
             }
             VerifyResult::Invalid => {

@@ -111,17 +111,11 @@ impl Bootstrapper {
             state.clone(),
             stats.clone(),
             block_processor.clone(),
-            state_changed.clone(),
             ledger.clone(),
         );
         response_handler.set_max_pending_frontiers(config.max_pending_frontier_responses);
 
-        let block_inspector = BlockInspector::new(
-            state.clone(),
-            state_changed.clone(),
-            ledger.clone(),
-            stats.clone(),
-        );
+        let block_inspector = BlockInspector::new(state.clone(), ledger.clone(), stats.clone());
         let requesters = Requesters::new(
             limiter.clone(),
             config.clone(),
