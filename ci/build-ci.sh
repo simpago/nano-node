@@ -28,17 +28,6 @@ fi
 
 ulimit -S -n 8192
 
-if [[ "$OS" == 'Linux' ]]; then
-    if clang --version && [ ${LCOV:-0} == 0 ]; then
-        BACKTRACE="-DNANO_STACKTRACE_BACKTRACE=ON \
-        -DNANO_BACKTRACE_INCLUDE=</tmp/backtrace.h>"
-    else
-        BACKTRACE="-DNANO_STACKTRACE_BACKTRACE=ON"
-    fi
-else
-    BACKTRACE=""
-fi
-
 cmake \
 -G'Unix Makefiles' \
 -DACTIVE_NETWORK=nano_dev_network \

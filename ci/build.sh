@@ -10,15 +10,6 @@ fi
 SRC=${SRC:-${PWD}}
 OS=$(uname)
 
-CMAKE_BACKTRACE=""
-if [[ ${OS} == 'Linux' ]]; then
-    CMAKE_BACKTRACE="-DNANO_STACKTRACE_BACKTRACE=ON"
-
-    if [[ ${COMPILER:-} == 'clang' ]]; then
-        CMAKE_BACKTRACE="${CMAKE_BACKTRACE} -DNANO_BACKTRACE_INCLUDE=</tmp/backtrace.h>"
-    fi
-fi
-
 CMAKE_QT_DIR=""
 if [[ ${QT_DIR:-} ]]; then
     CMAKE_QT_DIR="-DQt5_DIR=${QT_DIR}"
