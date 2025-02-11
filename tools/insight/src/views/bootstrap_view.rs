@@ -14,7 +14,7 @@ impl<'a> BootstrapView<'a> {
 
     pub fn show(&mut self, ctx: &egui::Context) {
         CentralPanel::default().show(ctx, |ui| {
-            ScrollArea::both().show(ui, |ui| {
+            ScrollArea::both().auto_shrink(false).show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.heading(format!("{} frontiers/s", self.model.frontiers_rate()));
                     ui.add_space(100.0);
@@ -54,6 +54,12 @@ impl<'a> BootstrapView<'a> {
                                 });
                         }
                     });
+                }
+                ui.add_space(20.0);
+
+                ui.heading("Outdated accounts found:");
+                for account in &self.model.outdated_accounts {
+                    ui.label(account);
                 }
             });
         });

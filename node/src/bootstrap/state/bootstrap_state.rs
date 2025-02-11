@@ -6,6 +6,7 @@ use rsnano_core::{utils::ContainerInfo, BlockHash};
 use rsnano_messages::AscPullReqType;
 use rsnano_network::Channel;
 use rsnano_nullable_clock::Timestamp;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 pub(crate) struct BootstrapState {
@@ -15,6 +16,7 @@ pub(crate) struct BootstrapState {
     pub frontier_scan: FrontierScan,
     pub counters: BootstrapCounters,
     pub frontier_ack_processor_busy: bool,
+    pub last_outdated_accounts: VecDeque<Account>,
     pub stopped: bool,
 }
 
@@ -30,6 +32,7 @@ impl BootstrapState {
             running_queries: RunningQueryContainer::default(),
             counters: BootstrapCounters::default(),
             frontier_ack_processor_busy: false,
+            last_outdated_accounts: VecDeque::new(),
             stopped: false,
         }
     }
@@ -95,6 +98,11 @@ impl BootstrapState {
             // Use the lowest possible priority here
             self.candidate_accounts
                 .priority_set(account, CandidateAccounts::PRIORITY_CUTOFF);
+
+            self.last_outdated_accounts.push_back(*account);
+            if self.last_outdated_accounts.len() > 20 {
+                self.last_outdated_accounts.pop_front();
+            }
         }
     }
 
