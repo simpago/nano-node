@@ -103,7 +103,7 @@ mod tests {
     fn update_account_ranges() {
         let stats = Arc::new(Stats::default());
         let ledger = Arc::new(Ledger::new_null());
-        let state = Arc::new(Mutex::new(BootstrapState::new_test_instance()));
+        let state = Arc::new(Mutex::new(BootstrapState::default()));
         let processor = FrontierAckProcessor::new(stats, ledger, state.clone());
 
         let query = RunningQuery {

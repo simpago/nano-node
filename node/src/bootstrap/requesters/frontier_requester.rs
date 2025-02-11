@@ -129,9 +129,9 @@ mod tests {
 
     #[test]
     fn happy_path() {
-        let mut requester = create_test_requester();
-        let mut state = BootstrapState::new_test_instance();
-        state.add_test_channel();
+        let (mut requester, network) = create_test_requester();
+        let mut state = BootstrapState::default();
+        network.write().unwrap().add_test_channel();
 
         let PollResult::Finished(result) = progress(&mut requester, &mut state) else {
             panic!("promise did not finish!")
@@ -142,7 +142,7 @@ mod tests {
 
     #[test]
     fn wait_candidate_accounts() {
-        let mut requester = create_test_requester();
+        let (mut requester, _) = create_test_requester();
         let mut state = state_with_max_priorities(1);
 
         // Fill up candidate accounts
@@ -169,8 +169,8 @@ mod tests {
 
     #[test]
     fn wait_limiter() {
-        let mut requester = create_test_requester();
-        let mut state = BootstrapState::new_test_instance();
+        let (mut requester, _) = create_test_requester();
+        let mut state = BootstrapState::default();
 
         // Should wait because rate limit reached
         requester.frontiers_limiter.should_pass(TEST_RATE_LIMIT);
@@ -192,8 +192,8 @@ mod tests {
 
     #[test]
     fn wait_channel() {
-        let mut requester = create_test_requester();
-        let mut state = BootstrapState::new_test_instance();
+        let (mut requester, network) = create_test_requester();
+        let mut state = BootstrapState::default();
 
         let result = progress(&mut requester, &mut state);
         assert!(matches!(result, PollResult::Wait));
@@ -203,16 +203,16 @@ mod tests {
         let result = requester.poll(&mut state);
         assert!(matches!(result, PollResult::Wait));
 
-        state.add_test_channel();
+        network.write().unwrap().add_test_channel();
         let result = requester.poll(&mut state);
         assert!(matches!(result, PollResult::Progress));
     }
 
     #[test]
     fn finish_request() {
-        let mut requester = create_test_requester();
-        let mut state = BootstrapState::new_test_instance();
-        state.add_test_channel();
+        let (mut requester, network) = create_test_requester();
+        let mut state = BootstrapState::default();
+        network.write().unwrap().add_test_channel();
 
         let PollResult::Finished(spec) = progress(&mut requester, &mut state) else {
             panic!("did not finish");
@@ -228,9 +228,9 @@ mod tests {
 
     #[test]
     fn wait_when_frontier_scan_rate_limited() {
-        let mut requester = create_test_requester();
-        let mut state = BootstrapState::new_test_instance();
-        state.add_test_channel();
+        let (mut requester, network) = create_test_requester();
+        let mut state = BootstrapState::default();
+        network.write().unwrap().add_test_channel();
         state.frontier_scan = FrontierScan::new_test_instance_blocked();
 
         let result = progress(&mut requester, &mut state);
@@ -243,11 +243,14 @@ mod tests {
 
     const TEST_RATE_LIMIT: usize = 1000;
 
-    fn create_test_requester() -> FrontierRequester {
+    fn create_test_requester() -> (FrontierRequester, Arc<RwLock<Network>>) {
         let stats = Arc::new(Stats::default());
-        let waiter = ChannelWaiter::default();
+        let network = Arc::new(RwLock::new(Network::new_test_instance()));
+        let limiter = Arc::new(RateLimiter::new(1024));
+        let waiter = ChannelWaiter::new(network.clone(), limiter, 1024);
         let clock = Arc::new(SteadyClock::new_null());
-        FrontierRequester::new(stats.clone(), clock, TEST_RATE_LIMIT, waiter)
+        let requester = FrontierRequester::new(stats.clone(), clock, TEST_RATE_LIMIT, waiter);
+        (requester, network)
     }
 
     fn state_with_max_priorities(max: usize) -> BootstrapState {
@@ -258,7 +261,6 @@ mod tests {
             },
             ..Default::default()
         };
-        let network = Arc::new(RwLock::new(Network::new_test_instance()));
-        BootstrapState::new(config, network)
+        BootstrapState::new(config)
     }
 }

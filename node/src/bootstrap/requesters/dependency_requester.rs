@@ -60,16 +60,19 @@ impl BootstrapPromise<AscPullQuerySpec> for DependencyRequester {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::RwLock;
+
     use super::*;
     use crate::bootstrap::progress;
     use rsnano_core::{Account, BlockHash};
-    use rsnano_network::bandwidth_limiter::RateLimiter;
+    use rsnano_network::{bandwidth_limiter::RateLimiter, Network};
 
     #[test]
     fn happy_path() {
-        let mut requester = create_test_requester();
-        let mut state = BootstrapState::new_test_instance();
-        state.add_test_channel();
+        let network = test_network();
+        network.write().unwrap().add_test_channel();
+        let mut requester = create_test_requester(network);
+        let mut state = BootstrapState::default();
 
         let account = Account::from(1);
         let dependency = BlockHash::from(2);
@@ -87,14 +90,15 @@ mod tests {
 
     #[test]
     fn wait_channel() {
-        let mut requester = create_test_requester();
-        let mut state = BootstrapState::new_test_instance();
+        let network = test_network();
+        let mut requester = create_test_requester(network.clone());
+        let mut state = BootstrapState::default();
 
         let result = progress(&mut requester, &mut state);
         assert!(matches!(result, PollResult::Wait));
         assert!(matches!(requester.state, DependencyState::WaitChannel));
 
-        state.add_test_channel();
+        network.write().unwrap().add_test_channel();
         let result = requester.poll(&mut state);
         assert!(matches!(result, PollResult::Progress));
         assert!(matches!(requester.state, DependencyState::WaitBlocking(_)));
@@ -102,9 +106,10 @@ mod tests {
 
     #[test]
     fn wait_dependency() {
-        let mut requester = create_test_requester();
-        let mut state = BootstrapState::new_test_instance();
-        state.add_test_channel();
+        let network = test_network();
+        network.write().unwrap().add_test_channel();
+        let mut requester = create_test_requester(network);
+        let mut state = BootstrapState::default();
 
         let result = progress(&mut requester, &mut state);
         assert!(matches!(result, PollResult::Wait));
@@ -120,10 +125,14 @@ mod tests {
         assert!(matches!(requester.state, DependencyState::Initial));
     }
 
-    fn create_test_requester() -> DependencyRequester {
+    fn create_test_requester(network: Arc<RwLock<Network>>) -> DependencyRequester {
         let stats = Arc::new(Stats::default());
         let limiter = Arc::new(RateLimiter::new(1024));
-        let channel_waiter = ChannelWaiter::new(limiter, 1024);
+        let channel_waiter = ChannelWaiter::new(network, limiter, 1024);
         DependencyRequester::new(stats, channel_waiter)
+    }
+
+    fn test_network() -> Arc<RwLock<Network>> {
+        Arc::new(RwLock::new(Network::new_test_instance()))
     }
 }

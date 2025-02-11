@@ -115,17 +115,18 @@ mod tests {
     };
     use rsnano_core::Account;
     use rsnano_ledger::Ledger;
+    use rsnano_network::{bandwidth_limiter::RateLimiter, Network};
     use rsnano_nullable_clock::SteadyClock;
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
 
     #[test]
     fn happy_path() {
-        let mut state = BootstrapState::new_test_instance();
-        state.add_test_channel();
+        let mut state = BootstrapState::default();
         let account = Account::from(42);
         state.candidate_accounts.priority_up(&account);
 
-        let mut requester = create_requester();
+        let (mut requester, network) = create_requester();
+        network.write().unwrap().add_test_channel();
         let PollResult::Finished(result) = progress(&mut requester, &mut state) else {
             panic!("Finished expected");
         };
@@ -135,9 +136,9 @@ mod tests {
 
     #[test]
     fn wait_block_processor() {
-        let mut state = BootstrapState::new_test_instance();
+        let mut state = BootstrapState::default();
 
-        let mut requester = create_requester();
+        let (mut requester, _) = create_requester();
         requester.block_processor_threshold = 0;
 
         let result = progress(&mut requester, &mut state);
@@ -148,8 +149,8 @@ mod tests {
 
     #[test]
     fn wait_channel() {
-        let mut state = BootstrapState::new_test_instance();
-        let mut requester = create_requester();
+        let mut state = BootstrapState::default();
+        let (mut requester, _) = create_requester();
 
         let result = progress(&mut requester, &mut state);
 
@@ -159,9 +160,9 @@ mod tests {
 
     #[test]
     fn wait_priority() {
-        let mut state = BootstrapState::new_test_instance();
-        let mut requester = create_requester();
-        state.add_test_channel();
+        let mut state = BootstrapState::default();
+        let (mut requester, network) = create_requester();
+        network.write().unwrap().add_test_channel();
 
         let result = progress(&mut requester, &mut state);
 
@@ -169,21 +170,25 @@ mod tests {
         assert!(matches!(requester.state, PriorityState::WaitPriority(_)));
     }
 
-    fn create_requester() -> PriorityRequester {
+    fn create_requester() -> (PriorityRequester, Arc<RwLock<Network>>) {
         let block_processor = Arc::new(BlockProcessor::new_null());
         let stats = Arc::new(Stats::default());
-        let channel_waiter = ChannelWaiter::default();
+        let network = Arc::new(RwLock::new(Network::new_test_instance()));
+        let rate_limiter = Arc::new(RateLimiter::new(1024));
+        let channel_waiter = ChannelWaiter::new(network.clone(), rate_limiter, 1024);
         let clock = Arc::new(SteadyClock::new_null());
         let ledger = Arc::new(Ledger::new_null());
         let config = BootstrapConfig::default();
 
-        PriorityRequester::new(
+        let requester = PriorityRequester::new(
             block_processor,
             stats,
             channel_waiter,
             clock,
             ledger,
             &config,
-        )
+        );
+
+        (requester, network)
     }
 }

@@ -4,7 +4,9 @@ use crate::bootstrap::{
 use crate::{block_processing::BlockProcessor, stats::Stats, transport::MessageSender};
 use rsnano_ledger::Ledger;
 use rsnano_network::bandwidth_limiter::RateLimiter;
+use rsnano_network::Network;
 use rsnano_nullable_clock::SteadyClock;
+use std::sync::RwLock;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -34,6 +36,7 @@ pub(crate) struct Requesters {
     stopped: Arc<AtomicBool>,
     ledger: Arc<Ledger>,
     block_processor: Arc<BlockProcessor>,
+    network: Arc<RwLock<Network>>,
 }
 
 impl Requesters {
@@ -47,6 +50,7 @@ impl Requesters {
         clock: Arc<SteadyClock>,
         ledger: Arc<Ledger>,
         block_processor: Arc<BlockProcessor>,
+        network: Arc<RwLock<Network>>,
     ) -> Self {
         Self {
             limiter,
@@ -58,6 +62,7 @@ impl Requesters {
             clock,
             ledger,
             block_processor,
+            network,
             threads: Mutex::new(None),
             stopped: Arc::new(AtomicBool::new(false)),
         }
@@ -66,7 +71,8 @@ impl Requesters {
     pub fn start(&self) {
         let limiter = self.limiter.clone();
         let max_requests = self.config.max_requests;
-        let channel_waiter = ChannelWaiter::new(limiter.clone(), max_requests);
+        let channel_waiter =
+            ChannelWaiter::new(self.network.clone(), limiter.clone(), max_requests);
 
         let runner = Arc::new(BootstrapPromiseRunner {
             state: self.state.clone(),

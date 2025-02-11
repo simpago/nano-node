@@ -108,7 +108,7 @@ impl Bootstrapper {
         clock: Arc<SteadyClock>,
     ) -> Self {
         let limiter = Arc::new(RateLimiter::new(config.rate_limit));
-        let state = Arc::new(Mutex::new(BootstrapState::new(config.clone(), network)));
+        let state = Arc::new(Mutex::new(BootstrapState::new(config.clone())));
         let stopped_notification = Arc::new(Condvar::new());
 
         let mut response_handler = ResponseProcessor::new(
@@ -131,6 +131,7 @@ impl Bootstrapper {
             clock.clone(),
             ledger.clone(),
             block_processor.clone(),
+            network,
         );
 
         Self {

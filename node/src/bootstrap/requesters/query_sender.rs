@@ -110,7 +110,7 @@ mod tests {
 
         let spec = AscPullQuerySpec::new_test_instance();
         let channel_id = spec.channel.channel_id();
-        let mut state = BootstrapState::new_test_instance();
+        let mut state = BootstrapState::default();
 
         let id = fixture.query_sender.send(spec, &mut state);
         assert!(id.is_some());
@@ -129,7 +129,7 @@ mod tests {
         let mut fixture = create_fixture();
 
         let spec = AscPullQuerySpec::new_test_instance();
-        let mut state = BootstrapState::new_test_instance();
+        let mut state = BootstrapState::default();
         state.candidate_accounts.priority_up(&spec.account);
 
         let id = fixture.query_sender.send(spec.clone(), &mut state).unwrap();
@@ -149,7 +149,7 @@ mod tests {
         let mut spec = AscPullQuerySpec::new_test_instance();
         spec.cooldown_account = true;
 
-        let mut state = BootstrapState::new_test_instance();
+        let mut state = BootstrapState::default();
         state.candidate_accounts.priority_up(&spec.account);
 
         fixture.query_sender.send(spec.clone(), &mut state).unwrap();
@@ -164,7 +164,7 @@ mod tests {
     fn when_channel_unavailable_should_not_send() {
         let mut fixture = create_fixture();
         let spec = AscPullQuerySpec::new_test_instance();
-        let mut state = BootstrapState::new_test_instance();
+        let mut state = BootstrapState::default();
 
         spec.channel.close();
         let id = fixture.query_sender.send(spec.clone(), &mut state);
@@ -179,7 +179,7 @@ mod tests {
     fn can_track_sends() {
         let mut fixture = create_fixture();
         let spec = AscPullQuerySpec::new_test_instance();
-        let mut state = BootstrapState::new_test_instance();
+        let mut state = BootstrapState::default();
 
         let tracker = fixture.query_sender.track();
         fixture.query_sender.send(spec.clone(), &mut state);

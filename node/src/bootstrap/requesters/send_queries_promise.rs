@@ -48,7 +48,7 @@ mod tests {
         let sender = QuerySender::new_null();
         let mut send_queries =
             SendQueriesPromise::new(StubPromise::new(PollResult::Progress), sender);
-        let mut state = BootstrapState::new_test_instance();
+        let mut state = BootstrapState::default();
 
         let result = send_queries.poll(&mut state);
 
@@ -59,7 +59,7 @@ mod tests {
     fn wait() {
         let sender = QuerySender::new_null();
         let mut send_queries = SendQueriesPromise::new(StubPromise::new(PollResult::Wait), sender);
-        let mut state = BootstrapState::new_test_instance();
+        let mut state = BootstrapState::default();
 
         let result = send_queries.poll(&mut state);
 
@@ -73,7 +73,7 @@ mod tests {
         let spec = AscPullQuerySpec::new_test_instance();
         let mut send_queries =
             SendQueriesPromise::new(StubPromise::new(PollResult::Finished(spec.clone())), sender);
-        let mut state = BootstrapState::new_test_instance();
+        let mut state = BootstrapState::default();
 
         let result = send_queries.poll(&mut state);
 

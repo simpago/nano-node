@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn abort_promise_when_stopped() {
-        let state = Arc::new(Mutex::new(BootstrapState::new_test_instance()));
+        let state = Arc::new(Mutex::new(BootstrapState::default()));
         let stopped = Arc::new(AtomicBool::new(false));
         let stopped_notification = Arc::new(Condvar::new());
 
@@ -114,22 +114,49 @@ mod tests {
         finished.wait();
     }
 
+    #[test]
+    fn return_result_when_finished() {
+        let state = Arc::new(Mutex::new(BootstrapState::default()));
+        let stopped = Arc::new(AtomicBool::new(false));
+        let stopped_notification = Arc::new(Condvar::new());
+
+        let runner = BootstrapPromiseRunner {
+            state: state.clone(),
+            throttle_wait: Duration::from_millis(100),
+            stopped: stopped.clone(),
+            stopped_notification: stopped_notification.clone(),
+        };
+
+        let mut promise = StubPromise::new();
+        promise.result = Some(42);
+
+        let result = runner.run(promise);
+
+        assert_eq!(result, Some(42));
+    }
+
     struct StubPromise {
         polled: Arc<OneShotNotification>,
+        result: Option<i32>,
     }
 
     impl StubPromise {
         fn new() -> Self {
             Self {
                 polled: Arc::new(OneShotNotification::new()),
+                result: None,
             }
         }
     }
 
-    impl BootstrapPromise<()> for StubPromise {
-        fn poll(&mut self, _state: &mut BootstrapState) -> PollResult<()> {
+    impl BootstrapPromise<i32> for StubPromise {
+        fn poll(&mut self, _state: &mut BootstrapState) -> PollResult<i32> {
             self.polled.notify();
-            PollResult::Wait
+            if let Some(result) = self.result.take() {
+                PollResult::Finished(result)
+            } else {
+                PollResult::Wait
+            }
         }
     }
 }
