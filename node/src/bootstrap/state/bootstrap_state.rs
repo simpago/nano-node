@@ -19,9 +19,12 @@ pub(crate) struct BootstrapState {
 
 impl BootstrapState {
     pub fn new(config: BootstrapConfig) -> Self {
+        let mut scoring = PeerScoring::new();
+        scoring.set_channel_limit(config.channel_limit);
+
         Self {
             candidate_accounts: CandidateAccounts::new(config.candidate_accounts.clone()),
-            scoring: PeerScoring::new(config.clone()),
+            scoring,
             frontier_scan: FrontierScan::new(config.frontier_scan.clone()),
             running_queries: RunningQueryContainer::default(),
             counters: BootstrapCounters::default(),

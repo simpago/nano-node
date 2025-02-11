@@ -14,7 +14,7 @@ use crate::{
 use rsnano_core::{utils::ContainerInfo, Account};
 use rsnano_ledger::{BlockStatus, Ledger};
 use rsnano_messages::{AscPullAck, BlocksAckPayload};
-use rsnano_network::{bandwidth_limiter::RateLimiter, ChannelId, Network};
+use rsnano_network::{bandwidth_limiter::RateLimiter, ChannelId, DeadChannelCleanupStep, Network};
 use rsnano_nullable_clock::SteadyClock;
 use std::{
     sync::{
@@ -309,5 +309,18 @@ impl BootstrapExt for Arc<Bootstrapper> {
             .unwrap();
 
         *self.threads.lock().unwrap() = Some(Threads { cleanup: timeout });
+    }
+}
+
+pub(crate) struct BootstrapperCleanup(pub Arc<Bootstrapper>);
+
+impl DeadChannelCleanupStep for BootstrapperCleanup {
+    fn clean_up_dead_channels(&self, dead_channel_ids: &[ChannelId]) {
+        self.0
+            .state
+            .lock()
+            .unwrap()
+            .scoring
+            .clean_up_dead_channels(dead_channel_ids);
     }
 }

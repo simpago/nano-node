@@ -1,5 +1,5 @@
 use crate::bootstrap::{state::BootstrapState, BootstrapPromise, PollResult};
-use rsnano_network::{bandwidth_limiter::RateLimiter, Channel, Network};
+use rsnano_network::{bandwidth_limiter::RateLimiter, Channel, ChannelId, Network, TrafficType};
 use std::sync::{Arc, RwLock};
 
 /// Waits until a channel becomes available
@@ -39,6 +39,14 @@ impl ChannelWaiter {
         let limiter = Arc::new(RateLimiter::new(1024));
         Self::new(network, limiter, 1024)
     }
+
+    fn candidate_channels(network: &Network) -> Vec<ChannelId> {
+        network
+            .channels()
+            .filter(|c| !c.should_drop(TrafficType::BootstrapRequests))
+            .map(|c| c.channel_id())
+            .collect()
+    }
 }
 
 impl BootstrapPromise<Arc<Channel>> for ChannelWaiter {
@@ -65,10 +73,13 @@ impl BootstrapPromise<Arc<Channel>> for ChannelWaiter {
             ChannelWaitState::WaitChannel => {
                 // Wait until a channel is available
                 let network = self.network.read().unwrap();
-                let channel = boot_state.scoring.channel(network.shuffled_channels());
-                if let Some(channel) = channel {
-                    self.state = ChannelWaitState::Initial;
-                    return PollResult::Finished(channel);
+                let channel_ids = Self::candidate_channels(&network);
+
+                if let Some(channel_id) = boot_state.scoring.channel(channel_ids) {
+                    if let Some(channel) = network.get(channel_id) {
+                        self.state = ChannelWaitState::Initial;
+                        return PollResult::Finished(channel.clone());
+                    }
                 }
             }
         }

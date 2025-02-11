@@ -24,7 +24,7 @@ impl BootstrapCleanup {
     pub fn cleanup(&mut self, state: &mut BootstrapState) {
         let now = self.clock.now();
         self.stats.inc(StatType::Bootstrap, DetailType::LoopCleanup);
-        state.scoring.timeout();
+        state.scoring.decay();
 
         let should_timeout = |query: &RunningQuery| query.response_cutoff < now;
 

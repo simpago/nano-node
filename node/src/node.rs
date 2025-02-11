@@ -4,7 +4,10 @@ use crate::{
         LedgerNotificationThread, LedgerNotifications, LocalBlockBroadcaster,
         LocalBlockBroadcasterExt, UncheckedMap,
     },
-    bootstrap::{BootstrapExt, BootstrapResponder, BootstrapResponderCleanup, Bootstrapper},
+    bootstrap::{
+        BootstrapExt, BootstrapResponder, BootstrapResponderCleanup, Bootstrapper,
+        BootstrapperCleanup,
+    },
     cementation::ConfirmingSet,
     config::{GlobalConfig, NetworkParams, NodeConfig, NodeFlags},
     consensus::{
@@ -780,6 +783,7 @@ impl Node {
             &network_params.ledger.genesis_account,
             &ledger_notifications,
         );
+        dead_channel_cleanup.add_step(BootstrapperCleanup(bootstrapper.clone()));
 
         let local_block_broadcaster = Arc::new(LocalBlockBroadcaster::new(
             config.local_block_broadcaster.clone(),
