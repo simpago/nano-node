@@ -92,6 +92,7 @@ impl QuerySender {
         }
     }
 
+    #[allow(dead_code)]
     pub fn track(&self) -> Arc<OutputTrackerMt<AscPullQuerySpec>> {
         self.send_listener.track()
     }

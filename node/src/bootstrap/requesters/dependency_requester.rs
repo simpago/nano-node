@@ -60,12 +60,11 @@ impl BootstrapPromise<AscPullQuerySpec> for DependencyRequester {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::RwLock;
-
     use super::*;
     use crate::bootstrap::progress;
     use rsnano_core::{Account, BlockHash};
     use rsnano_network::{bandwidth_limiter::RateLimiter, Network};
+    use std::sync::RwLock;
 
     #[test]
     fn happy_path() {

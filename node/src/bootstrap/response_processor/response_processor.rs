@@ -16,7 +16,7 @@ use std::{
 
 pub(crate) struct ResponseProcessor {
     state: Arc<Mutex<BootstrapState>>,
-    condition: Arc<Condvar>,
+    state_changed: Arc<Condvar>,
     frontiers: FrontierAckProcessor,
     accounts: AccountAckProcessor,
     blocks: BlockAckProcessor,
@@ -47,17 +47,17 @@ impl ResponseProcessor {
         state: Arc<Mutex<BootstrapState>>,
         stats: Arc<Stats>,
         block_processor: Arc<BlockProcessor>,
-        condition: Arc<Condvar>,
+        state_changed: Arc<Condvar>,
         ledger: Arc<Ledger>,
     ) -> Self {
         let frontiers = FrontierAckProcessor::new(stats.clone(), ledger, state.clone());
         let accounts = AccountAckProcessor::new(stats.clone(), state.clone());
         let blocks =
-            BlockAckProcessor::new(state.clone(), stats, condition.clone(), block_processor);
+            BlockAckProcessor::new(state.clone(), stats, state_changed.clone(), block_processor);
 
         Self {
             state,
-            condition,
+            state_changed,
             frontiers,
             accounts,
             blocks,
@@ -77,7 +77,7 @@ impl ResponseProcessor {
         let query = self.take_running_query_for(&response)?;
         self.process_response(&query, response)?;
         self.update_peer_scoring(channel_id);
-        self.condition.notify_all();
+        self.state_changed.notify_all();
         Ok(ProcessInfo::new(&query, now))
     }
 

@@ -6,11 +6,12 @@ use crate::{
 use rsnano_core::{Account, Block, BlockType, SavedBlock};
 use rsnano_ledger::{BlockStatus, Ledger};
 use rsnano_store_lmdb::LmdbReadTransaction;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
 /// Inspects a processed block and adjusts the bootstrap state accordingly
 pub(super) struct BlockInspector {
     state: Arc<Mutex<BootstrapState>>,
+    state_changed: Arc<Condvar>,
     ledger: Arc<Ledger>,
     stats: Arc<Stats>,
 }
@@ -18,11 +19,13 @@ pub(super) struct BlockInspector {
 impl BlockInspector {
     pub(super) fn new(
         state: Arc<Mutex<BootstrapState>>,
+        state_changed: Arc<Condvar>,
         ledger: Arc<Ledger>,
         stats: Arc<Stats>,
     ) -> Self {
         Self {
             state,
+            state_changed,
             ledger,
             stats,
         }
@@ -137,6 +140,7 @@ impl BlockInspector {
                                 .inc(StatType::BootstrapAccountSets, DetailType::PrioritizeFailed);
                         };
                     }
+                    self.state_changed.notify_all();
                 }
             }
             BlockStatus::GapSource => {
@@ -148,6 +152,7 @@ impl BlockInspector {
                         // Mark account as blocked because it is missing the source block
                         let blocked = state.candidate_accounts.block(*account, source);
                         if blocked {
+                            self.state_changed.notify_all();
                             self.stats.inc(
                                 StatType::BootstrapAccountSets,
                                 DetailType::PriorityEraseBlock,
@@ -170,6 +175,7 @@ impl BlockInspector {
                     if block.block_type() == BlockType::State {
                         let account = block.account_field().unwrap();
                         if state.candidate_accounts.priority_set_initial(&account) {
+                            self.state_changed.notify_all();
                             self.stats
                                 .inc(StatType::BootstrapAccountSets, DetailType::PriorityInsert);
                         } else {
@@ -182,6 +188,7 @@ impl BlockInspector {
             BlockStatus::GapEpochOpenPending => {
                 // Epoch open blocks for accounts that don't have any pending blocks yet
                 if state.candidate_accounts.priority_erase(account) {
+                    self.state_changed.notify_all();
                     self.stats
                         .inc(StatType::BootstrapAccountSets, DetailType::PriorityErase);
                 }

@@ -15,6 +15,7 @@ pub(crate) struct BootstrapState {
     pub frontier_scan: FrontierScan,
     pub counters: BootstrapCounters,
     pub frontier_ack_processor_busy: bool,
+    pub stopped: bool,
 }
 
 impl BootstrapState {
@@ -29,6 +30,7 @@ impl BootstrapState {
             running_queries: RunningQueryContainer::default(),
             counters: BootstrapCounters::default(),
             frontier_ack_processor_busy: false,
+            stopped: false,
         }
     }
 

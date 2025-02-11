@@ -17,10 +17,7 @@ use rsnano_messages::{AscPullAck, BlocksAckPayload};
 use rsnano_network::{bandwidth_limiter::RateLimiter, ChannelId, DeadChannelCleanupStep, Network};
 use rsnano_nullable_clock::SteadyClock;
 use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Condvar, Mutex, RwLock,
-    },
+    sync::{Arc, Condvar, Mutex, RwLock},
     thread::JoinHandle,
     time::Duration,
 };
@@ -84,11 +81,10 @@ pub struct Bootstrapper {
     stats: Arc<Stats>,
     threads: Mutex<Option<Threads>>,
     state: Arc<Mutex<BootstrapState>>,
-    stopped_notification: Arc<Condvar>,
+    state_changed: Arc<Condvar>,
     config: BootstrapConfig,
     clock: Arc<SteadyClock>,
     response_handler: ResponseProcessor,
-    stopped: AtomicBool,
     block_inspector: BlockInspector,
     requesters: Requesters,
 }
@@ -109,25 +105,30 @@ impl Bootstrapper {
     ) -> Self {
         let limiter = Arc::new(RateLimiter::new(config.rate_limit));
         let state = Arc::new(Mutex::new(BootstrapState::new(config.clone())));
-        let stopped_notification = Arc::new(Condvar::new());
+        let state_changed = Arc::new(Condvar::new());
 
         let mut response_handler = ResponseProcessor::new(
             state.clone(),
             stats.clone(),
             block_processor.clone(),
-            stopped_notification.clone(),
+            state_changed.clone(),
             ledger.clone(),
         );
         response_handler.set_max_pending_frontiers(config.max_pending_frontier_responses);
 
-        let block_inspector = BlockInspector::new(state.clone(), ledger.clone(), stats.clone());
+        let block_inspector = BlockInspector::new(
+            state.clone(),
+            state_changed.clone(),
+            ledger.clone(),
+            stats.clone(),
+        );
         let requesters = Requesters::new(
             limiter.clone(),
             config.clone(),
             stats.clone(),
             message_sender.clone(),
             state.clone(),
-            stopped_notification.clone(),
+            state_changed.clone(),
             clock.clone(),
             ledger.clone(),
             block_processor.clone(),
@@ -137,12 +138,11 @@ impl Bootstrapper {
         Self {
             threads: Mutex::new(None),
             state,
-            stopped_notification,
+            state_changed,
             config,
             stats,
             clock,
             response_handler,
-            stopped: AtomicBool::new(false),
             block_inspector,
             requesters,
         }
@@ -150,10 +150,10 @@ impl Bootstrapper {
 
     pub fn stop(&self) {
         {
-            let _guard = self.state.lock().unwrap();
-            self.stopped.store(true, Ordering::SeqCst);
+            let mut guard = self.state.lock().unwrap();
+            guard.stopped = true;
         }
-        self.stopped_notification.notify_all();
+        self.state_changed.notify_all();
 
         self.requesters.stop();
 
@@ -181,15 +181,14 @@ impl Bootstrapper {
 
     fn run_timeouts(&self) {
         let mut cleanup = BootstrapCleanup::new(self.clock.clone(), self.stats.clone());
-        let mut guard = self.state.lock().unwrap();
-        while !self.stopped.load(Ordering::SeqCst) {
-            cleanup.cleanup(&mut guard);
+        let mut state = self.state.lock().unwrap();
+        while !state.stopped {
+            cleanup.cleanup(&mut state);
+            self.state_changed.notify_all();
 
-            guard = self
-                .stopped_notification
-                .wait_timeout_while(guard, Duration::from_secs(1), |_| {
-                    !self.stopped.load(Ordering::SeqCst)
-                })
+            state = self
+                .state_changed
+                .wait_timeout_while(state, Duration::from_secs(1), |s| !s.stopped)
                 .unwrap()
                 .0;
         }
@@ -236,7 +235,7 @@ impl Bootstrapper {
 
     fn blocks_processed(&self, batch: &[(BlockStatus, Arc<BlockContext>)]) {
         self.block_inspector.inspect(batch);
-        self.stopped_notification.notify_all();
+        self.state_changed.notify_all();
     }
 
     pub fn container_info(&self) -> ContainerInfo {

@@ -1,10 +1,7 @@
 use crate::bootstrap::{state::BootstrapState, BootstrapPromise, PollResult};
 use std::{
     cmp::min,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Condvar, Mutex,
-    },
+    sync::{Arc, Condvar, Mutex},
     time::Duration,
 };
 
@@ -13,8 +10,7 @@ use std::{
 pub(crate) struct BootstrapPromiseRunner {
     pub state: Arc<Mutex<BootstrapState>>,
     pub throttle_wait: Duration,
-    pub stopped: Arc<AtomicBool>,
-    pub stopped_notification: Arc<Condvar>,
+    pub state_changed: Arc<Condvar>,
 }
 
 impl BootstrapPromiseRunner {
@@ -25,22 +21,18 @@ impl BootstrapPromiseRunner {
         P: BootstrapPromise<T>,
     {
         let mut interval = Self::INITIAL_INTERVAL;
-        let mut guard = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
         loop {
-            if self.stopped.load(Ordering::SeqCst) {
+            if state.stopped {
                 return None;
             }
 
-            match self.progress(&mut promise, &mut guard, interval) {
+            match self.progress(&mut promise, &mut state, interval) {
                 Ok(result) => return Some(result),
                 Err(i) => interval = i,
             }
 
-            guard = self
-                .stopped_notification
-                .wait_timeout_while(guard, interval, |_| !self.stopped.load(Ordering::SeqCst))
-                .unwrap()
-                .0;
+            state = self.state_changed.wait_timeout(state, interval).unwrap().0;
         }
     }
 
@@ -57,7 +49,7 @@ impl BootstrapPromiseRunner {
         loop {
             match action.poll(state) {
                 PollResult::Progress => {
-                    if self.stopped.load(Ordering::SeqCst) {
+                    if state.stopped {
                         return Err(Self::INITIAL_INTERVAL);
                     }
                     reset_wait_interval = true;
@@ -85,14 +77,12 @@ mod tests {
     #[test]
     fn abort_promise_when_stopped() {
         let state = Arc::new(Mutex::new(BootstrapState::default()));
-        let stopped = Arc::new(AtomicBool::new(false));
-        let stopped_notification = Arc::new(Condvar::new());
+        let state_changed = Arc::new(Condvar::new());
 
         let runner = BootstrapPromiseRunner {
             state: state.clone(),
             throttle_wait: Duration::from_millis(100),
-            stopped: stopped.clone(),
-            stopped_notification: stopped_notification.clone(),
+            state_changed: state_changed.clone(),
         };
 
         let promise = StubPromise::new();
@@ -107,24 +97,22 @@ mod tests {
 
         polled.wait();
         {
-            let _guard = state.lock().unwrap();
-            stopped.store(true, Ordering::SeqCst);
+            let mut state = state.lock().unwrap();
+            state.stopped = true;
         }
-        stopped_notification.notify_all();
+        state_changed.notify_all();
         finished.wait();
     }
 
     #[test]
     fn return_result_when_finished() {
         let state = Arc::new(Mutex::new(BootstrapState::default()));
-        let stopped = Arc::new(AtomicBool::new(false));
-        let stopped_notification = Arc::new(Condvar::new());
+        let state_changed = Arc::new(Condvar::new());
 
         let runner = BootstrapPromiseRunner {
             state: state.clone(),
             throttle_wait: Duration::from_millis(100),
-            stopped: stopped.clone(),
-            stopped_notification: stopped_notification.clone(),
+            state_changed: state_changed.clone(),
         };
 
         let mut promise = StubPromise::new();

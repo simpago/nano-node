@@ -8,10 +8,7 @@ use rsnano_network::Network;
 use rsnano_nullable_clock::SteadyClock;
 use std::sync::RwLock;
 use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Condvar, Mutex,
-    },
+    sync::{Arc, Condvar, Mutex},
     thread::JoinHandle,
 };
 
@@ -30,10 +27,9 @@ pub(crate) struct Requesters {
     stats: Arc<Stats>,
     message_sender: MessageSender,
     state: Arc<Mutex<BootstrapState>>,
-    stopped_notification: Arc<Condvar>,
+    state_changed: Arc<Condvar>,
     clock: Arc<SteadyClock>,
     threads: Mutex<Option<RequesterThreads>>,
-    stopped: Arc<AtomicBool>,
     ledger: Arc<Ledger>,
     block_processor: Arc<BlockProcessor>,
     network: Arc<RwLock<Network>>,
@@ -46,7 +42,7 @@ impl Requesters {
         stats: Arc<Stats>,
         message_sender: MessageSender,
         state: Arc<Mutex<BootstrapState>>,
-        stopped_notification: Arc<Condvar>,
+        state_changed: Arc<Condvar>,
         clock: Arc<SteadyClock>,
         ledger: Arc<Ledger>,
         block_processor: Arc<BlockProcessor>,
@@ -58,13 +54,12 @@ impl Requesters {
             stats,
             message_sender,
             state,
-            stopped_notification,
+            state_changed,
             clock,
             ledger,
             block_processor,
             network,
             threads: Mutex::new(None),
-            stopped: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -77,8 +72,7 @@ impl Requesters {
         let runner = Arc::new(BootstrapPromiseRunner {
             state: self.state.clone(),
             throttle_wait: self.config.throttle_wait,
-            stopped_notification: self.stopped_notification.clone(),
-            stopped: self.stopped.clone(),
+            state_changed: self.state_changed.clone(),
         });
 
         let frontiers = if self.config.enable_frontier_scan {
@@ -133,10 +127,10 @@ impl Requesters {
 
     pub fn stop(&self) {
         {
-            let _guard = self.state.lock().unwrap();
-            self.stopped.store(true, Ordering::SeqCst);
+            let mut state = self.state.lock().unwrap();
+            state.stopped = true;
         }
-        self.stopped_notification.notify_all();
+        self.state_changed.notify_all();
 
         let threads = self.threads.lock().unwrap().take();
         if let Some(mut threads) = threads {
