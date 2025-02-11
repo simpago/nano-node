@@ -1,4 +1,5 @@
 use super::{account_crawler::AccountDatabaseCrawler, pending_crawler::PendingDatabaseCrawler};
+use crate::bootstrap::state::OutdatedAccounts;
 use rsnano_core::{Account, Frontier};
 use rsnano_ledger::Ledger;
 use rsnano_store_lmdb::LmdbReadTransaction;
@@ -12,15 +13,6 @@ pub(crate) enum FrontierCheckResult {
     Outdated,
     /// Account doesn't exist but has pending blocks in the ledger
     Pending,
-}
-
-#[derive(Default, Debug, PartialEq, Eq)]
-pub(crate) struct OutdatedAccounts {
-    pub accounts: Vec<Account>,
-    /// Accounts that exist but are outdated
-    pub outdated: usize,
-    /// Accounts that don't exist but have pending blocks in the ledger
-    pub pending: usize,
 }
 
 /// Checks if a given frontier is up to date or outdated
@@ -69,6 +61,7 @@ impl<'a> FrontierChecker<'a> {
             accounts,
             outdated,
             pending,
+            fontiers_received: frontiers.len(),
         }
     }
 
@@ -130,7 +123,12 @@ mod tests {
         assert_frontier_check(
             LedgerSpec::default(),
             &frontiers,
-            OutdatedAccounts::default(),
+            OutdatedAccounts {
+                accounts: Vec::new(),
+                outdated: 0,
+                pending: 0,
+                fontiers_received: 1,
+            },
         );
     }
 
@@ -146,6 +144,7 @@ mod tests {
             accounts: vec![account],
             outdated: 1,
             pending: 0,
+            fontiers_received: 1,
         };
         assert_frontier_check(ledger, &frontiers, expected);
     }
@@ -157,7 +156,12 @@ mod tests {
             frontiers: vec![frontier.clone()],
             ..Default::default()
         };
-        let expected = OutdatedAccounts::default();
+        let expected = OutdatedAccounts {
+            accounts: Vec::new(),
+            outdated: 0,
+            pending: 0,
+            fontiers_received: 1,
+        };
         assert_frontier_check(ledger, &[frontier], expected);
     }
 
@@ -173,6 +177,7 @@ mod tests {
             accounts: vec![account],
             outdated: 0,
             pending: 1,
+            fontiers_received: 1,
         };
         assert_frontier_check(ledger, &frontiers, expected);
     }
@@ -188,7 +193,12 @@ mod tests {
             ..Default::default()
         };
         let frontiers = [Frontier::new(account, frontier)];
-        let expected = OutdatedAccounts::default();
+        let expected = OutdatedAccounts {
+            accounts: Vec::new(),
+            outdated: 0,
+            pending: 0,
+            fontiers_received: 1,
+        };
         assert_frontier_check(ledger, &frontiers, expected);
     }
 
@@ -199,7 +209,12 @@ mod tests {
             ..Default::default()
         };
         let frontiers = [Frontier::new(Account::from(1), BlockHash::from(2))];
-        let expected = OutdatedAccounts::default();
+        let expected = OutdatedAccounts {
+            accounts: Vec::new(),
+            outdated: 0,
+            pending: 0,
+            fontiers_received: 1,
+        };
         assert_frontier_check(ledger, &frontiers, expected);
     }
 
@@ -210,7 +225,12 @@ mod tests {
             ..Default::default()
         };
         let frontiers = [Frontier::new(Account::from(1), BlockHash::from(2))];
-        let expected = OutdatedAccounts::default();
+        let expected = OutdatedAccounts {
+            accounts: Vec::new(),
+            outdated: 0,
+            pending: 0,
+            fontiers_received: 1,
+        };
         assert_frontier_check(ledger, &frontiers, expected);
     }
 

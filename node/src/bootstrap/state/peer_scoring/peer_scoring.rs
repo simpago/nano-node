@@ -1,8 +1,7 @@
 use super::{peer_score::PeerScore, peer_score_container::PeerScoreContainer};
 use rand::{seq::SliceRandom, thread_rng};
 use rsnano_core::utils::ContainerInfo;
-use rsnano_network::{Channel, ChannelId, TrafficType};
-use std::sync::Arc;
+use rsnano_network::ChannelId;
 
 /// Container for tracking and scoring peers with respect to bootstrapping
 pub(crate) struct PeerScoring {

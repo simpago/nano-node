@@ -1,6 +1,6 @@
-use super::frontier_checker::{FrontierChecker, OutdatedAccounts};
+use super::frontier_checker::FrontierChecker;
 use crate::{
-    bootstrap::state::{BootstrapState, CandidateAccounts},
+    bootstrap::state::{BootstrapState, OutdatedAccounts},
     stats::{DetailType, StatType, Stats},
 };
 use rsnano_core::Frontier;
@@ -32,17 +32,7 @@ impl<'a> FrontierWorker<'a> {
     pub fn process(&mut self, frontiers: Vec<Frontier>) {
         let outdated = self.checker.get_outdated_accounts(&frontiers);
         self.update_stats(&frontiers, &outdated);
-
-        let mut guard = self.state.lock().unwrap();
-        guard.counters.received_frontiers += frontiers.len();
-        guard.counters.outdated_accounts_found += outdated.accounts.len();
-
-        for account in outdated.accounts {
-            // Use the lowest possible priority here
-            guard
-                .candidate_accounts
-                .priority_set(&account, CandidateAccounts::PRIORITY_CUTOFF);
-        }
+        self.state.lock().unwrap().frontiers_processed(&outdated);
     }
 
     fn update_stats(&self, frontiers: &[Frontier], outdated: &OutdatedAccounts) {
@@ -72,6 +62,7 @@ impl<'a> FrontierWorker<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bootstrap::state::CandidateAccounts;
     use rsnano_core::{Account, AccountInfo, BlockHash};
 
     #[test]

@@ -85,6 +85,17 @@ impl BootstrapState {
         blocking
     }
 
+    pub fn frontiers_processed(&mut self, outdated: &OutdatedAccounts) {
+        self.counters.received_frontiers += outdated.fontiers_received;
+        self.counters.outdated_accounts_found += outdated.accounts.len();
+
+        for account in &outdated.accounts {
+            // Use the lowest possible priority here
+            self.candidate_accounts
+                .priority_set(account, CandidateAccounts::PRIORITY_CUTOFF);
+        }
+    }
+
     pub fn container_info(&self) -> ContainerInfo {
         ContainerInfo::builder()
             .leaf(
@@ -109,4 +120,15 @@ impl Default for BootstrapState {
 pub struct BootstrapCounters {
     pub received_frontiers: usize,
     pub outdated_accounts_found: usize,
+}
+
+#[derive(Default, Debug, PartialEq, Eq)]
+pub(crate) struct OutdatedAccounts {
+    pub accounts: Vec<Account>,
+    /// Accounts that exist but are outdated
+    pub outdated: usize,
+    /// Accounts that don't exist but have pending blocks in the ledger
+    pub pending: usize,
+    /// Total count of received frontiers
+    pub fontiers_received: usize,
 }
