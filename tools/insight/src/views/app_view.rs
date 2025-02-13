@@ -1,6 +1,7 @@
 use super::{
-    bootstrap_view::BootstrapView, queue_group_view::show_queue_group, show_peers, LedgerStatsView,
-    MessageRecorderControlsView, MessageStatsView, MessageTabView, NodeRunnerView, TabBarView,
+    bootstrap_view::BootstrapView, queue_group_view::show_queue_group, show_peers, ExplorerView,
+    LedgerStatsView, MessageRecorderControlsView, MessageStatsView, MessageTabView, NodeRunnerView,
+    TabBarView,
 };
 use crate::view_models::{AppViewModel, QueueGroupViewModel, Tab};
 use eframe::egui::{
@@ -63,6 +64,7 @@ impl eframe::App for AppView {
             Tab::Messages => MessageTabView::new(&mut self.model).show(ctx),
             Tab::Queues => show_queues(ctx, self.model.queue_groups()),
             Tab::Bootstrap => BootstrapView::new(&self.model.bootstrap).show(ctx),
+            Tab::Explorer => ExplorerView::new(&self.model.explorer).show(ctx),
         }
 
         // Repaint to show the continuously increasing current block and message counters

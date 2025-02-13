@@ -4,6 +4,7 @@ pub(crate) enum Tab {
     Messages,
     Queues,
     Bootstrap,
+    Explorer,
 }
 
 impl Tab {
@@ -13,11 +14,18 @@ impl Tab {
             Tab::Messages => "Messages",
             Tab::Queues => "Queues",
             Tab::Bootstrap => "Frontier Scan",
+            Tab::Explorer => "Explorer",
         }
     }
 }
 
-pub static TAB_ORDER: [Tab; 4] = [Tab::Peers, Tab::Messages, Tab::Queues, Tab::Bootstrap];
+pub static TAB_ORDER: [Tab; 5] = [
+    Tab::Peers,
+    Tab::Messages,
+    Tab::Queues,
+    Tab::Bootstrap,
+    Tab::Explorer,
+];
 
 pub(crate) struct TabBarViewModel {
     pub selected: Tab,
@@ -71,7 +79,7 @@ mod tests {
     #[test]
     fn tab_names() {
         let model = TabBarViewModel::new();
-        assert_eq!(model.tabs.len(), 4);
+        assert_eq!(model.tabs.len(), 5);
         assert_eq!(model.tabs[0].label, "Peers");
         assert_eq!(model.tabs[0].selected, true);
         assert_eq!(model.tabs[1].label, "Messages");

@@ -3568,6 +3568,7 @@ dependencies = [
  "rsnano_node",
  "rsnano_nullable_clock",
  "rsnano_store_lmdb",
+ "serde_json",
  "strum",
  "tokio",
  "tracing",

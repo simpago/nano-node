@@ -1,6 +1,7 @@
 use super::{
-    BootstrapViewModel, ChannelsViewModel, LedgerStatsViewModel, MessageStatsViewModel,
-    MessageTableViewModel, NodeRunnerViewModel, QueueGroupViewModel, TabBarViewModel,
+    BootstrapViewModel, ChannelsViewModel, ExplorerViewModel, LedgerStatsViewModel,
+    MessageStatsViewModel, MessageTableViewModel, NodeRunnerViewModel, QueueGroupViewModel,
+    TabBarViewModel,
 };
 use crate::{
     channels::Channels, ledger_stats::LedgerStats, message_collection::MessageCollection,
@@ -32,6 +33,7 @@ pub(crate) struct AppViewModel {
     pub block_processor_info: FairQueueInfo<BlockSource>,
     pub vote_processor_info: FairQueueInfo<RepTier>,
     pub bootstrap: BootstrapViewModel,
+    pub explorer: ExplorerViewModel,
 }
 
 impl AppViewModel {
@@ -58,6 +60,7 @@ impl AppViewModel {
             block_processor_info: Default::default(),
             vote_processor_info: Default::default(),
             bootstrap: Default::default(),
+            explorer: Default::default(),
         }
     }
 
@@ -84,6 +87,14 @@ impl AppViewModel {
             self.block_processor_info = node.block_processor.info();
             self.vote_processor_info = node.vote_processor_queue.info();
             self.bootstrap.update(&node.bootstrapper, now);
+            let tx = node.ledger.read_txn();
+            let block = node
+                .ledger
+                .any()
+                .get_block(&tx, &node.network_params.ledger.genesis_block.hash())
+                .unwrap();
+            self.explorer.block =
+                serde_json::to_string_pretty(&block.json_representation()).unwrap();
         }
 
         self.message_table.update_message_counts();
