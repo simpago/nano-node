@@ -12,10 +12,14 @@ impl<'a> SearchBarView<'a> {
 
     pub fn show(&mut self, ui: &mut Ui) {
         if ui
-            .add(TextEdit::singleline(&mut self.model.input).hint_text("account / block hash ..."))
+            .add(
+                TextEdit::singleline(&mut self.model.input)
+                    .hint_text("account / block hash ...")
+                    .desired_width(450.0),
+            )
             .changed()
         {
-            // TODO
+            self.model.input_changed();
         };
     }
 }
