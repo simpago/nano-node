@@ -10,7 +10,8 @@ use rsnano_core::{
     block_priority,
     utils::{ContainerInfo, UnixTimestamp},
     Account, AccountInfo, Amount, Block, BlockHash, BlockSubType, ConfirmationHeightInfo,
-    DependentBlocks, Epoch, Link, PendingInfo, PendingKey, PublicKey, Root, SavedBlock,
+    DependentBlocks, DetailedBlock, Epoch, Link, PendingInfo, PendingKey, PublicKey, Root,
+    SavedBlock,
 };
 use rsnano_store_lmdb::{
     ConfiguredAccountDatabaseBuilder, ConfiguredBlockDatabaseBuilder,
@@ -670,6 +671,17 @@ impl Ledger {
         } else {
             self.any().get_block(tx, &block.previous())
         }
+    }
+
+    pub fn detailed_block(&self, tx: &dyn Transaction, hash: &BlockHash) -> Option<DetailedBlock> {
+        let block = self.any().get_block(tx, hash)?;
+        let amount = self.any().block_amount_for(tx, &block);
+        let confirmed = self.confirmed().block_exists_or_pruned(tx, hash);
+        Some(DetailedBlock {
+            block,
+            amount,
+            confirmed,
+        })
     }
 
     pub fn cemented_count(&self) -> u64 {

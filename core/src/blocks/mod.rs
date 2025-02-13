@@ -673,6 +673,12 @@ impl DependentBlocks {
     }
 }
 
+pub struct DetailedBlock {
+    pub block: SavedBlock,
+    pub amount: Option<Amount>,
+    pub confirmed: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

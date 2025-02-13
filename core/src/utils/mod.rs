@@ -3,6 +3,7 @@ mod fair_queue;
 mod peer;
 mod stream;
 
+use chrono::{DateTime, TimeZone, Utc};
 pub use container_info::*;
 pub use fair_queue::*;
 pub use peer::*;
@@ -159,6 +160,12 @@ impl UnixTimestamp {
 
     pub fn add(&self, seconds: u64) -> Self {
         Self(self.0 + seconds)
+    }
+
+    pub fn utc(&self) -> DateTime<Utc> {
+        Utc.timestamp_opt(self.0 as i64, 0)
+            .latest()
+            .unwrap_or_default()
     }
 }
 

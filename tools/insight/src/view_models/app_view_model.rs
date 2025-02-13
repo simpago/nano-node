@@ -1,5 +1,5 @@
 use super::{
-    BootstrapViewModel, ChannelsViewModel, ExplorerViewModel, LedgerStatsViewModel,
+    BlockViewModel, BootstrapViewModel, ChannelsViewModel, LedgerStatsViewModel,
     MessageStatsViewModel, MessageTableViewModel, NodeRunnerViewModel, QueueGroupViewModel,
     TabBarViewModel,
 };
@@ -33,7 +33,7 @@ pub(crate) struct AppViewModel {
     pub block_processor_info: FairQueueInfo<BlockSource>,
     pub vote_processor_info: FairQueueInfo<RepTier>,
     pub bootstrap: BootstrapViewModel,
-    pub explorer: ExplorerViewModel,
+    pub explorer: BlockViewModel,
 }
 
 impl AppViewModel {
@@ -87,14 +87,11 @@ impl AppViewModel {
             self.block_processor_info = node.block_processor.info();
             self.vote_processor_info = node.vote_processor_queue.info();
             self.bootstrap.update(&node.bootstrapper, now);
+
             let tx = node.ledger.read_txn();
-            let block = node
-                .ledger
-                .any()
-                .get_block(&tx, &node.network_params.ledger.genesis_block.hash())
-                .unwrap();
-            self.explorer.block =
-                serde_json::to_string_pretty(&block.json_representation()).unwrap();
+            let hash = node.network_params.ledger.genesis_block.hash();
+            let block = node.ledger.detailed_block(&tx, &hash).unwrap();
+            self.explorer.show(&block);
         }
 
         self.message_table.update_message_counts();
