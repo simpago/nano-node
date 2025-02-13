@@ -1,7 +1,7 @@
 use super::{
     bootstrap_view::BootstrapView, queue_group_view::show_queue_group, show_peers, ExplorerView,
     LedgerStatsView, MessageRecorderControlsView, MessageStatsView, MessageTabView, NodeRunnerView,
-    TabBarView,
+    SearchBarView, TabBarView,
 };
 use crate::view_models::{AppViewModel, QueueGroupViewModel, Tab};
 use eframe::egui::{
@@ -27,6 +27,8 @@ impl AppView {
                 NodeRunnerView::new(&mut self.model.node_runner).show(ui);
                 ui.separator();
                 MessageRecorderControlsView::new(&self.model.msg_recorder).show(ui);
+                ui.separator();
+                SearchBarView::new(&mut self.model.search_bar).show(ui);
             });
             ui.add_space(1.0);
         });

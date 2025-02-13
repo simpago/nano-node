@@ -1,7 +1,7 @@
 use super::{
     BlockViewModel, BootstrapViewModel, ChannelsViewModel, LedgerStatsViewModel,
     MessageStatsViewModel, MessageTableViewModel, NodeRunnerViewModel, QueueGroupViewModel,
-    TabBarViewModel,
+    SearchBarViewModel, TabBarViewModel,
 };
 use crate::{
     channels::Channels, ledger_stats::LedgerStats, message_collection::MessageCollection,
@@ -33,6 +33,7 @@ pub(crate) struct AppViewModel {
     pub block_processor_info: FairQueueInfo<BlockSource>,
     pub vote_processor_info: FairQueueInfo<RepTier>,
     pub bootstrap: BootstrapViewModel,
+    pub search_bar: SearchBarViewModel,
     pub explorer: BlockViewModel,
 }
 
@@ -60,6 +61,7 @@ impl AppViewModel {
             block_processor_info: Default::default(),
             vote_processor_info: Default::default(),
             bootstrap: Default::default(),
+            search_bar: Default::default(),
             explorer: Default::default(),
         }
     }

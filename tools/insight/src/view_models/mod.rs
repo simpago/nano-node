@@ -9,6 +9,7 @@ mod message_view_model;
 mod node_runner_view_model;
 mod palette;
 mod queue_group_view_model;
+mod search_bar_view_model;
 mod tab_bar_view_model;
 
 pub(crate) use app_view_model::*;
@@ -22,4 +23,5 @@ pub(crate) use message_view_model::*;
 pub(crate) use node_runner_view_model::*;
 pub(crate) use palette::PaletteColor;
 pub(crate) use queue_group_view_model::*;
+pub(crate) use search_bar_view_model::*;
 pub(crate) use tab_bar_view_model::*;
