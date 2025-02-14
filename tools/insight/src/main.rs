@@ -1,4 +1,5 @@
 mod channels;
+mod explorer;
 mod ledger_stats;
 mod message_collection;
 mod message_rate_calculator;

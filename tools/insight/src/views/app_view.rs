@@ -20,15 +20,18 @@ impl AppView {
 }
 
 impl AppView {
-    fn show_node_runner(&mut self, ctx: &egui::Context) {
-        TopBottomPanel::top("node_runner_panel").show(ctx, |ui| {
+    fn show_controls_panel(&mut self, ctx: &egui::Context) {
+        TopBottomPanel::top("controls_panel").show(ctx, |ui| {
             ui.add_space(1.0);
             ui.horizontal(|ui| {
                 NodeRunnerView::new(&mut self.model.node_runner).show(ui);
                 ui.separator();
                 MessageRecorderControlsView::new(&self.model.msg_recorder).show(ui);
                 ui.separator();
-                SearchBarView::new(&mut self.model.search_bar).show(ui);
+                let changed = SearchBarView::new(&mut self.model.search_bar).show(ui);
+                if changed {
+                    self.model.search();
+                }
             });
             ui.add_space(1.0);
         });
@@ -57,7 +60,7 @@ impl AppView {
 impl eframe::App for AppView {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.model.update();
-        self.show_node_runner(ctx);
+        self.show_controls_panel(ctx);
         self.show_tabs(ctx);
         self.show_stats(ctx);
 
@@ -66,7 +69,7 @@ impl eframe::App for AppView {
             Tab::Messages => MessageTabView::new(&mut self.model).show(ctx),
             Tab::Queues => show_queues(ctx, self.model.queue_groups()),
             Tab::Bootstrap => BootstrapView::new(&self.model.bootstrap).show(ctx),
-            Tab::Explorer => ExplorerView::new(&self.model.explorer).show(ctx),
+            Tab::Explorer => ExplorerView::new(&self.model.explorer()).show(ctx),
         }
 
         // Repaint to show the continuously increasing current block and message counters

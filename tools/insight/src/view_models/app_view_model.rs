@@ -1,11 +1,16 @@
 use super::{
     BlockViewModel, BootstrapViewModel, ChannelsViewModel, LedgerStatsViewModel,
     MessageStatsViewModel, MessageTableViewModel, NodeRunnerViewModel, QueueGroupViewModel,
-    SearchBarViewModel, TabBarViewModel,
+    SearchBarViewModel, Tab, TabBarViewModel,
 };
 use crate::{
-    channels::Channels, ledger_stats::LedgerStats, message_collection::MessageCollection,
-    message_recorder::MessageRecorder, node_runner::NodeRunner, view_models::QueueViewModel,
+    channels::Channels,
+    explorer::{Explorer, ExplorerState},
+    ledger_stats::LedgerStats,
+    message_collection::MessageCollection,
+    message_recorder::MessageRecorder,
+    node_runner::NodeRunner,
+    view_models::QueueViewModel,
 };
 use rsnano_core::utils::FairQueueInfo;
 use rsnano_node::{
@@ -34,16 +39,12 @@ pub(crate) struct AppViewModel {
     pub vote_processor_info: FairQueueInfo<RepTier>,
     pub bootstrap: BootstrapViewModel,
     pub search_bar: SearchBarViewModel,
-    pub explorer: BlockViewModel,
+    pub explorer: Explorer,
 }
 
 impl AppViewModel {
     pub(crate) fn new() -> Self {
         let node_runner = NodeRunner::new();
-        Self::with_node_runner(node_runner)
-    }
-
-    pub(crate) fn with_node_runner(node_runner: NodeRunner) -> Self {
         let messages = Arc::new(RwLock::new(MessageCollection::default()));
         let msg_recorder = Arc::new(MessageRecorder::new(messages.clone()));
         let clock = Arc::new(SteadyClock::default());
@@ -62,7 +63,7 @@ impl AppViewModel {
             vote_processor_info: Default::default(),
             bootstrap: Default::default(),
             search_bar: Default::default(),
-            explorer: Default::default(),
+            explorer: Explorer::new(),
         }
     }
 
@@ -89,11 +90,6 @@ impl AppViewModel {
             self.block_processor_info = node.block_processor.info();
             self.vote_processor_info = node.vote_processor_queue.info();
             self.bootstrap.update(&node.bootstrapper, now);
-
-            let tx = node.ledger.read_txn();
-            let hash = node.network_params.ledger.genesis_block.hash();
-            let block = node.ledger.detailed_block(&tx, &hash).unwrap();
-            self.explorer.show(&block);
         }
 
         self.message_table.update_message_counts();
@@ -144,10 +140,21 @@ impl AppViewModel {
             },
         ]
     }
-}
 
-impl Default for AppViewModel {
-    fn default() -> Self {
-        Self::new()
+    pub fn search(&mut self) {
+        if let Some(node) = self.node_runner.node() {
+            let has_result = self.explorer.search(&node.ledger, &self.search_bar.input);
+            if has_result {
+                self.tabs.select(Tab::Explorer);
+            }
+        }
+    }
+
+    pub fn explorer(&self) -> BlockViewModel {
+        let mut view_model = BlockViewModel::default();
+        if let ExplorerState::Block(b) = self.explorer.state() {
+            view_model.show(b);
+        }
+        view_model
     }
 }
