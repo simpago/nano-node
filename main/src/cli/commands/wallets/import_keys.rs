@@ -44,7 +44,7 @@ impl ImportKeysArgs {
 
         node.wallets.ensure_wallet_is_unlocked(wallet_id, &password);
 
-        if node.wallets.mutex.lock().unwrap().contains_key(&wallet_id) {
+        if node.wallets.wallet_exists(&wallet_id) {
             let valid = node.wallets.ensure_wallet_is_unlocked(wallet_id, &password);
             if valid {
                 node.wallets

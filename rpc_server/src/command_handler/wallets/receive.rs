@@ -1,7 +1,7 @@
 use crate::command_handler::RpcCommandHandler;
 use anyhow::{anyhow, bail};
 use rsnano_core::{Amount, BlockDetails, PendingKey, Root};
-use rsnano_node::wallets::WalletsExt;
+use rsnano_node::wallets::{WalletsError, WalletsExt};
 use rsnano_rpc_messages::{BlockDto, ReceiveArgs};
 use std::cmp::max;
 
@@ -57,19 +57,11 @@ impl RpcCommandHandler {
         // Disable work generation if "work" option is provided
         let generate_work = work == 0;
 
-        let wallet = {
-            let wallets = self.node.wallets.mutex.lock().unwrap();
-            wallets
-                .get(&args.wallet)
-                .ok_or_else(|| anyhow!("wallet not found"))?
-                .clone()
-        };
-
         let block = self
             .node
             .wallets
             .receive_sync(
-                wallet,
+                args.wallet,
                 args.block,
                 representative,
                 Amount::MAX,
@@ -77,7 +69,10 @@ impl RpcCommandHandler {
                 work,
                 generate_work,
             )
-            .map_err(|_| anyhow!("Error generating block"))?;
+            .map_err(|e| match e {
+                WalletsError::WalletNotFound => anyhow!("wallet not found"),
+                _ => anyhow!("Error generating block"),
+            })?;
 
         Ok(BlockDto::new(block.hash()))
     }

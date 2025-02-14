@@ -12,7 +12,7 @@ use test_helpers::{assert_timely, assert_timely_eq, System};
 fn open_create() {
     let mut system = System::new();
     let node = system.make_node();
-    assert_eq!(node.wallets.mutex.lock().unwrap().len(), 1); // it starts out with a default wallet
+    assert_eq!(node.wallets.wallet_count(), 1); // it starts out with a default wallet
     let id = WalletId::random();
     assert_eq!(node.wallets.wallet_exists(&id), false);
     node.wallets.create(id);

@@ -91,7 +91,7 @@ pub struct Wallets {
     block_processor: Arc<BlockProcessor>,
     pub wallet_reps: Arc<Mutex<WalletRepresentatives>>,
     online_reps: Arc<Mutex<OnlineReps>>,
-    pub kdf: KeyDerivationFunction,
+    kdf: KeyDerivationFunction,
     start_election: Mutex<Option<Box<dyn Fn(SavedBlock) + Send + Sync>>>,
     confirming_set: Arc<ConfirmingSet>,
     message_flooder: Mutex<MessageFlooder>,
@@ -886,11 +886,15 @@ impl Wallets {
         Ok(wallet.store.serialize_json(&tx))
     }
 
+    pub fn wallet_count(&self) -> usize {
+        self.mutex.lock().unwrap().len()
+    }
+
     pub fn container_info(&self) -> ContainerInfo {
         [
             (
                 "items",
-                self.mutex.lock().unwrap().len(),
+                self.wallet_count(),
                 size_of::<usize>() * size_of::<WalletId>(),
             ),
             ("actions", self.wallet_actions.len(), size_of::<usize>() * 2),
@@ -1054,14 +1058,14 @@ pub trait WalletsExt {
 
     fn receive_sync(
         &self,
-        wallet: Arc<Wallet>,
+        wallet_id: WalletId,
         block: BlockHash,
         representative: PublicKey,
         amount: Amount,
         account: Account,
         work: u64,
         generate_work: bool,
-    ) -> Result<SavedBlock, ()>;
+    ) -> Result<SavedBlock, WalletsError>;
 
     fn send_async_wallet(
         &self,
@@ -1703,14 +1707,18 @@ impl WalletsExt for Arc<Wallets> {
 
     fn receive_sync(
         &self,
-        wallet: Arc<Wallet>,
+        wallet_id: WalletId,
         block_hash: BlockHash,
         representative: PublicKey,
         amount: Amount,
         account: Account,
         work: u64,
         generate_work: bool,
-    ) -> Result<SavedBlock, ()> {
+    ) -> Result<SavedBlock, WalletsError> {
+        let wallet = {
+            let guard = self.mutex.lock().unwrap();
+            Wallets::get_wallet(&guard, &wallet_id)?.clone()
+        };
         let result = Arc::new((Condvar::new(), Mutex::new((false, None)))); // done, result
         let result_clone = Arc::clone(&result);
         self.receive_async_wallet(
@@ -1731,7 +1739,7 @@ impl WalletsExt for Arc<Wallets> {
         if let Some(block) = guard.1.clone() {
             Ok(block)
         } else {
-            Err(())
+            Err(WalletsError::Generic)
         }
     }
 
