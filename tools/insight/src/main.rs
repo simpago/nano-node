@@ -2,6 +2,7 @@ mod app;
 mod channels;
 mod explorer;
 mod frontier_scan;
+mod gui;
 mod ledger_stats;
 mod message_collection;
 mod message_rate_calculator;
@@ -11,10 +12,9 @@ mod node_callbacks;
 mod node_runner;
 mod nullable_runtime;
 mod rate_calculator;
-mod views;
 
 use eframe::egui;
-use views::MainView;
+use gui::MainView;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {

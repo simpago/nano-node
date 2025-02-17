@@ -4,12 +4,12 @@ use eframe::egui::{
 
 use super::{
     frontier_scan::view_frontier_scan, queue_group::show_queue_group, view_ledger_stats,
-    view_node_runner, view_peers, view_search_bar, view_tabs, BlockViewModel, ChannelsViewModel,
-    ExplorerView, FrontierScanViewModel, MessageRecorderControlsView, MessageStatsView,
-    MessageStatsViewModel, MessageTabView, MessageTableViewModel, QueueGroupViewModel,
-    TabViewModel,
+    view_message_recorder_controls, view_message_tab, view_node_runner, view_peers,
+    view_search_bar, view_tabs, BlockViewModel, ChannelsViewModel, ExplorerView,
+    FrontierScanViewModel, MessageStatsView, MessageStatsViewModel, MessageTableViewModel,
+    QueueGroupViewModel, TabViewModel,
 };
-use crate::{app::InsightApp, explorer::ExplorerState, navigator::NavItem, views::QueueViewModel};
+use crate::{app::InsightApp, explorer::ExplorerState, gui::QueueViewModel, navigator::NavItem};
 
 pub(crate) struct MainView {
     model: AppViewModel,
@@ -29,7 +29,7 @@ impl MainView {
             ui.horizontal(|ui| {
                 view_node_runner(ui, &mut self.model.app.node_runner);
                 ui.separator();
-                MessageRecorderControlsView::new(&self.model.app.msg_recorder).show(ui);
+                view_message_recorder_controls(ui, &self.model.app.msg_recorder);
                 ui.separator();
                 view_search_bar(ui, &mut self.model.search_input, &mut self.model.app);
             });
@@ -66,7 +66,7 @@ impl eframe::App for MainView {
 
         match self.model.app.navigator.current {
             NavItem::Peers => view_peers(ctx, self.model.channels()),
-            NavItem::Messages => MessageTabView::new(&mut self.model).show(ctx),
+            NavItem::Messages => view_message_tab(ctx, &mut self.model),
             NavItem::Queues => view_queues(ctx, self.model.queue_groups()),
             NavItem::Bootstrap => view_frontier_scan(ctx, self.model.frontier_scan()),
             NavItem::Explorer => ExplorerView::new(&self.model.explorer()).show(ctx),

@@ -7,7 +7,7 @@ use strum::IntoEnumIterator;
 
 use rsnano_core::utils::{FairQueueInfo, QueueInfo};
 
-use crate::views::PaletteColor;
+use crate::gui::PaletteColor;
 
 pub(crate) fn show_queue_group(ui: &mut Ui, model: QueueGroupViewModel) {
     ui.heading(model.heading);

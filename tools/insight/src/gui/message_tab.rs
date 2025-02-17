@@ -1,16 +1,20 @@
 use super::{channels::ChannelsView, AppViewModel, MessageTableView, MessageView};
 use eframe::egui::{self, CentralPanel, SidePanel};
 
-pub(crate) struct MessageTabView<'a> {
+pub(crate) fn view_message_tab(ctx: &egui::Context, model: &mut AppViewModel) {
+    MessageTabView::new(model).show(ctx);
+}
+
+struct MessageTabView<'a> {
     model: &'a mut AppViewModel,
 }
 
 impl<'a> MessageTabView<'a> {
-    pub(crate) fn new(model: &'a mut AppViewModel) -> Self {
+    fn new(model: &'a mut AppViewModel) -> Self {
         Self { model }
     }
 
-    pub fn show(&mut self, ctx: &egui::Context) {
+    fn show(&mut self, ctx: &egui::Context) {
         self.show_channels(ctx);
         self.show_message_overview(ctx);
         self.show_message_details(ctx);

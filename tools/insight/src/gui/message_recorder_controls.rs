@@ -1,16 +1,20 @@
 use crate::message_recorder::MessageRecorder;
 use eframe::egui::Ui;
 
-pub(crate) struct MessageRecorderControlsView<'a> {
+pub(crate) fn view_message_recorder_controls(ui: &mut Ui, recorder: &MessageRecorder) {
+    MessageRecorderControlsView::new(recorder).view(ui);
+}
+
+struct MessageRecorderControlsView<'a> {
     recorder: &'a MessageRecorder,
 }
 
 impl<'a> MessageRecorderControlsView<'a> {
-    pub(crate) fn new(recorder: &'a MessageRecorder) -> Self {
+    fn new(recorder: &'a MessageRecorder) -> Self {
         Self { recorder }
     }
 
-    pub fn show(&self, ui: &mut Ui) {
+    fn view(&self, ui: &mut Ui) {
         self.capture_check_box(ui);
         self.clear_button(ui);
     }
