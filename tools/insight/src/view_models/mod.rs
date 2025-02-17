@@ -1,18 +1,10 @@
 mod app_view_model;
-mod explorer_view_model;
-mod frontier_scan;
-mod message_stats_view_model;
-mod message_table_view_model;
 mod message_view_model;
 mod palette;
 mod queue_group_view_model;
 mod tab_bar;
 
 pub(crate) use app_view_model::*;
-pub(crate) use explorer_view_model::*;
-pub(crate) use frontier_scan::*;
-pub(crate) use message_stats_view_model::*;
-pub(crate) use message_table_view_model::*;
 pub(crate) use message_view_model::*;
 use num_format::{Locale, ToFormattedString};
 pub(crate) use palette::PaletteColor;

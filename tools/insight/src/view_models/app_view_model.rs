@@ -1,9 +1,12 @@
-use super::{
-    BlockViewModel, FrontierScanViewModel, MessageStatsViewModel, MessageTableViewModel,
-    QueueGroupViewModel, TabViewModel,
-};
+use super::{QueueGroupViewModel, TabViewModel};
 use crate::{
-    app::InsightApp, explorer::ExplorerState, view_models::QueueViewModel, views::ChannelsViewModel,
+    app::InsightApp,
+    explorer::ExplorerState,
+    view_models::QueueViewModel,
+    views::{
+        BlockViewModel, ChannelsViewModel, FrontierScanViewModel, MessageStatsViewModel,
+        MessageTableViewModel,
+    },
 };
 
 pub(crate) struct AppViewModel {
