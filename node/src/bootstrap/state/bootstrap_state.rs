@@ -79,15 +79,8 @@ impl BootstrapState {
 
     /* Waits for next available blocking block */
     pub fn next_blocking(&self) -> BlockHash {
-        let blocking = self
-            .candidate_accounts
-            .next_blocking(|hash| self.count_queries_by_hash(hash, QuerySource::Dependencies) == 0);
-
-        if blocking.is_zero() {
-            return blocking;
-        }
-
-        blocking
+        self.candidate_accounts
+            .next_blocking(|hash| self.count_queries_by_hash(hash, QuerySource::Dependencies) == 0)
     }
 
     pub fn frontiers_processed(&mut self, outdated: &OutdatedAccounts) {
