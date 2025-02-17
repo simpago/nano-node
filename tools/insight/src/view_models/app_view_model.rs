@@ -1,7 +1,7 @@
 use super::{
     BlockViewModel, BootstrapViewModel, ChannelsViewModel, LedgerStatsViewModel,
-    MessageStatsViewModel, MessageTableViewModel, NodeRunnerViewModel, QueueGroupViewModel,
-    SearchBarViewModel, Tab, TabBarViewModel,
+    MessageStatsViewModel, MessageTableViewModel, QueueGroupViewModel, SearchBarViewModel, Tab,
+    TabBarViewModel,
 };
 use crate::{
     channels::Channels,
@@ -40,7 +40,7 @@ pub(crate) struct AppViewModel {
     pub bootstrap: BootstrapViewModel,
     pub search_bar: SearchBarViewModel,
     pub explorer: Explorer,
-    node_runner: NodeRunner,
+    pub node_runner: NodeRunner,
 }
 
 impl AppViewModel {
@@ -159,9 +159,5 @@ impl AppViewModel {
             view_model.show(b);
         }
         view_model
-    }
-
-    pub fn node_runner(&mut self) -> NodeRunnerViewModel {
-        NodeRunnerViewModel::new(&mut self.node_runner)
     }
 }

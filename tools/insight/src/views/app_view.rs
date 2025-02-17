@@ -24,7 +24,7 @@ impl AppView {
         TopBottomPanel::top("controls_panel").show(ctx, |ui| {
             ui.add_space(1.0);
             ui.horizontal(|ui| {
-                NodeRunnerView::new(self.model.node_runner()).show(ui);
+                NodeRunnerView::new(&mut self.model.node_runner).show(ui);
                 ui.separator();
                 MessageRecorderControlsView::new(&self.model.msg_recorder).show(ui);
                 ui.separator();

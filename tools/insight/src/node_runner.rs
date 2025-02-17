@@ -52,6 +52,14 @@ impl NodeRunner {
         runner
     }
 
+    pub fn can_start_node(&self) -> bool {
+        self.state() == NodeState::Stopped
+    }
+
+    pub fn can_stop_node(&self) -> bool {
+        self.state() == NodeState::Started
+    }
+
     pub fn start_node(&mut self) {
         self.set_state(NodeState::Starting);
 
@@ -90,6 +98,15 @@ impl NodeRunner {
 
     fn set_state(&self, state: NodeState) {
         self.state.store(state as u8, Ordering::SeqCst);
+    }
+
+    pub fn status(&self) -> &'static str {
+        match self.state() {
+            NodeState::Starting => "starting...",
+            NodeState::Started => "running",
+            NodeState::Stopping => "stopping...",
+            NodeState::Stopped => "not running",
+        }
     }
 
     pub(crate) fn stop(&mut self) {

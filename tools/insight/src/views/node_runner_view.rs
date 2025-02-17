@@ -1,14 +1,14 @@
-use crate::view_models::NodeRunnerViewModel;
+use crate::node_runner::NodeRunner;
 use eframe::egui::{Button, RadioButton, TextEdit, Ui};
 use rsnano_core::Networks;
 
 pub(crate) struct NodeRunnerView<'a> {
-    model: NodeRunnerViewModel<'a>,
+    runner: &'a mut NodeRunner,
 }
 
 impl<'a> NodeRunnerView<'a> {
-    pub(crate) fn new(model: NodeRunnerViewModel<'a>) -> Self {
-        Self { model }
+    pub(crate) fn new(runner: &'a mut NodeRunner) -> Self {
+        Self { runner }
     }
 
     pub fn show(&mut self, ui: &mut Ui) {
@@ -16,45 +16,47 @@ impl<'a> NodeRunnerView<'a> {
             self.network_radio_button(ui, Networks::NanoLiveNetwork);
             self.network_radio_button(ui, Networks::NanoBetaNetwork);
             self.network_radio_button(ui, Networks::NanoTestNetwork);
-            let mut path = self.model.data_path().to_owned();
-            let response =
-                ui.add_enabled(self.model.can_start_node(), TextEdit::singleline(&mut path));
+            let mut path = self.runner.data_path().to_owned();
+            let response = ui.add_enabled(
+                self.runner.can_start_node(),
+                TextEdit::singleline(&mut path),
+            );
             if response.changed() {
-                self.model.set_data_path(path);
+                self.runner.set_data_path(path);
             }
             self.start_node_button(ui);
             self.stop_button(ui);
-            ui.label(self.model.status());
+            ui.label(self.runner.status());
         });
     }
 
     fn start_node_button(&mut self, ui: &mut Ui) {
         if ui
-            .add_enabled(self.model.can_start_node(), Button::new("Start node"))
+            .add_enabled(self.runner.can_start_node(), Button::new("Start node"))
             .clicked()
         {
-            self.model.start_node();
+            self.runner.start_node();
         }
     }
 
     fn stop_button(&mut self, ui: &mut Ui) {
         if ui
-            .add_enabled(self.model.can_stop_node(), Button::new("Stop node"))
+            .add_enabled(self.runner.can_stop_node(), Button::new("Stop node"))
             .clicked()
         {
-            self.model.stop_node();
+            self.runner.stop();
         }
     }
 
     fn network_radio_button(&mut self, ui: &mut Ui, network: Networks) {
         if ui
             .add_enabled(
-                self.model.can_start_node(),
-                RadioButton::new(self.model.network() == network, network.as_str()),
+                self.runner.can_start_node(),
+                RadioButton::new(self.runner.network() == network, network.as_str()),
             )
             .clicked()
         {
-            self.model.set_network(network);
+            self.runner.set_network(network);
         }
     }
 }
