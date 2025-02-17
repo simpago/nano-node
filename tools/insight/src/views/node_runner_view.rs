@@ -3,11 +3,11 @@ use eframe::egui::{Button, RadioButton, TextEdit, Ui};
 use rsnano_core::Networks;
 
 pub(crate) struct NodeRunnerView<'a> {
-    model: &'a mut NodeRunnerViewModel,
+    model: NodeRunnerViewModel<'a>,
 }
 
 impl<'a> NodeRunnerView<'a> {
-    pub(crate) fn new(model: &'a mut NodeRunnerViewModel) -> Self {
+    pub(crate) fn new(model: NodeRunnerViewModel<'a>) -> Self {
         Self { model }
     }
 
@@ -18,7 +18,7 @@ impl<'a> NodeRunnerView<'a> {
             self.network_radio_button(ui, Networks::NanoTestNetwork);
             ui.add_enabled(
                 self.model.can_start_node(),
-                TextEdit::singleline(&mut self.model.data_path),
+                TextEdit::singleline(self.model.data_path),
             );
             self.start_node_button(ui);
             self.stop_button(ui);
