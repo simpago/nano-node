@@ -12,7 +12,7 @@ use crate::{
     node_runner::NodeRunner,
     view_models::QueueViewModel,
 };
-use rsnano_core::{utils::FairQueueInfo, Networks};
+use rsnano_core::utils::FairQueueInfo;
 use rsnano_node::{
     block_processing::BlockSource,
     cementation::ConfirmingSetInfo,
@@ -39,8 +39,6 @@ pub(crate) struct AppViewModel {
     pub bootstrap: BootstrapViewModel,
     pub search_bar: SearchBarViewModel,
     pub explorer: Explorer,
-    data_path: String,
-    network: Networks,
     node_runner: NodeRunner,
 }
 
@@ -65,8 +63,6 @@ impl AppViewModel {
             bootstrap: Default::default(),
             search_bar: Default::default(),
             explorer: Explorer::new(),
-            network: Networks::NanoLiveNetwork,
-            data_path: String::new(),
             node_runner,
         }
     }
@@ -163,12 +159,6 @@ impl AppViewModel {
     }
 
     pub fn node_runner(&mut self) -> NodeRunnerViewModel {
-        NodeRunnerViewModel::new(
-            &mut self.node_runner,
-            &self.msg_recorder,
-            &self.clock,
-            &mut self.network,
-            &mut self.data_path,
-        )
+        NodeRunnerViewModel::new(&mut self.node_runner, &self.msg_recorder, &self.clock)
     }
 }

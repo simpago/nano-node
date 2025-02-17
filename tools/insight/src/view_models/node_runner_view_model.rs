@@ -3,7 +3,6 @@ use crate::{
     node_runner::{NodeRunner, NodeState},
 };
 use rsnano_core::Networks;
-use rsnano_node::{working_path_for, Node};
 use rsnano_nullable_clock::SteadyClock;
 use std::sync::Arc;
 
@@ -11,23 +10,17 @@ pub(crate) struct NodeRunnerViewModel<'a> {
     msg_recorder: &'a Arc<MessageRecorder>,
     clock: &'a Arc<SteadyClock>,
     pub node_runner: &'a mut NodeRunner,
-    network: &'a mut Networks,
-    pub data_path: &'a mut String,
 }
 impl<'a> NodeRunnerViewModel<'a> {
     pub(crate) fn new(
         node_runner: &'a mut NodeRunner,
         msg_recorder: &'a Arc<MessageRecorder>,
         clock: &'a Arc<SteadyClock>,
-        network: &'a mut Networks,
-        data_path: &'a mut String,
     ) -> Self {
         Self {
             node_runner,
             msg_recorder,
             clock,
-            network,
-            data_path,
         }
     }
 
@@ -41,8 +34,7 @@ impl<'a> NodeRunnerViewModel<'a> {
 
     pub(crate) fn start_node(&mut self) {
         let callbacks = make_node_callbacks(self.msg_recorder.clone(), self.clock.clone());
-        self.node_runner
-            .start_node(*self.network, &self.data_path, callbacks);
+        self.node_runner.start_node(callbacks);
     }
 
     pub(crate) fn stop_node(&mut self) {
@@ -59,15 +51,18 @@ impl<'a> NodeRunnerViewModel<'a> {
     }
 
     pub(crate) fn network(&self) -> Networks {
-        *self.network
+        self.node_runner.network()
     }
 
     pub(crate) fn set_network(&mut self, network: Networks) {
-        *self.network = network;
-        *self.data_path = working_path_for(network)
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
+        self.node_runner.set_network(network);
+    }
+
+    pub(crate) fn data_path(&self) -> &str {
+        self.node_runner.data_path()
+    }
+
+    pub(crate) fn set_data_path(&mut self, path: String) {
+        self.node_runner.set_data_path(path)
     }
 }

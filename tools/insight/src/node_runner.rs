@@ -2,7 +2,7 @@ use num::FromPrimitive;
 use num_derive::FromPrimitive;
 use rsnano_core::Networks;
 use rsnano_daemon::DaemonBuilder;
-use rsnano_node::{Node, NodeCallbacks};
+use rsnano_node::{working_path_for, Node, NodeCallbacks};
 use std::{
     path::PathBuf,
     sync::{
@@ -21,6 +21,8 @@ pub enum NodeState {
 }
 
 pub(crate) struct NodeRunner {
+    data_path: String,
+    network: Networks,
     node: Arc<Mutex<Option<Arc<Node>>>>,
     state: Arc<AtomicU8>,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
@@ -28,11 +30,15 @@ pub(crate) struct NodeRunner {
 
 impl NodeRunner {
     pub(crate) fn new() -> Self {
-        Self {
+        let mut runner = Self {
+            network: Networks::Invalid,
+            data_path: String::new(),
             node: Arc::new(Mutex::new(None)),
             state: Arc::new(AtomicU8::new(NodeState::Stopped as u8)),
             stop: None,
-        }
+        };
+        runner.set_network(Networks::NanoLiveNetwork);
+        runner
     }
 
     pub fn new_null_with(node: Arc<Node>) -> Self {
@@ -42,12 +48,7 @@ impl NodeRunner {
         runner
     }
 
-    pub fn start_node(
-        &mut self,
-        network: Networks,
-        data_path: impl Into<PathBuf>,
-        callbacks: NodeCallbacks,
-    ) {
+    pub fn start_node(&mut self, callbacks: NodeCallbacks) {
         self.set_state(NodeState::Starting);
 
         let (tx_stop, rx_stop) = tokio::sync::oneshot::channel::<()>();
@@ -56,7 +57,8 @@ impl NodeRunner {
         let node = self.node.clone();
         let state1 = self.state.clone();
         let state2 = self.state.clone();
-        let data_path = data_path.into();
+        let data_path: PathBuf = self.data_path.clone().into();
+        let network = self.network;
 
         std::thread::spawn(move || {
             let on_started = move |n| {
@@ -99,6 +101,27 @@ impl NodeRunner {
 
     pub(crate) fn node(&self) -> Option<Arc<Node>> {
         self.node.lock().unwrap().clone()
+    }
+
+    pub(crate) fn data_path(&self) -> &str {
+        &self.data_path
+    }
+
+    pub fn set_data_path(&mut self, path: String) {
+        self.data_path = path;
+    }
+
+    pub fn network(&self) -> Networks {
+        self.network
+    }
+
+    pub(crate) fn set_network(&mut self, network: Networks) {
+        self.network = network;
+        self.data_path = working_path_for(network)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
     }
 }
 
