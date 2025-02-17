@@ -554,7 +554,7 @@ bool nano::bootstrap_service::request (nano::account account, size_t count, std:
 				{
 					tag.type = query_type::blocks_by_hash;
 					tag.start = conf_info->frontier;
-					tag.hash = conf_info->height;
+					tag.hash = conf_info->frontier;
 
 					logger.debug (nano::log::type::bootstrap, "Requesting blocks for {} starting from confirmation frontier: {} (optimistic: {})",
 					account,
