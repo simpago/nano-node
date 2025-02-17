@@ -1,27 +1,13 @@
-use crate::{
-    message_recorder::{make_node_callbacks, MessageRecorder},
-    node_runner::{NodeRunner, NodeState},
-};
 use rsnano_core::Networks;
-use rsnano_nullable_clock::SteadyClock;
-use std::sync::Arc;
+
+use crate::node_runner::{NodeRunner, NodeState};
 
 pub(crate) struct NodeRunnerViewModel<'a> {
-    msg_recorder: &'a Arc<MessageRecorder>,
-    clock: &'a Arc<SteadyClock>,
     pub node_runner: &'a mut NodeRunner,
 }
 impl<'a> NodeRunnerViewModel<'a> {
-    pub(crate) fn new(
-        node_runner: &'a mut NodeRunner,
-        msg_recorder: &'a Arc<MessageRecorder>,
-        clock: &'a Arc<SteadyClock>,
-    ) -> Self {
-        Self {
-            node_runner,
-            msg_recorder,
-            clock,
-        }
+    pub(crate) fn new(node_runner: &'a mut NodeRunner) -> Self {
+        Self { node_runner }
     }
 
     pub(crate) fn can_start_node(&self) -> bool {
@@ -33,8 +19,7 @@ impl<'a> NodeRunnerViewModel<'a> {
     }
 
     pub(crate) fn start_node(&mut self) {
-        let callbacks = make_node_callbacks(self.msg_recorder.clone(), self.clock.clone());
-        self.node_runner.start_node(callbacks);
+        self.node_runner.start_node();
     }
 
     pub(crate) fn stop_node(&mut self) {

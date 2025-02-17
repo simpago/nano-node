@@ -2,7 +2,7 @@ use num::FromPrimitive;
 use num_derive::FromPrimitive;
 use rsnano_core::Networks;
 use rsnano_daemon::DaemonBuilder;
-use rsnano_node::{working_path_for, Node, NodeCallbacks};
+use rsnano_node::{working_path_for, Node};
 use std::{
     path::PathBuf,
     sync::{
@@ -11,6 +11,8 @@ use std::{
     },
 };
 use tracing::error;
+
+use crate::node_callbacks::NodeCallbackFactory;
 
 #[derive(FromPrimitive, PartialEq, Eq, Debug)]
 pub enum NodeState {
@@ -26,29 +28,31 @@ pub(crate) struct NodeRunner {
     node: Arc<Mutex<Option<Arc<Node>>>>,
     state: Arc<AtomicU8>,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
+    callback_factory: NodeCallbackFactory,
 }
 
 impl NodeRunner {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(callback_factory: NodeCallbackFactory) -> Self {
         let mut runner = Self {
             network: Networks::Invalid,
             data_path: String::new(),
             node: Arc::new(Mutex::new(None)),
             state: Arc::new(AtomicU8::new(NodeState::Stopped as u8)),
             stop: None,
+            callback_factory,
         };
         runner.set_network(Networks::NanoLiveNetwork);
         runner
     }
 
     pub fn new_null_with(node: Arc<Node>) -> Self {
-        let runner = Self::new();
+        let runner = Self::new(NodeCallbackFactory::new_null());
         *runner.node.lock().unwrap() = Some(node);
         runner.set_state(NodeState::Started);
         runner
     }
 
-    pub fn start_node(&mut self, callbacks: NodeCallbacks) {
+    pub fn start_node(&mut self) {
         self.set_state(NodeState::Starting);
 
         let (tx_stop, rx_stop) = tokio::sync::oneshot::channel::<()>();
@@ -59,6 +63,7 @@ impl NodeRunner {
         let state2 = self.state.clone();
         let data_path: PathBuf = self.data_path.clone().into();
         let network = self.network;
+        let callbacks = self.callback_factory.make_node_callbacks();
 
         std::thread::spawn(move || {
             let on_started = move |n| {

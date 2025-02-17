@@ -9,6 +9,7 @@ use crate::{
     ledger_stats::LedgerStats,
     message_collection::MessageCollection,
     message_recorder::MessageRecorder,
+    node_callbacks::NodeCallbackFactory,
     node_runner::NodeRunner,
     view_models::QueueViewModel,
 };
@@ -44,10 +45,12 @@ pub(crate) struct AppViewModel {
 
 impl AppViewModel {
     pub(crate) fn new() -> Self {
-        let node_runner = NodeRunner::new();
+        let clock = Arc::new(SteadyClock::default());
         let messages = Arc::new(RwLock::new(MessageCollection::default()));
         let msg_recorder = Arc::new(MessageRecorder::new(messages.clone()));
-        let clock = Arc::new(SteadyClock::default());
+        let callback_factory = NodeCallbackFactory::new(msg_recorder.clone(), clock.clone());
+        let node_runner = NodeRunner::new(callback_factory);
+
         Self {
             message_table: MessageTableViewModel::new(messages.clone()),
             tabs: TabBarViewModel::new(),
@@ -159,6 +162,6 @@ impl AppViewModel {
     }
 
     pub fn node_runner(&mut self) -> NodeRunnerViewModel {
-        NodeRunnerViewModel::new(&mut self.node_runner, &self.msg_recorder, &self.clock)
+        NodeRunnerViewModel::new(&mut self.node_runner)
     }
 }

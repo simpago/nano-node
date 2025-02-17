@@ -1,14 +1,13 @@
-use crate::{
-    message_collection::{MessageCollection, RecordedMessage},
-    message_rate_calculator::{MessageRates, MessageRatesCalculator},
-};
-use chrono::Utc;
-use rsnano_network::ChannelDirection;
-use rsnano_node::NodeCallbacks;
-use rsnano_nullable_clock::{SteadyClock, Timestamp};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, RwLock,
+};
+
+use rsnano_nullable_clock::Timestamp;
+
+use crate::{
+    message_collection::{MessageCollection, RecordedMessage},
+    message_rate_calculator::{MessageRates, MessageRatesCalculator},
 };
 
 pub(crate) struct MessageRecorder {
@@ -57,41 +56,8 @@ impl MessageRecorder {
     }
 }
 
-pub(crate) fn make_node_callbacks(
-    recorder: Arc<MessageRecorder>,
-    clock: Arc<SteadyClock>,
-) -> NodeCallbacks {
-    let recorder2 = recorder.clone();
-    let recorder3 = recorder.clone();
-    let clock2 = clock.clone();
-    let clock3 = clock.clone();
-    NodeCallbacks::builder()
-        .on_publish(move |channel_id, message| {
-            let recorded = RecordedMessage {
-                channel_id,
-                message: message.clone(),
-                direction: ChannelDirection::Outbound,
-                date: Utc::now(),
-            };
-            recorder.record(recorded, clock.now());
-        })
-        .on_inbound(move |channel_id, message| {
-            let recorded = RecordedMessage {
-                channel_id,
-                message: message.clone(),
-                direction: ChannelDirection::Inbound,
-                date: Utc::now(),
-            };
-            recorder2.record(recorded, clock2.now());
-        })
-        .on_inbound_dropped(move |channel_id, message| {
-            let recorded = RecordedMessage {
-                channel_id,
-                message: message.clone(),
-                direction: ChannelDirection::Inbound,
-                date: Utc::now(),
-            };
-            recorder3.record(recorded, clock3.now());
-        })
-        .finish()
+impl Default for MessageRecorder {
+    fn default() -> Self {
+        Self::new(Arc::new(RwLock::new(MessageCollection::default())))
+    }
 }
