@@ -1,9 +1,12 @@
 use super::{
     bootstrap_view::BootstrapView, queue_group_view::show_queue_group, show_peers, view_search_bar,
-    ExplorerView, LedgerStatsView, MessageRecorderControlsView, MessageStatsView, MessageTabView,
-    NodeRunnerView, TabBarView,
+    view_tabs, ExplorerView, LedgerStatsView, MessageRecorderControlsView, MessageStatsView,
+    MessageTabView, NodeRunnerView,
 };
-use crate::view_models::{AppViewModel, QueueGroupViewModel, Tab};
+use crate::{
+    navigator::NavItem,
+    view_models::{AppViewModel, QueueGroupViewModel},
+};
 use eframe::egui::{
     self, global_theme_preference_switch, warn_if_debug_build, CentralPanel, TopBottomPanel,
 };
@@ -39,7 +42,7 @@ impl AppView {
 
     fn show_tabs(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("tabs_panel").show(ctx, |ui| {
-            TabBarView::new(&mut self.model.tabs).show(ui);
+            view_tabs(ui, &self.model.tabs(), &mut self.model.app.navigator);
         });
     }
 
@@ -64,12 +67,12 @@ impl eframe::App for AppView {
         self.show_tabs(ctx);
         self.show_stats(ctx);
 
-        match self.model.tabs.selected_tab() {
-            Tab::Peers => show_peers(ctx, self.model.channels()),
-            Tab::Messages => MessageTabView::new(&mut self.model).show(ctx),
-            Tab::Queues => show_queues(ctx, self.model.queue_groups()),
-            Tab::Bootstrap => BootstrapView::new(&self.model.bootstrap).show(ctx),
-            Tab::Explorer => ExplorerView::new(&self.model.explorer()).show(ctx),
+        match self.model.app.navigator.current {
+            NavItem::Peers => show_peers(ctx, self.model.channels()),
+            NavItem::Messages => MessageTabView::new(&mut self.model).show(ctx),
+            NavItem::Queues => show_queues(ctx, self.model.queue_groups()),
+            NavItem::Bootstrap => BootstrapView::new(&self.model.bootstrap).show(ctx),
+            NavItem::Explorer => ExplorerView::new(&self.model.explorer()).show(ctx),
         }
 
         // Repaint to show the continuously increasing current block and message counters

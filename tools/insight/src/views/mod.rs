@@ -13,7 +13,7 @@ mod node_runner_view;
 mod peers_view;
 mod queue_group_view;
 mod search_bar;
-mod tab_bar_view;
+mod tab_bar;
 
 pub(crate) use app_view::*;
 pub(crate) use explorer_view::*;
@@ -26,4 +26,4 @@ pub(crate) use message_view::*;
 pub(crate) use node_runner_view::*;
 pub(crate) use peers_view::*;
 pub(crate) use search_bar::*;
-pub(crate) use tab_bar_view::*;
+pub(crate) use tab_bar::*;

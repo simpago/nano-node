@@ -10,17 +10,16 @@ use rsnano_nullable_clock::Timestamp;
 
 use super::{
     BlockViewModel, BootstrapViewModel, ChannelsViewModel, LedgerStatsViewModel,
-    MessageStatsViewModel, MessageTableViewModel, QueueGroupViewModel, Tab, TabBarViewModel,
+    MessageStatsViewModel, MessageTableViewModel, QueueGroupViewModel, TabViewModel,
 };
 use crate::{
-    app::InsightApp, explorer::ExplorerState, ledger_stats::LedgerStats,
+    app::InsightApp, explorer::ExplorerState, ledger_stats::LedgerStats, navigator::NavItem,
     view_models::QueueViewModel,
 };
 
 pub(crate) struct AppViewModel {
     pub app: InsightApp,
     pub message_table: MessageTableViewModel,
-    pub tabs: TabBarViewModel,
     ledger_stats: LedgerStats,
     last_update: Option<Timestamp>,
     pub aec_info: ActiveElectionsInfo,
@@ -39,7 +38,6 @@ impl AppViewModel {
         Self {
             app,
             message_table,
-            tabs: TabBarViewModel::new(),
             ledger_stats: LedgerStats::new(),
             last_update: None,
             aec_info: Default::default(),
@@ -80,6 +78,19 @@ impl AppViewModel {
         self.message_table.update_message_counts();
 
         self.last_update = Some(now);
+    }
+
+    pub(crate) fn tabs(&self) -> Vec<TabViewModel> {
+        self.app
+            .navigator
+            .all
+            .iter()
+            .map(|i| TabViewModel {
+                selected: *i == self.app.navigator.current,
+                label: i.name(),
+                value: *i,
+            })
+            .collect()
     }
 
     pub(crate) fn message_stats(&self) -> MessageStatsViewModel {
@@ -130,7 +141,7 @@ impl AppViewModel {
         if let Some(node) = self.app.node_runner.node() {
             let has_result = self.app.explorer.search(&node.ledger, &self.search_input);
             if has_result {
-                self.tabs.select(Tab::Explorer);
+                self.app.navigator.current = NavItem::Explorer;
             }
         }
     }

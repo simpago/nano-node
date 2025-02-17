@@ -4,7 +4,7 @@ use rsnano_nullable_clock::SteadyClock;
 
 use crate::{
     channels::Channels, explorer::Explorer, message_collection::MessageCollection,
-    message_recorder::MessageRecorder, node_callbacks::NodeCallbackFactory,
+    message_recorder::MessageRecorder, navigator::Navigator, node_callbacks::NodeCallbackFactory,
     node_runner::NodeRunner,
 };
 
@@ -15,6 +15,7 @@ pub(crate) struct InsightApp {
     pub node_runner: NodeRunner,
     pub channels: Channels,
     pub explorer: Explorer,
+    pub navigator: Navigator,
 }
 
 impl InsightApp {
@@ -31,6 +32,7 @@ impl InsightApp {
             node_runner: NodeRunner::new(callback_factory),
             channels,
             explorer: Explorer::new(),
+            navigator: Navigator::new(),
         }
     }
 }
