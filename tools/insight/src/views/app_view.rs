@@ -1,14 +1,15 @@
+use eframe::egui::{
+    self, global_theme_preference_switch, warn_if_debug_build, CentralPanel, TopBottomPanel,
+};
+
 use super::{
-    bootstrap_view::BootstrapView, queue_group_view::show_queue_group, show_peers,
-    view_ledger_stats, view_node_runner, view_search_bar, view_tabs, ExplorerView,
+    frontier_scan::view_frontier_scan, queue_group_view::show_queue_group, view_ledger_stats,
+    view_node_runner, view_peers, view_search_bar, view_tabs, ExplorerView,
     MessageRecorderControlsView, MessageStatsView, MessageTabView,
 };
 use crate::{
     navigator::NavItem,
     view_models::{AppViewModel, QueueGroupViewModel},
-};
-use eframe::egui::{
-    self, global_theme_preference_switch, warn_if_debug_build, CentralPanel, TopBottomPanel,
 };
 
 pub(crate) struct AppView {
@@ -23,7 +24,7 @@ impl AppView {
 }
 
 impl AppView {
-    fn show_controls_panel(&mut self, ctx: &egui::Context) {
+    fn view_controls_panel(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("controls_panel").show(ctx, |ui| {
             ui.add_space(1.0);
             ui.horizontal(|ui| {
@@ -37,13 +38,13 @@ impl AppView {
         });
     }
 
-    fn show_tabs(&mut self, ctx: &egui::Context) {
+    fn view_tabs(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("tabs_panel").show(ctx, |ui| {
             view_tabs(ui, &self.model.tabs(), &mut self.model.app.navigator);
         });
     }
 
-    fn show_stats(&mut self, ctx: &egui::Context) {
+    fn view_stats(&mut self, ctx: &egui::Context) {
         TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 global_theme_preference_switch(ui);
@@ -60,15 +61,15 @@ impl AppView {
 impl eframe::App for AppView {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.model.update();
-        self.show_controls_panel(ctx);
-        self.show_tabs(ctx);
-        self.show_stats(ctx);
+        self.view_controls_panel(ctx);
+        self.view_tabs(ctx);
+        self.view_stats(ctx);
 
         match self.model.app.navigator.current {
-            NavItem::Peers => show_peers(ctx, self.model.channels()),
+            NavItem::Peers => view_peers(ctx, self.model.channels()),
             NavItem::Messages => MessageTabView::new(&mut self.model).show(ctx),
-            NavItem::Queues => show_queues(ctx, self.model.queue_groups()),
-            NavItem::Bootstrap => BootstrapView::new(self.model.frontier_scan()).show(ctx),
+            NavItem::Queues => view_queues(ctx, self.model.queue_groups()),
+            NavItem::Bootstrap => view_frontier_scan(ctx, self.model.frontier_scan()),
             NavItem::Explorer => ExplorerView::new(&self.model.explorer()).show(ctx),
         }
 
@@ -77,7 +78,7 @@ impl eframe::App for AppView {
     }
 }
 
-fn show_queues(ctx: &egui::Context, groups: Vec<QueueGroupViewModel>) {
+fn view_queues(ctx: &egui::Context, groups: Vec<QueueGroupViewModel>) {
     CentralPanel::default().show(ctx, |ui| {
         for group in groups {
             show_queue_group(ui, group);

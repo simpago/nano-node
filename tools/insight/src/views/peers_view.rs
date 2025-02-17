@@ -7,17 +7,17 @@ use egui_extras::{Column, Size, StripBuilder, TableBuilder};
 
 use super::badge::Badge;
 
-pub(crate) fn show_peers(ctx: &egui::Context, model: ChannelsViewModel) {
+pub(crate) fn view_peers(ctx: &egui::Context, model: ChannelsViewModel) {
     CentralPanel::default().show(ctx, |ui| {
         if model.channel_count() == 0 {
-            show_no_connected_peers(ui);
+            view_no_connected_peers(ui);
         } else {
-            show_peers_table(ui, model);
+            view_peers_table(ui, model);
         }
     });
 }
 
-fn show_no_connected_peers(ui: &mut Ui) {
+fn view_no_connected_peers(ui: &mut Ui) {
     StripBuilder::new(ui)
         .size(Size::remainder())
         .size(Size::exact(50.0))
@@ -31,7 +31,7 @@ fn show_no_connected_peers(ui: &mut Ui) {
         });
 }
 
-fn show_peers_table(ui: &mut Ui, mut model: ChannelsViewModel) {
+fn view_peers_table(ui: &mut Ui, mut model: ChannelsViewModel) {
     TableBuilder::new(ui)
         .striped(true)
         .resizable(false)
@@ -95,7 +95,7 @@ fn show_peers_table(ui: &mut Ui, mut model: ChannelsViewModel) {
                 row.col(|ui| {
                     ui.add(Label::new(row_model.channel_id).selectable(false));
                 });
-                row.col(|ui| show_rep_state(ui, row_model.rep_state));
+                row.col(|ui| view_rep_state(ui, row_model.rep_state));
                 row.col(|ui| {
                     ui.add(Label::new(row_model.direction).selectable(false));
                 });
@@ -130,7 +130,7 @@ fn show_peers_table(ui: &mut Ui, mut model: ChannelsViewModel) {
         });
 }
 
-pub(crate) fn show_rep_state(ui: &mut Ui, rep_state: RepState) {
+pub(crate) fn view_rep_state(ui: &mut Ui, rep_state: RepState) {
     match rep_state {
         RepState::PrincipalRep => {
             ui.add(Badge::new("PR", PaletteColor::Purple1));

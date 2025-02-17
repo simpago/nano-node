@@ -2,16 +2,20 @@ use crate::view_models::FrontierScanViewModel;
 use eframe::egui::{self, CentralPanel, ProgressBar, ScrollArea};
 use egui_extras::{Size, StripBuilder};
 
-pub(crate) struct BootstrapView {
+pub(crate) fn view_frontier_scan(ctx: &egui::Context, model: FrontierScanViewModel) {
+    FrontierScanView::new(model).show(ctx)
+}
+
+struct FrontierScanView {
     model: FrontierScanViewModel,
 }
 
-impl BootstrapView {
-    pub(crate) fn new(model: FrontierScanViewModel) -> Self {
+impl FrontierScanView {
+    fn new(model: FrontierScanViewModel) -> Self {
         Self { model }
     }
 
-    pub fn show(self, ctx: &egui::Context) {
+    fn show(self, ctx: &egui::Context) {
         CentralPanel::default().show(ctx, |ui| {
             ScrollArea::both().auto_shrink(false).show(ui, |ui| {
                 ui.horizontal(|ui| {

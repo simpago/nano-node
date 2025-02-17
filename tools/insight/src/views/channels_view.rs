@@ -2,7 +2,7 @@ use crate::view_models::ChannelsViewModel;
 use eframe::egui::{Align, Label, Layout, Sense, Ui};
 use egui_extras::{Column, TableBuilder};
 
-use super::show_rep_state;
+use super::view_rep_state;
 
 pub(crate) struct ChannelsView<'a> {
     model: ChannelsViewModel<'a>,
@@ -48,7 +48,7 @@ impl<'a> ChannelsView<'a> {
                         ui.add(Label::new(row_model.channel_id).selectable(false));
                     });
                     row.col(|ui| {
-                        show_rep_state(ui, row_model.rep_state);
+                        view_rep_state(ui, row_model.rep_state);
                     });
                     row.col(|ui| {
                         ui.add(Label::new(row_model.remote_addr).selectable(false));
