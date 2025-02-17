@@ -9,7 +9,7 @@ use rsnano_core::utils::{FairQueueInfo, QueueInfo};
 
 use crate::gui::PaletteColor;
 
-pub(crate) fn show_queue_group(ui: &mut Ui, model: QueueGroupViewModel) {
+pub(crate) fn view_queue_group(ui: &mut Ui, model: QueueGroupViewModel) {
     ui.heading(model.heading);
 
     for queue in model.queues {

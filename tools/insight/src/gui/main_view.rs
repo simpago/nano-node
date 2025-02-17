@@ -3,11 +3,10 @@ use eframe::egui::{
 };
 
 use super::{
-    frontier_scan::view_frontier_scan, queue_group::show_queue_group, view_ledger_stats,
-    view_message_recorder_controls, view_message_tab, view_node_runner, view_peers,
-    view_search_bar, view_tabs, BlockViewModel, ChannelsViewModel, ExplorerView,
-    FrontierScanViewModel, MessageStatsView, MessageStatsViewModel, MessageTableViewModel,
-    QueueGroupViewModel, TabViewModel,
+    view_frontier_scan, view_ledger_stats, view_message_recorder_controls, view_message_tab,
+    view_node_runner, view_peers, view_queue_group, view_search_bar, view_tabs, BlockViewModel,
+    ChannelsViewModel, ExplorerView, FrontierScanViewModel, MessageStatsView,
+    MessageStatsViewModel, MessageTableViewModel, QueueGroupViewModel, TabViewModel,
 };
 use crate::{app::InsightApp, explorer::ExplorerState, gui::QueueViewModel, navigator::NavItem};
 
@@ -68,7 +67,9 @@ impl eframe::App for MainView {
             NavItem::Peers => view_peers(ctx, self.model.channels()),
             NavItem::Messages => view_message_tab(ctx, &mut self.model),
             NavItem::Queues => view_queues(ctx, self.model.queue_groups()),
-            NavItem::Bootstrap => view_frontier_scan(ctx, self.model.frontier_scan()),
+            NavItem::Bootstrap => {
+                view_frontier_scan(ctx, self.model.frontier_scan(), &mut self.model.app)
+            }
             NavItem::Explorer => ExplorerView::new(&self.model.explorer()).show(ctx),
         }
 
@@ -80,7 +81,7 @@ impl eframe::App for MainView {
 fn view_queues(ctx: &egui::Context, groups: Vec<QueueGroupViewModel>) {
     CentralPanel::default().show(ctx, |ui| {
         for group in groups {
-            show_queue_group(ui, group);
+            view_queue_group(ui, group);
             ui.add_space(10.0);
         }
     });

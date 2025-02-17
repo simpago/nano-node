@@ -2,21 +2,26 @@ use eframe::egui::{self, CentralPanel, ProgressBar, ScrollArea};
 use egui_extras::{Size, StripBuilder};
 use rsnano_core::Account;
 
-use crate::frontier_scan::FrontierScanInfo;
+use crate::{app::InsightApp, frontier_scan::FrontierScanInfo};
 
 use super::formatted_number;
 
-pub(crate) fn view_frontier_scan(ctx: &egui::Context, model: FrontierScanViewModel) {
-    FrontierScanView::new(model).show(ctx)
-}
-
-struct FrontierScanView {
+pub(crate) fn view_frontier_scan(
+    ctx: &egui::Context,
     model: FrontierScanViewModel,
+    app: &mut InsightApp,
+) {
+    FrontierScanView::new(model, app).show(ctx)
 }
 
-impl FrontierScanView {
-    fn new(model: FrontierScanViewModel) -> Self {
-        Self { model }
+struct FrontierScanView<'a> {
+    model: FrontierScanViewModel,
+    app: &'a mut InsightApp,
+}
+
+impl<'a> FrontierScanView<'a> {
+    fn new(model: FrontierScanViewModel, app: &'a mut InsightApp) -> Self {
+        Self { model, app }
     }
 
     fn show(self, ctx: &egui::Context) {
@@ -60,7 +65,9 @@ impl FrontierScanView {
 
                 ui.heading("Outdated accounts found:");
                 for account in self.model.outdated_accounts {
-                    ui.label(account);
+                    if ui.link(account.clone()).clicked() {
+                        self.app.search(&account);
+                    }
                 }
             });
         });
