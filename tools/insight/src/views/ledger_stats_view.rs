@@ -1,39 +1,32 @@
-use crate::view_models::LedgerStatsViewModel;
 use eframe::egui::Ui;
 use egui_extras::{Size, StripBuilder};
 
-pub(crate) struct LedgerStatsView<'a>(LedgerStatsViewModel<'a>);
+use crate::{ledger_stats::LedgerStats, view_models::formatted_number};
 
-impl<'a> LedgerStatsView<'a> {
-    pub fn new(model: LedgerStatsViewModel<'a>) -> Self {
-        Self(model)
-    }
+pub(crate) fn view_ledger_stats(ui: &mut Ui, stats: &LedgerStats) {
+    ui.label("Blocks");
 
-    pub fn view(&self, ui: &mut Ui) {
-        ui.label("Blocks");
+    ui.label("bps:");
+    StripBuilder::new(ui)
+        .size(Size::exact(35.0))
+        .horizontal(|mut strip| {
+            strip.cell(|ui| {
+                ui.label(formatted_number(stats.blocks_per_second()));
+            })
+        });
 
-        ui.label("bps:");
-        StripBuilder::new(ui)
-            .size(Size::exact(35.0))
-            .horizontal(|mut strip| {
-                strip.cell(|ui| {
-                    ui.label(self.0.blocks_per_second());
-                })
-            });
+    ui.label("cps:");
+    StripBuilder::new(ui)
+        .size(Size::exact(35.0))
+        .horizontal(|mut strip| {
+            strip.cell(|ui| {
+                ui.label(formatted_number(stats.confirmations_per_second()));
+            })
+        });
 
-        ui.label("cps:");
-        StripBuilder::new(ui)
-            .size(Size::exact(35.0))
-            .horizontal(|mut strip| {
-                strip.cell(|ui| {
-                    ui.label(self.0.confirmations_per_second());
-                })
-            });
-
-        ui.label("blocks:");
-        ui.label(self.0.block_count());
-        ui.add_space(10.0);
-        ui.label("cemented:");
-        ui.label(self.0.cemented_count());
-    }
+    ui.label("blocks:");
+    ui.label(formatted_number(stats.total_blocks));
+    ui.add_space(10.0);
+    ui.label("cemented:");
+    ui.label(formatted_number(stats.cemented_blocks));
 }

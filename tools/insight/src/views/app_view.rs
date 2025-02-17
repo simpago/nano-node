@@ -1,7 +1,7 @@
 use super::{
-    bootstrap_view::BootstrapView, queue_group_view::show_queue_group, show_peers, view_search_bar,
-    view_tabs, ExplorerView, LedgerStatsView, MessageRecorderControlsView, MessageStatsView,
-    MessageTabView, NodeRunnerView,
+    bootstrap_view::BootstrapView, queue_group_view::show_queue_group, show_peers,
+    view_ledger_stats, view_node_runner, view_search_bar, view_tabs, ExplorerView,
+    MessageRecorderControlsView, MessageStatsView, MessageTabView,
 };
 use crate::{
     navigator::NavItem,
@@ -27,7 +27,7 @@ impl AppView {
         TopBottomPanel::top("controls_panel").show(ctx, |ui| {
             ui.add_space(1.0);
             ui.horizontal(|ui| {
-                NodeRunnerView::new(&mut self.model.app.node_runner).show(ui);
+                view_node_runner(ui, &mut self.model.app.node_runner);
                 ui.separator();
                 MessageRecorderControlsView::new(&self.model.app.msg_recorder).show(ui);
                 ui.separator();
@@ -50,7 +50,7 @@ impl AppView {
                 ui.separator();
                 MessageStatsView::new(self.model.message_stats()).view(ui);
                 ui.separator();
-                LedgerStatsView::new(self.model.ledger_stats()).view(ui);
+                view_ledger_stats(ui, &self.model.app.ledger_stats);
                 warn_if_debug_build(ui);
             });
         });

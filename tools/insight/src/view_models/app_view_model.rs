@@ -1,27 +1,19 @@
-use std::time::Duration;
-
 use rsnano_core::utils::FairQueueInfo;
 use rsnano_node::{
     block_processing::BlockSource,
     cementation::ConfirmingSetInfo,
     consensus::{ActiveElectionsInfo, RepTier},
 };
-use rsnano_nullable_clock::Timestamp;
 
 use super::{
-    BlockViewModel, BootstrapViewModel, ChannelsViewModel, LedgerStatsViewModel,
-    MessageStatsViewModel, MessageTableViewModel, QueueGroupViewModel, TabViewModel,
+    BlockViewModel, BootstrapViewModel, ChannelsViewModel, MessageStatsViewModel,
+    MessageTableViewModel, QueueGroupViewModel, TabViewModel,
 };
-use crate::{
-    app::InsightApp, explorer::ExplorerState, ledger_stats::LedgerStats, navigator::NavItem,
-    view_models::QueueViewModel,
-};
+use crate::{app::InsightApp, explorer::ExplorerState, view_models::QueueViewModel};
 
 pub(crate) struct AppViewModel {
     pub app: InsightApp,
     pub message_table: MessageTableViewModel,
-    ledger_stats: LedgerStats,
-    last_update: Option<Timestamp>,
     pub aec_info: ActiveElectionsInfo,
     pub confirming_set: ConfirmingSetInfo,
     pub block_processor_info: FairQueueInfo<BlockSource>,
@@ -38,8 +30,6 @@ impl AppViewModel {
         Self {
             app,
             message_table,
-            ledger_stats: LedgerStats::new(),
-            last_update: None,
             aec_info: Default::default(),
             confirming_set: Default::default(),
             block_processor_info: Default::default(),
@@ -50,15 +40,13 @@ impl AppViewModel {
     }
 
     pub(crate) fn update(&mut self) {
-        let now = self.app.clock.now();
-        if let Some(last_update) = self.last_update {
-            if now - last_update < Duration::from_millis(500) {
-                return;
-            }
+        if !self.app.update() {
+            return;
         }
 
+        let now = self.app.clock.now();
+
         if let Some(node) = self.app.node_runner.node() {
-            self.ledger_stats.update(&node, now);
             let channels = node.network.read().unwrap().sorted_channels();
             let telemetries = node.telemetry.get_all_telemetries();
             let (peered_reps, min_rep_weight) = {
@@ -76,8 +64,6 @@ impl AppViewModel {
         }
 
         self.message_table.update_message_counts();
-
-        self.last_update = Some(now);
     }
 
     pub(crate) fn tabs(&self) -> Vec<TabViewModel> {
@@ -95,10 +81,6 @@ impl AppViewModel {
 
     pub(crate) fn message_stats(&self) -> MessageStatsViewModel {
         MessageStatsViewModel::new(&self.app.msg_recorder)
-    }
-
-    pub(crate) fn ledger_stats(&self) -> LedgerStatsViewModel {
-        LedgerStatsViewModel::new(&self.ledger_stats)
     }
 
     pub(crate) fn channels(&mut self) -> ChannelsViewModel {
