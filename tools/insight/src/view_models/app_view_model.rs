@@ -1,10 +1,3 @@
-use rsnano_core::utils::FairQueueInfo;
-use rsnano_node::{
-    block_processing::BlockSource,
-    cementation::ConfirmingSetInfo,
-    consensus::{ActiveElectionsInfo, RepTier},
-};
-
 use super::{
     BlockViewModel, BootstrapViewModel, ChannelsViewModel, MessageStatsViewModel,
     MessageTableViewModel, QueueGroupViewModel, TabViewModel,
@@ -14,10 +7,6 @@ use crate::{app::InsightApp, explorer::ExplorerState, view_models::QueueViewMode
 pub(crate) struct AppViewModel {
     pub app: InsightApp,
     pub message_table: MessageTableViewModel,
-    pub aec_info: ActiveElectionsInfo,
-    pub confirming_set: ConfirmingSetInfo,
-    pub block_processor_info: FairQueueInfo<BlockSource>,
-    pub vote_processor_info: FairQueueInfo<RepTier>,
     pub bootstrap: BootstrapViewModel,
     pub search_input: String,
 }
@@ -30,10 +19,6 @@ impl AppViewModel {
         Self {
             app,
             message_table,
-            aec_info: Default::default(),
-            confirming_set: Default::default(),
-            block_processor_info: Default::default(),
-            vote_processor_info: Default::default(),
             bootstrap: Default::default(),
             search_input: String::new(),
         }
@@ -47,19 +32,6 @@ impl AppViewModel {
         let now = self.app.clock.now();
 
         if let Some(node) = self.app.node_runner.node() {
-            let channels = node.network.read().unwrap().sorted_channels();
-            let telemetries = node.telemetry.get_all_telemetries();
-            let (peered_reps, min_rep_weight) = {
-                let guard = node.online_reps.lock().unwrap();
-                (guard.peered_reps(), guard.minimum_principal_weight())
-            };
-            self.app
-                .channels
-                .update(channels, telemetries, peered_reps, min_rep_weight);
-            self.aec_info = node.active.info();
-            self.confirming_set = node.confirming_set.info();
-            self.block_processor_info = node.block_processor.info();
-            self.vote_processor_info = node.vote_processor_queue.info();
             self.bootstrap.update(&node.bootstrapper, now);
         }
 
@@ -94,26 +66,34 @@ impl AppViewModel {
                 queues: vec![
                     QueueViewModel::new(
                         "Priority",
-                        self.aec_info.priority,
-                        self.aec_info.max_queue,
+                        self.app.aec_info.priority,
+                        self.app.aec_info.max_queue,
                     ),
-                    QueueViewModel::new("Hinted", self.aec_info.hinted, self.aec_info.max_queue),
+                    QueueViewModel::new(
+                        "Hinted",
+                        self.app.aec_info.hinted,
+                        self.app.aec_info.max_queue,
+                    ),
                     QueueViewModel::new(
                         "Optimistic",
-                        self.aec_info.optimistic,
-                        self.aec_info.max_queue,
+                        self.app.aec_info.optimistic,
+                        self.app.aec_info.max_queue,
                     ),
-                    QueueViewModel::new("Total", self.aec_info.total, self.aec_info.max_queue),
+                    QueueViewModel::new(
+                        "Total",
+                        self.app.aec_info.total,
+                        self.app.aec_info.max_queue,
+                    ),
                 ],
             },
-            QueueGroupViewModel::for_fair_queue("Block Processor", &self.block_processor_info),
-            QueueGroupViewModel::for_fair_queue("Vote Processor", &self.vote_processor_info),
+            QueueGroupViewModel::for_fair_queue("Block Processor", &self.app.block_processor_info),
+            QueueGroupViewModel::for_fair_queue("Vote Processor", &self.app.vote_processor_info),
             QueueGroupViewModel {
                 heading: "Miscellaneous".to_string(),
                 queues: vec![QueueViewModel::new(
                     "Confirming",
-                    self.confirming_set.size,
-                    self.confirming_set.max_size,
+                    self.app.confirming_set.size,
+                    self.app.confirming_set.max_size,
                 )],
             },
         ]

@@ -3,6 +3,12 @@ use std::{
     time::Duration,
 };
 
+use rsnano_core::utils::FairQueueInfo;
+use rsnano_node::{
+    block_processing::BlockSource,
+    cementation::ConfirmingSetInfo,
+    consensus::{ActiveElectionsInfo, RepTier},
+};
 use rsnano_nullable_clock::{SteadyClock, Timestamp};
 
 use crate::{
@@ -26,6 +32,10 @@ pub(crate) struct InsightApp {
     pub explorer: Explorer,
     pub navigator: Navigator,
     pub ledger_stats: LedgerStats,
+    pub aec_info: ActiveElectionsInfo,
+    pub confirming_set: ConfirmingSetInfo,
+    pub block_processor_info: FairQueueInfo<BlockSource>,
+    pub vote_processor_info: FairQueueInfo<RepTier>,
 }
 
 impl InsightApp {
@@ -44,6 +54,10 @@ impl InsightApp {
             explorer: Explorer::new(),
             navigator: Navigator::new(),
             ledger_stats: LedgerStats::new(),
+            aec_info: Default::default(),
+            confirming_set: Default::default(),
+            block_processor_info: Default::default(),
+            vote_processor_info: Default::default(),
             last_update: None,
         }
     }
@@ -67,6 +81,18 @@ impl InsightApp {
 
         if let Some(node) = self.node_runner.node() {
             self.ledger_stats.update(&node, now);
+            let channels = node.network.read().unwrap().sorted_channels();
+            let telemetries = node.telemetry.get_all_telemetries();
+            let (peered_reps, min_rep_weight) = {
+                let guard = node.online_reps.lock().unwrap();
+                (guard.peered_reps(), guard.minimum_principal_weight())
+            };
+            self.channels
+                .update(channels, telemetries, peered_reps, min_rep_weight);
+            self.aec_info = node.active.info();
+            self.confirming_set = node.confirming_set.info();
+            self.block_processor_info = node.block_processor.info();
+            self.vote_processor_info = node.vote_processor_queue.info();
         }
 
         self.last_update = Some(now);
