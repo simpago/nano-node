@@ -1,5 +1,4 @@
-use super::{channels::ChannelsView, MessageTableView, MessageView};
-use crate::view_models::AppViewModel;
+use super::{channels::ChannelsView, AppViewModel, MessageTableView, MessageView};
 use eframe::egui::{self, CentralPanel, SidePanel};
 
 pub(crate) struct MessageTabView<'a> {

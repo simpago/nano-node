@@ -2,7 +2,9 @@ use eframe::egui::{self, CentralPanel, ProgressBar, ScrollArea};
 use egui_extras::{Size, StripBuilder};
 use rsnano_core::Account;
 
-use crate::{frontier_scan::FrontierScanInfo, view_models::formatted_number};
+use crate::frontier_scan::FrontierScanInfo;
+
+use super::formatted_number;
 
 pub(crate) fn view_frontier_scan(ctx: &egui::Context, model: FrontierScanViewModel) {
     FrontierScanView::new(model).show(ctx)

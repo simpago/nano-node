@@ -1,5 +1,6 @@
-use crate::view_models::PaletteColor;
 use eframe::egui::{Color32, NumExt, Sense, TextStyle, Ui, Widget, WidgetText};
+
+use super::PaletteColor;
 
 pub(crate) struct Badge {
     text: WidgetText,

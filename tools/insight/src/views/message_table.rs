@@ -4,15 +4,13 @@ use eframe::egui::{
     Align, CentralPanel, Color32, Label, Layout, Sense, TextEdit, TextWrapMode, TopBottomPanel, Ui,
 };
 use egui_extras::{Column, TableBuilder};
+
 use rsnano_core::{Account, BlockHash};
 use rsnano_messages::{Message, MessageType};
 use rsnano_network::ChannelDirection;
 
-use super::badge::Badge;
-use crate::{
-    message_collection::{MessageCollection, RecordedMessage},
-    view_models::{MessageViewModel, PaletteColor},
-};
+use super::{badge::Badge, MessageViewModel, PaletteColor};
+use crate::message_collection::{MessageCollection, RecordedMessage};
 
 pub(crate) struct MessageTableView<'a> {
     model: &'a mut MessageTableViewModel,

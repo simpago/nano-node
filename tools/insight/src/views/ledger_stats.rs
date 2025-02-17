@@ -1,7 +1,8 @@
 use eframe::egui::Ui;
 use egui_extras::{Size, StripBuilder};
 
-use crate::{ledger_stats::LedgerStats, view_models::formatted_number};
+use super::formatted_number;
+use crate::ledger_stats::LedgerStats;
 
 pub(crate) fn view_ledger_stats(ui: &mut Ui, stats: &LedgerStats) {
     ui.label("Blocks");

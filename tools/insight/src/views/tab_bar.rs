@@ -1,6 +1,6 @@
 use eframe::egui::Ui;
 
-use crate::{navigator::Navigator, view_models::TabViewModel};
+use crate::navigator::{NavItem, Navigator};
 
 pub(crate) fn view_tabs(ui: &mut Ui, tabs: &[TabViewModel], navigator: &mut Navigator) {
     ui.horizontal(|ui| {
@@ -10,4 +10,10 @@ pub(crate) fn view_tabs(ui: &mut Ui, tabs: &[TabViewModel], navigator: &mut Navi
             }
         }
     });
+}
+
+pub(crate) struct TabViewModel {
+    pub selected: bool,
+    pub label: &'static str,
+    pub value: NavItem,
 }
