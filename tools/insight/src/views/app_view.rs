@@ -31,10 +31,7 @@ impl AppView {
                 ui.separator();
                 MessageRecorderControlsView::new(&self.model.app.msg_recorder).show(ui);
                 ui.separator();
-                let changed = view_search_bar(ui, &mut self.model.search_input);
-                if changed {
-                    self.model.search();
-                }
+                view_search_bar(ui, &mut self.model.search_input, &mut self.model.app);
             });
             ui.add_space(1.0);
         });

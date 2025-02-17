@@ -137,15 +137,6 @@ impl AppViewModel {
         ]
     }
 
-    pub fn search(&mut self) {
-        if let Some(node) = self.app.node_runner.node() {
-            let has_result = self.app.explorer.search(&node.ledger, &self.search_input);
-            if has_result {
-                self.app.navigator.current = NavItem::Explorer;
-            }
-        }
-    }
-
     pub fn explorer(&self) -> BlockViewModel {
         let mut view_model = BlockViewModel::default();
         if let ExplorerState::Block(b) = self.app.explorer.state() {

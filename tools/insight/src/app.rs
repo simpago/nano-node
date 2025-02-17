@@ -3,8 +3,12 @@ use std::sync::{Arc, RwLock};
 use rsnano_nullable_clock::SteadyClock;
 
 use crate::{
-    channels::Channels, explorer::Explorer, message_collection::MessageCollection,
-    message_recorder::MessageRecorder, navigator::Navigator, node_callbacks::NodeCallbackFactory,
+    channels::Channels,
+    explorer::Explorer,
+    message_collection::MessageCollection,
+    message_recorder::MessageRecorder,
+    navigator::{NavItem, Navigator},
+    node_callbacks::NodeCallbackFactory,
     node_runner::NodeRunner,
 };
 
@@ -33,6 +37,15 @@ impl InsightApp {
             channels,
             explorer: Explorer::new(),
             navigator: Navigator::new(),
+        }
+    }
+
+    pub fn search(&mut self, input: &str) {
+        if let Some(node) = self.node_runner.node() {
+            let has_result = self.explorer.search(&node.ledger, input);
+            if has_result {
+                self.navigator.current = NavItem::Explorer;
+            }
         }
     }
 }
