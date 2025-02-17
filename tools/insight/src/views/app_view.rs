@@ -68,7 +68,7 @@ impl eframe::App for AppView {
             NavItem::Peers => show_peers(ctx, self.model.channels()),
             NavItem::Messages => MessageTabView::new(&mut self.model).show(ctx),
             NavItem::Queues => show_queues(ctx, self.model.queue_groups()),
-            NavItem::Bootstrap => BootstrapView::new(&self.model.bootstrap).show(ctx),
+            NavItem::Bootstrap => BootstrapView::new(self.model.frontier_scan()).show(ctx),
             NavItem::Explorer => ExplorerView::new(&self.model.explorer()).show(ctx),
         }
 

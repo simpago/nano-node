@@ -1,34 +1,27 @@
-use crate::view_models::BootstrapViewModel;
+use crate::view_models::FrontierScanViewModel;
 use eframe::egui::{self, CentralPanel, ProgressBar, ScrollArea};
 use egui_extras::{Size, StripBuilder};
-use num_format::{Locale, ToFormattedString};
 
-pub(crate) struct BootstrapView<'a> {
-    model: &'a BootstrapViewModel,
+pub(crate) struct BootstrapView {
+    model: FrontierScanViewModel,
 }
 
-impl<'a> BootstrapView<'a> {
-    pub(crate) fn new(model: &'a BootstrapViewModel) -> Self {
+impl BootstrapView {
+    pub(crate) fn new(model: FrontierScanViewModel) -> Self {
         Self { model }
     }
 
-    pub fn show(&mut self, ctx: &egui::Context) {
+    pub fn show(self, ctx: &egui::Context) {
         CentralPanel::default().show(ctx, |ui| {
             ScrollArea::both().auto_shrink(false).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.heading(format!("{} frontiers/s", self.model.frontiers_rate()));
+                    ui.heading(self.model.frontiers_rate);
                     ui.add_space(100.0);
-                    ui.heading(format!("{} outdated/s", self.model.outdated_rate()));
+                    ui.heading(self.model.outdated_rate);
                     ui.add_space(50.0);
-                    ui.label(format!(
-                        "{} frontiers total",
-                        self.model.frontiers_total.to_formatted_string(&Locale::en)
-                    ));
+                    ui.label(self.model.frontiers_total);
                     ui.add_space(50.0);
-                    ui.label(format!(
-                        "{} outdated total",
-                        self.model.outdated_total.to_formatted_string(&Locale::en)
-                    ));
+                    ui.label(self.model.outdated_total);
                 });
 
                 for heads in self.model.frontier_heads.chunks(4) {
@@ -58,7 +51,7 @@ impl<'a> BootstrapView<'a> {
                 ui.add_space(20.0);
 
                 ui.heading("Outdated accounts found:");
-                for account in &self.model.outdated_accounts {
+                for account in self.model.outdated_accounts {
                     ui.label(account);
                 }
             });

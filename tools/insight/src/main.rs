@@ -1,6 +1,7 @@
 mod app;
 mod channels;
 mod explorer;
+mod frontier_scan;
 mod ledger_stats;
 mod message_collection;
 mod message_rate_calculator;

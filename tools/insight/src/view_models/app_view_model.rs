@@ -1,5 +1,5 @@
 use super::{
-    BlockViewModel, BootstrapViewModel, ChannelsViewModel, MessageStatsViewModel,
+    BlockViewModel, ChannelsViewModel, FrontierScanViewModel, MessageStatsViewModel,
     MessageTableViewModel, QueueGroupViewModel, TabViewModel,
 };
 use crate::{app::InsightApp, explorer::ExplorerState, view_models::QueueViewModel};
@@ -7,7 +7,6 @@ use crate::{app::InsightApp, explorer::ExplorerState, view_models::QueueViewMode
 pub(crate) struct AppViewModel {
     pub app: InsightApp,
     pub message_table: MessageTableViewModel,
-    pub bootstrap: BootstrapViewModel,
     pub search_input: String,
 }
 
@@ -19,7 +18,6 @@ impl AppViewModel {
         Self {
             app,
             message_table,
-            bootstrap: Default::default(),
             search_input: String::new(),
         }
     }
@@ -27,12 +25,6 @@ impl AppViewModel {
     pub(crate) fn update(&mut self) {
         if !self.app.update() {
             return;
-        }
-
-        let now = self.app.clock.now();
-
-        if let Some(node) = self.app.node_runner.node() {
-            self.bootstrap.update(&node.bootstrapper, now);
         }
 
         self.message_table.update_message_counts();
@@ -105,5 +97,9 @@ impl AppViewModel {
             view_model.show(b);
         }
         view_model
+    }
+
+    pub fn frontier_scan(&self) -> FrontierScanViewModel {
+        FrontierScanViewModel::new(&self.app.frontier_scan)
     }
 }

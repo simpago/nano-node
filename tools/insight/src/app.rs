@@ -14,6 +14,7 @@ use rsnano_nullable_clock::{SteadyClock, Timestamp};
 use crate::{
     channels::Channels,
     explorer::Explorer,
+    frontier_scan::FrontierScanInfo,
     ledger_stats::LedgerStats,
     message_collection::MessageCollection,
     message_recorder::MessageRecorder,
@@ -36,6 +37,7 @@ pub(crate) struct InsightApp {
     pub confirming_set: ConfirmingSetInfo,
     pub block_processor_info: FairQueueInfo<BlockSource>,
     pub vote_processor_info: FairQueueInfo<RepTier>,
+    pub frontier_scan: FrontierScanInfo,
 }
 
 impl InsightApp {
@@ -58,6 +60,7 @@ impl InsightApp {
             confirming_set: Default::default(),
             block_processor_info: Default::default(),
             vote_processor_info: Default::default(),
+            frontier_scan: FrontierScanInfo::default(),
             last_update: None,
         }
     }
@@ -93,6 +96,7 @@ impl InsightApp {
             self.confirming_set = node.confirming_set.info();
             self.block_processor_info = node.block_processor.info();
             self.vote_processor_info = node.vote_processor_queue.info();
+            self.frontier_scan.update(&node.bootstrapper, now);
         }
 
         self.last_update = Some(now);
