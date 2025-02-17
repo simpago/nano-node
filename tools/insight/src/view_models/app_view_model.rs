@@ -10,13 +10,10 @@ use rsnano_nullable_clock::Timestamp;
 
 use super::{
     BlockViewModel, BootstrapViewModel, ChannelsViewModel, LedgerStatsViewModel,
-    MessageStatsViewModel, MessageTableViewModel, QueueGroupViewModel, SearchBarViewModel, Tab,
-    TabBarViewModel,
+    MessageStatsViewModel, MessageTableViewModel, QueueGroupViewModel, Tab, TabBarViewModel,
 };
 use crate::{
-    app::InsightApp,
-    explorer::{Explorer, ExplorerState},
-    ledger_stats::LedgerStats,
+    app::InsightApp, explorer::ExplorerState, ledger_stats::LedgerStats,
     view_models::QueueViewModel,
 };
 
@@ -31,8 +28,7 @@ pub(crate) struct AppViewModel {
     pub block_processor_info: FairQueueInfo<BlockSource>,
     pub vote_processor_info: FairQueueInfo<RepTier>,
     pub bootstrap: BootstrapViewModel,
-    pub search_bar: SearchBarViewModel,
-    pub explorer: Explorer,
+    pub search_input: String,
 }
 
 impl AppViewModel {
@@ -51,8 +47,7 @@ impl AppViewModel {
             block_processor_info: Default::default(),
             vote_processor_info: Default::default(),
             bootstrap: Default::default(),
-            search_bar: Default::default(),
-            explorer: Explorer::new(),
+            search_input: String::new(),
         }
     }
 
@@ -133,7 +128,7 @@ impl AppViewModel {
 
     pub fn search(&mut self) {
         if let Some(node) = self.app.node_runner.node() {
-            let has_result = self.explorer.search(&node.ledger, &self.search_bar.input);
+            let has_result = self.app.explorer.search(&node.ledger, &self.search_input);
             if has_result {
                 self.tabs.select(Tab::Explorer);
             }
@@ -142,7 +137,7 @@ impl AppViewModel {
 
     pub fn explorer(&self) -> BlockViewModel {
         let mut view_model = BlockViewModel::default();
-        if let ExplorerState::Block(b) = self.explorer.state() {
+        if let ExplorerState::Block(b) = self.app.explorer.state() {
             view_model.show(b);
         }
         view_model

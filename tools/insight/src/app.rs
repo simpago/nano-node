@@ -3,8 +3,9 @@ use std::sync::{Arc, RwLock};
 use rsnano_nullable_clock::SteadyClock;
 
 use crate::{
-    channels::Channels, message_collection::MessageCollection, message_recorder::MessageRecorder,
-    node_callbacks::NodeCallbackFactory, node_runner::NodeRunner,
+    channels::Channels, explorer::Explorer, message_collection::MessageCollection,
+    message_recorder::MessageRecorder, node_callbacks::NodeCallbackFactory,
+    node_runner::NodeRunner,
 };
 
 pub(crate) struct InsightApp {
@@ -13,6 +14,7 @@ pub(crate) struct InsightApp {
     pub msg_recorder: Arc<MessageRecorder>,
     pub node_runner: NodeRunner,
     pub channels: Channels,
+    pub explorer: Explorer,
 }
 
 impl InsightApp {
@@ -28,6 +30,7 @@ impl InsightApp {
             msg_recorder,
             node_runner: NodeRunner::new(callback_factory),
             channels,
+            explorer: Explorer::new(),
         }
     }
 }

@@ -1,7 +1,7 @@
 use super::{
-    bootstrap_view::BootstrapView, queue_group_view::show_queue_group, show_peers, ExplorerView,
-    LedgerStatsView, MessageRecorderControlsView, MessageStatsView, MessageTabView, NodeRunnerView,
-    SearchBarView, TabBarView,
+    bootstrap_view::BootstrapView, queue_group_view::show_queue_group, show_peers, view_search_bar,
+    ExplorerView, LedgerStatsView, MessageRecorderControlsView, MessageStatsView, MessageTabView,
+    NodeRunnerView, TabBarView,
 };
 use crate::view_models::{AppViewModel, QueueGroupViewModel, Tab};
 use eframe::egui::{
@@ -28,7 +28,7 @@ impl AppView {
                 ui.separator();
                 MessageRecorderControlsView::new(&self.model.app.msg_recorder).show(ui);
                 ui.separator();
-                let changed = SearchBarView::new(&mut self.model.search_bar).show(ui);
+                let changed = view_search_bar(ui, &mut self.model.search_input);
                 if changed {
                     self.model.search();
                 }
