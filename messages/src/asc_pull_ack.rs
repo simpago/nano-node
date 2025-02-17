@@ -166,6 +166,10 @@ impl BlocksAckPayload {
         Self::new(blocks)
     }
 
+    pub fn empty() -> Self {
+        Self::new(VecDeque::new())
+    }
+
     /* Header allows for 16 bit extensions; 65535 bytes / 500 bytes (block size with some future margin) ~ 131 */
     pub const MAX_BLOCKS: u8 = 128;
 

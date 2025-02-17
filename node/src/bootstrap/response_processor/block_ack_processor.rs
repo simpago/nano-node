@@ -123,3 +123,77 @@ impl BlockAckProcessor {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rsnano_core::Account;
+
+    use crate::bootstrap::state::QueryType;
+
+    use super::*;
+
+    #[test]
+    fn response_doesnt_match_query() {
+        let state = Arc::new(Mutex::new(BootstrapState::default()));
+        let stats = Arc::new(Stats::default());
+        let block_processor = Arc::new(BlockProcessor::new_null());
+        let processor = BlockAckProcessor::new(state, stats.clone(), block_processor);
+
+        let query = RunningQuery::new_test_instance();
+        let response = BlocksAckPayload::new_test_instance();
+        let ok = processor.process(&query, &response);
+        assert!(!ok);
+        assert_eq!(
+            stats.count(
+                StatType::BootstrapProcess,
+                DetailType::Blocks,
+                Direction::In
+            ),
+            1
+        );
+        assert_eq!(
+            stats.count(
+                StatType::BootstrapVerifyBlocks,
+                DetailType::Invalid,
+                Direction::In
+            ),
+            1
+        );
+    }
+
+    #[test]
+    fn handle_empty_response() {
+        let state = Arc::new(Mutex::new(BootstrapState::default()));
+        let stats = Arc::new(Stats::default());
+        let block_processor = Arc::new(BlockProcessor::new_null());
+        let processor = BlockAckProcessor::new(state, stats.clone(), block_processor);
+
+        let account = Account::from(42);
+
+        let query = RunningQuery {
+            query_type: QueryType::BlocksByAccount,
+            account,
+            ..RunningQuery::new_test_instance()
+        };
+
+        let response = BlocksAckPayload::empty();
+        let ok = processor.process(&query, &response);
+        assert!(ok);
+        assert_eq!(
+            stats.count(
+                StatType::BootstrapProcess,
+                DetailType::Blocks,
+                Direction::In
+            ),
+            1
+        );
+        assert_eq!(
+            stats.count(
+                StatType::BootstrapVerifyBlocks,
+                DetailType::NothingNew,
+                Direction::In
+            ),
+            1
+        );
+    }
+}
