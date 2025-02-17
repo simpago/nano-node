@@ -1,5 +1,4 @@
 mod app_view_model;
-mod channels_view_model;
 mod explorer_view_model;
 mod frontier_scan;
 mod message_stats_view_model;
@@ -10,7 +9,6 @@ mod queue_group_view_model;
 mod tab_bar;
 
 pub(crate) use app_view_model::*;
-pub(crate) use channels_view_model::*;
 pub(crate) use explorer_view_model::*;
 pub(crate) use frontier_scan::*;
 pub(crate) use message_stats_view_model::*;

@@ -12,18 +12,18 @@ use crate::{
     view_models::{AppViewModel, QueueGroupViewModel},
 };
 
-pub(crate) struct AppView {
+pub(crate) struct MainView {
     model: AppViewModel,
 }
 
-impl AppView {
+impl MainView {
     pub(crate) fn new() -> Self {
         let model = AppViewModel::new();
         Self { model }
     }
 }
 
-impl AppView {
+impl MainView {
     fn view_controls_panel(&mut self, ctx: &egui::Context) {
         TopBottomPanel::top("controls_panel").show(ctx, |ui| {
             ui.add_space(1.0);
@@ -58,7 +58,7 @@ impl AppView {
     }
 }
 
-impl eframe::App for AppView {
+impl eframe::App for MainView {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.model.update();
         self.view_controls_panel(ctx);

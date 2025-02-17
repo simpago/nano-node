@@ -15,7 +15,7 @@ mod view_models;
 mod views;
 
 use eframe::egui;
-use views::AppView;
+use views::MainView;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -25,6 +25,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "RsNano Insight",
         options,
-        Box::new(|_| Ok(Box::new(AppView::new()))),
+        Box::new(|_| Ok(Box::new(MainView::new()))),
     )
 }

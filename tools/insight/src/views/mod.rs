@@ -1,9 +1,9 @@
-mod app_view;
 mod badge;
-mod channels_view;
+mod channels;
 mod explorer_view;
 mod frontier_scan;
 mod ledger_stats_view;
+mod main_view;
 mod message_recorder_controls_view;
 mod message_stats_view;
 mod message_tab_view;
@@ -15,9 +15,10 @@ mod queue_group_view;
 mod search_bar;
 mod tab_bar;
 
-pub(crate) use app_view::*;
+pub(crate) use channels::*;
 pub(crate) use explorer_view::*;
 pub(crate) use ledger_stats_view::*;
+pub(crate) use main_view::*;
 pub(crate) use message_recorder_controls_view::*;
 pub(crate) use message_stats_view::*;
 pub(crate) use message_tab_view::*;

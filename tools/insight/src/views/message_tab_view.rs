@@ -1,4 +1,4 @@
-use super::{channels_view::ChannelsView, MessageTableView, MessageView};
+use super::{channels::ChannelsView, MessageTableView, MessageView};
 use crate::view_models::AppViewModel;
 use eframe::egui::{self, CentralPanel, SidePanel};
 
