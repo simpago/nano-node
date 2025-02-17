@@ -23,7 +23,7 @@ pub enum NodeState {
 }
 
 pub(crate) struct NodeRunner {
-    data_path: String,
+    pub data_path: String,
     network: Networks,
     node: Arc<Mutex<Option<Arc<Node>>>>,
     state: Arc<AtomicU8>,
@@ -123,14 +123,6 @@ impl NodeRunner {
 
     pub(crate) fn node(&self) -> Option<Arc<Node>> {
         self.node.lock().unwrap().clone()
-    }
-
-    pub(crate) fn data_path(&self) -> &str {
-        &self.data_path
-    }
-
-    pub fn set_data_path(&mut self, path: String) {
-        self.data_path = path;
     }
 
     pub fn network(&self) -> Networks {

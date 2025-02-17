@@ -16,14 +16,10 @@ impl<'a> NodeRunnerView<'a> {
             self.network_radio_button(ui, Networks::NanoLiveNetwork);
             self.network_radio_button(ui, Networks::NanoBetaNetwork);
             self.network_radio_button(ui, Networks::NanoTestNetwork);
-            let mut path = self.runner.data_path().to_owned();
-            let response = ui.add_enabled(
+            ui.add_enabled(
                 self.runner.can_start_node(),
-                TextEdit::singleline(&mut path),
+                TextEdit::singleline(&mut self.runner.data_path),
             );
-            if response.changed() {
-                self.runner.set_data_path(path);
-            }
             self.start_node_button(ui);
             self.stop_button(ui);
             ui.label(self.runner.status());

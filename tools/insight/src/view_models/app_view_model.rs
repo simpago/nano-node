@@ -1,37 +1,30 @@
-use super::{
-    BlockViewModel, BootstrapViewModel, ChannelsViewModel, LedgerStatsViewModel,
-    MessageStatsViewModel, MessageTableViewModel, QueueGroupViewModel, SearchBarViewModel, Tab,
-    TabBarViewModel,
-};
-use crate::{
-    channels::Channels,
-    explorer::{Explorer, ExplorerState},
-    ledger_stats::LedgerStats,
-    message_collection::MessageCollection,
-    message_recorder::MessageRecorder,
-    node_callbacks::NodeCallbackFactory,
-    node_runner::NodeRunner,
-    view_models::QueueViewModel,
-};
+use std::time::Duration;
+
 use rsnano_core::utils::FairQueueInfo;
 use rsnano_node::{
     block_processing::BlockSource,
     cementation::ConfirmingSetInfo,
     consensus::{ActiveElectionsInfo, RepTier},
 };
-use rsnano_nullable_clock::{SteadyClock, Timestamp};
-use std::{
-    sync::{Arc, RwLock},
-    time::Duration,
+use rsnano_nullable_clock::Timestamp;
+
+use super::{
+    BlockViewModel, BootstrapViewModel, ChannelsViewModel, LedgerStatsViewModel,
+    MessageStatsViewModel, MessageTableViewModel, QueueGroupViewModel, SearchBarViewModel, Tab,
+    TabBarViewModel,
+};
+use crate::{
+    app::InsightApp,
+    explorer::{Explorer, ExplorerState},
+    ledger_stats::LedgerStats,
+    view_models::QueueViewModel,
 };
 
 pub(crate) struct AppViewModel {
-    pub msg_recorder: Arc<MessageRecorder>,
+    pub app: InsightApp,
     pub message_table: MessageTableViewModel,
     pub tabs: TabBarViewModel,
     ledger_stats: LedgerStats,
-    channels: Channels,
-    clock: Arc<SteadyClock>,
     last_update: Option<Timestamp>,
     pub aec_info: ActiveElectionsInfo,
     pub confirming_set: ConfirmingSetInfo,
@@ -40,23 +33,17 @@ pub(crate) struct AppViewModel {
     pub bootstrap: BootstrapViewModel,
     pub search_bar: SearchBarViewModel,
     pub explorer: Explorer,
-    pub node_runner: NodeRunner,
 }
 
 impl AppViewModel {
     pub(crate) fn new() -> Self {
-        let clock = Arc::new(SteadyClock::default());
-        let messages = Arc::new(RwLock::new(MessageCollection::default()));
-        let msg_recorder = Arc::new(MessageRecorder::new(messages.clone()));
-        let callback_factory = NodeCallbackFactory::new(msg_recorder.clone(), clock.clone());
-        let node_runner = NodeRunner::new(callback_factory);
+        let app = InsightApp::new();
+        let message_table = MessageTableViewModel::new(app.messages.clone());
 
         Self {
-            message_table: MessageTableViewModel::new(messages.clone()),
+            app,
+            message_table,
             tabs: TabBarViewModel::new(),
-            msg_recorder,
-            channels: Channels::new(messages),
-            clock,
             ledger_stats: LedgerStats::new(),
             last_update: None,
             aec_info: Default::default(),
@@ -66,19 +53,18 @@ impl AppViewModel {
             bootstrap: Default::default(),
             search_bar: Default::default(),
             explorer: Explorer::new(),
-            node_runner,
         }
     }
 
     pub(crate) fn update(&mut self) {
-        let now = self.clock.now();
+        let now = self.app.clock.now();
         if let Some(last_update) = self.last_update {
             if now - last_update < Duration::from_millis(500) {
                 return;
             }
         }
 
-        if let Some(node) = self.node_runner.node() {
+        if let Some(node) = self.app.node_runner.node() {
             self.ledger_stats.update(&node, now);
             let channels = node.network.read().unwrap().sorted_channels();
             let telemetries = node.telemetry.get_all_telemetries();
@@ -86,7 +72,8 @@ impl AppViewModel {
                 let guard = node.online_reps.lock().unwrap();
                 (guard.peered_reps(), guard.minimum_principal_weight())
             };
-            self.channels
+            self.app
+                .channels
                 .update(channels, telemetries, peered_reps, min_rep_weight);
             self.aec_info = node.active.info();
             self.confirming_set = node.confirming_set.info();
@@ -101,7 +88,7 @@ impl AppViewModel {
     }
 
     pub(crate) fn message_stats(&self) -> MessageStatsViewModel {
-        MessageStatsViewModel::new(&self.msg_recorder)
+        MessageStatsViewModel::new(&self.app.msg_recorder)
     }
 
     pub(crate) fn ledger_stats(&self) -> LedgerStatsViewModel {
@@ -109,7 +96,7 @@ impl AppViewModel {
     }
 
     pub(crate) fn channels(&mut self) -> ChannelsViewModel {
-        ChannelsViewModel::new(&mut self.channels)
+        ChannelsViewModel::new(&mut self.app.channels)
     }
 
     pub(crate) fn queue_groups(&self) -> Vec<QueueGroupViewModel> {
@@ -145,7 +132,7 @@ impl AppViewModel {
     }
 
     pub fn search(&mut self) {
-        if let Some(node) = self.node_runner.node() {
+        if let Some(node) = self.app.node_runner.node() {
             let has_result = self.explorer.search(&node.ledger, &self.search_bar.input);
             if has_result {
                 self.tabs.select(Tab::Explorer);

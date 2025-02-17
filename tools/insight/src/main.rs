@@ -1,3 +1,4 @@
+mod app;
 mod channels;
 mod explorer;
 mod ledger_stats;
