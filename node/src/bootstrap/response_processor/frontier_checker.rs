@@ -1,4 +1,4 @@
-use super::{account_crawler::AccountDatabaseCrawler, pending_crawler::PendingDatabaseCrawler};
+use super::database_crawler::{AccountCrawlSource, DatabaseCrawler, PendingCrawlSource};
 use crate::bootstrap::state::OutdatedAccounts;
 use rsnano_core::{Account, Frontier};
 use rsnano_ledger::Ledger;
@@ -19,8 +19,8 @@ pub(crate) enum FrontierCheckResult {
 pub(crate) struct FrontierChecker<'a> {
     ledger: &'a Ledger,
     tx: &'a LmdbReadTransaction,
-    account_crawler: AccountDatabaseCrawler<'a>,
-    pending_crawler: PendingDatabaseCrawler<'a>,
+    account_crawler: DatabaseCrawler<'a, AccountCrawlSource<'a>>,
+    pending_crawler: DatabaseCrawler<'a, PendingCrawlSource<'a>>,
 }
 
 impl<'a> FrontierChecker<'a> {
@@ -28,8 +28,8 @@ impl<'a> FrontierChecker<'a> {
         Self {
             ledger,
             tx,
-            account_crawler: AccountDatabaseCrawler::new(ledger, tx),
-            pending_crawler: PendingDatabaseCrawler::new(ledger, tx),
+            account_crawler: DatabaseCrawler::new(AccountCrawlSource::new(ledger, tx)),
+            pending_crawler: DatabaseCrawler::new(PendingCrawlSource::new(ledger, tx)),
         }
     }
 
@@ -87,8 +87,8 @@ impl<'a> FrontierChecker<'a> {
         }
 
         // Check if account has pending blocks in our ledger
-        if let Some((key, _)) = &self.pending_crawler.current {
-            if key.receiving_account == frontier.account {
+        if let Some((account, _)) = &self.pending_crawler.current {
+            if *account == frontier.account {
                 return FrontierCheckResult::Pending;
             }
         }

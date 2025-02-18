@@ -4,7 +4,7 @@ use rsnano_store_lmdb::LmdbReadTransaction;
 
 pub(super) struct DatabaseCrawler<'a, T>
 where
-    T: DatabaseCrawlerSource<'a>,
+    T: CrawlSource<'a>,
 {
     source: T,
     it: Option<Box<dyn Iterator<Item = (Account, T::Value)> + 'a>>,
@@ -15,7 +15,7 @@ const SEQUENTIAL_ATTEMPTS: usize = 10;
 
 impl<'a, T> DatabaseCrawler<'a, T>
 where
-    T: DatabaseCrawlerSource<'a>,
+    T: CrawlSource<'a>,
 {
     pub fn new(source: T) -> Self {
         Self {
@@ -79,23 +79,23 @@ where
     }
 }
 
-pub(crate) trait DatabaseCrawlerSource<'a> {
+pub(crate) trait CrawlSource<'a> {
     type Value;
     fn iter(&self, start: Account) -> Box<dyn Iterator<Item = (Account, Self::Value)> + 'a>;
 }
 
-pub(crate) struct AccountDatabaseCrawlerSource<'a> {
+pub(crate) struct AccountCrawlSource<'a> {
     ledger: &'a Ledger,
     tx: &'a LmdbReadTransaction,
 }
 
-impl<'a> AccountDatabaseCrawlerSource<'a> {
+impl<'a> AccountCrawlSource<'a> {
     pub(crate) fn new(ledger: &'a Ledger, tx: &'a LmdbReadTransaction) -> Self {
         Self { ledger, tx }
     }
 }
 
-impl<'a> DatabaseCrawlerSource<'a> for AccountDatabaseCrawlerSource<'a> {
+impl<'a> CrawlSource<'a> for AccountCrawlSource<'a> {
     type Value = AccountInfo;
 
     fn iter(&self, start: Account) -> Box<dyn Iterator<Item = (Account, AccountInfo)> + 'a> {
@@ -103,18 +103,18 @@ impl<'a> DatabaseCrawlerSource<'a> for AccountDatabaseCrawlerSource<'a> {
     }
 }
 
-pub(crate) struct PendingDatabaseCrawlerSource<'a> {
+pub(crate) struct PendingCrawlSource<'a> {
     ledger: &'a Ledger,
     tx: &'a LmdbReadTransaction,
 }
 
-impl<'a> PendingDatabaseCrawlerSource<'a> {
+impl<'a> PendingCrawlSource<'a> {
     pub(crate) fn new(ledger: &'a Ledger, tx: &'a LmdbReadTransaction) -> Self {
         Self { ledger, tx }
     }
 }
 
-impl<'a> DatabaseCrawlerSource<'a> for PendingDatabaseCrawlerSource<'a> {
+impl<'a> CrawlSource<'a> for PendingCrawlSource<'a> {
     type Value = PendingInfo;
 
     fn iter(&self, start: Account) -> Box<dyn Iterator<Item = (Account, PendingInfo)> + 'a> {
@@ -137,7 +137,7 @@ mod tests {
     fn empty_ledger() {
         let ledger = Ledger::new_null();
         let tx = ledger.read_txn();
-        let source = AccountDatabaseCrawlerSource::new(&ledger, &tx);
+        let source = AccountCrawlSource::new(&ledger, &tx);
         let mut crawler = DatabaseCrawler::new(source);
         crawler.seek(Account::from(123));
         assert_eq!(crawler.current, None);
@@ -151,7 +151,7 @@ mod tests {
             .account_info(&account, &info)
             .finish();
         let tx = ledger.read_txn();
-        let source = AccountDatabaseCrawlerSource::new(&ledger, &tx);
+        let source = AccountCrawlSource::new(&ledger, &tx);
         let mut crawler = DatabaseCrawler::new(source);
         crawler.seek(account);
         assert_eq!(crawler.current, Some((account, info)));
@@ -165,7 +165,7 @@ mod tests {
             .account_info(&account, &info)
             .finish();
         let tx = ledger.read_txn();
-        let source = AccountDatabaseCrawlerSource::new(&ledger, &tx);
+        let source = AccountCrawlSource::new(&ledger, &tx);
         let mut crawler = DatabaseCrawler::new(source);
         crawler.seek(Account::from(1));
         assert_eq!(crawler.current, Some((account, info)));
@@ -179,7 +179,7 @@ mod tests {
             .account_info(&account, &info)
             .finish();
         let tx = ledger.read_txn();
-        let source = AccountDatabaseCrawlerSource::new(&ledger, &tx);
+        let source = AccountCrawlSource::new(&ledger, &tx);
         let mut crawler = DatabaseCrawler::new(source);
         crawler.seek(Account::from(2));
         assert_eq!(crawler.current, None);
@@ -193,7 +193,7 @@ mod tests {
             .account_info(&account, &info)
             .finish();
         let tx = ledger.read_txn();
-        let source = AccountDatabaseCrawlerSource::new(&ledger, &tx);
+        let source = AccountCrawlSource::new(&ledger, &tx);
         let mut crawler = DatabaseCrawler::new(source);
         crawler.seek(Account::from(2));
         crawler.advance_to(Account::from(99999));
@@ -210,7 +210,7 @@ mod tests {
             .account_info(&account2, &info)
             .finish();
         let tx = ledger.read_txn();
-        let source = AccountDatabaseCrawlerSource::new(&ledger, &tx);
+        let source = AccountCrawlSource::new(&ledger, &tx);
         let mut crawler = DatabaseCrawler::new(source);
         crawler.seek(account1);
         crawler.advance_to(account2);
@@ -223,17 +223,17 @@ mod tests {
         let info = AccountInfo::new_test_instance();
         let mut ledger_builder = Ledger::new_null_builder().account_info(&first_account, &info);
 
-        for i in 0..SEQUENTIAL_ATTEMPTS {
+        for i in 0..SEQUENTIAL_ATTEMPTS + 1 {
             ledger_builder = ledger_builder.account_info(&Account::from(i as u64 + 2), &info);
         }
 
         let ledger = ledger_builder.finish();
 
         let tx = ledger.read_txn();
-        let source = AccountDatabaseCrawlerSource::new(&ledger, &tx);
+        let source = AccountCrawlSource::new(&ledger, &tx);
         let mut crawler = DatabaseCrawler::new(source);
         crawler.seek(first_account);
-        let target = Account::from(SEQUENTIAL_ATTEMPTS as u64 + 1);
+        let target = Account::from(SEQUENTIAL_ATTEMPTS as u64 + 2);
         crawler.advance_to(target);
         assert_eq!(crawler.current, Some((target, info)));
     }
@@ -246,7 +246,7 @@ mod tests {
             .account_info(&account, &info)
             .finish();
         let tx = ledger.read_txn();
-        let source = AccountDatabaseCrawlerSource::new(&ledger, &tx);
+        let source = AccountCrawlSource::new(&ledger, &tx);
         let mut crawler = DatabaseCrawler::new(source);
         crawler.seek(account);
         crawler.advance_to(account);
@@ -261,12 +261,23 @@ mod tests {
             .account_info(&account, &info)
             .finish();
         let tx = ledger.read_txn();
-        let source = AccountDatabaseCrawlerSource::new(&ledger, &tx);
+        let source = AccountCrawlSource::new(&ledger, &tx);
         let mut crawler = DatabaseCrawler::new(source);
         crawler.seek(account);
         crawler.advance_to(account.inc_or_max());
         assert_eq!(crawler.current, None);
         crawler.advance_to(account.inc_or_max());
         assert_eq!(crawler.current, None);
+    }
+
+    #[test]
+    fn pending_crawler() {
+        let key = PendingKey::new_test_instance();
+        let info = PendingInfo::new_test_instance();
+        let ledger = Ledger::new_null_builder().pending(&key, &info).finish();
+        let tx = ledger.read_txn();
+        let mut crawler = DatabaseCrawler::new(PendingCrawlSource::new(&ledger, &tx));
+        crawler.seek(key.receiving_account);
+        assert_eq!(crawler.current, Some((key.receiving_account, info)));
     }
 }
