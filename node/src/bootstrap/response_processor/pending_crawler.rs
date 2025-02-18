@@ -22,51 +22,57 @@ impl<'a> PendingDatabaseCrawler<'a> {
     }
 
     pub fn seek(&mut self, start: Account) {
-        let mut iter = self
-            .ledger
-            .store
-            .pending
-            .iter_range(self.tx, PendingKey::new(start, BlockHash::zero())..);
-
-        self.current = iter.next();
-        if self.current.is_some() {
-            self.it = Some(Box::new(iter));
+        let start_key = PendingKey::new(start, BlockHash::zero());
+        let mut it = Box::new(self.ledger.store.pending.iter_range(self.tx, start_key..));
+        self.current = it.next();
+        self.it = if self.current.is_some() {
+            Some(it)
         } else {
-            self.it = None;
+            None
         }
     }
 
-    pub fn advance_to(&mut self, account: &Account) {
-        let Some(it) = &mut self.it else {
+    pub fn advance_to(&mut self, target: Account) {
+        if Self::target_reached(&self.current, &target) {
             return;
+        }
+
+        if !self.advance_sequentially(target) {
+            // perform a fresh lookup
+            self.seek(target);
+        }
+    }
+
+    fn target_reached(current: &Option<(PendingKey, PendingInfo)>, target: &Account) -> bool {
+        if let Some((key, _)) = current {
+            if key.receiving_account >= *target {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// It is faster to try to reuse the existing iterator than to
+    /// perform a fresh seek.
+    /// Only if this doesn't succeed we perform a fresh seek.
+    fn advance_sequentially(&mut self, target: Account) -> bool {
+        let Some(it) = &mut self.it else {
+            return false;
         };
 
-        if let Some((key, _)) = &self.current {
-            if key.receiving_account == *account {
-                return; // already at correct account
-            }
-        }
-
-        // First try advancing sequentially
         for _ in 0..Self::SEQUENTIAL_ATTEMPTS {
             self.current = it.next();
-            match &self.current {
-                Some((key, _)) => {
-                    // Break if we've reached or overshoot the target account
-                    if key.receiving_account.number() >= account.number() {
-                        return;
-                    }
-                }
-                None => {
-                    self.it = None;
-                    self.current = None;
-                    break;
-                }
+            if Self::target_reached(&self.current, &target) {
+                return true;
+            }
+
+            if self.current.is_none() {
+                self.it = None;
+                return true;
             }
         }
 
-        // If that fails, perform a fresh lookup
-        self.seek(*account);
+        false
     }
 }
 
@@ -124,7 +130,7 @@ mod tests {
         let tx = ledger.read_txn();
         let mut crawler = PendingDatabaseCrawler::new(&ledger, &tx);
         crawler.seek(key.receiving_account);
-        crawler.advance_to(&Account::from(99999));
+        crawler.advance_to(Account::from(99999));
         assert_eq!(crawler.current, None);
     }
 
@@ -140,7 +146,7 @@ mod tests {
         let tx = ledger.read_txn();
         let mut crawler = PendingDatabaseCrawler::new(&ledger, &tx);
         crawler.seek(key1.receiving_account);
-        crawler.advance_to(&key2.receiving_account);
+        crawler.advance_to(key2.receiving_account);
         assert_eq!(crawler.current, Some((key2, info)));
     }
 
@@ -162,7 +168,7 @@ mod tests {
         let mut crawler = PendingDatabaseCrawler::new(&ledger, &tx);
         crawler.seek(first_account);
         let target = Account::from(PendingDatabaseCrawler::SEQUENTIAL_ATTEMPTS as u64 + 1);
-        crawler.advance_to(&target);
+        crawler.advance_to(target);
         assert_eq!(
             crawler.current,
             Some((PendingKey::new(target, block), info))
@@ -177,7 +183,7 @@ mod tests {
         let tx = ledger.read_txn();
         let mut crawler = PendingDatabaseCrawler::new(&ledger, &tx);
         crawler.seek(key.receiving_account);
-        crawler.advance_to(&key.receiving_account);
+        crawler.advance_to(key.receiving_account);
         assert_eq!(crawler.current, Some((key, info)));
     }
 
@@ -189,9 +195,9 @@ mod tests {
         let tx = ledger.read_txn();
         let mut crawler = PendingDatabaseCrawler::new(&ledger, &tx);
         crawler.seek(key.receiving_account);
-        crawler.advance_to(&key.receiving_account.inc_or_max());
+        crawler.advance_to(key.receiving_account.inc_or_max());
         assert_eq!(crawler.current, None);
-        crawler.advance_to(&key.receiving_account.inc_or_max());
+        crawler.advance_to(key.receiving_account.inc_or_max());
         assert_eq!(crawler.current, None);
     }
 }

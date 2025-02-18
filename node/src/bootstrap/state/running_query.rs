@@ -161,41 +161,35 @@ impl RunningQuery {
     /// - nothing_new: when received response indicates that the account chain does not have more blocks
     /// - ok: otherwise, if all checks pass
     pub fn verify_blocks(&self, response: &BlocksAckPayload) -> VerifyResult {
-        if !matches!(
-            self.query_type,
-            QueryType::BlocksByHash | QueryType::BlocksByAccount
-        ) {
-            return VerifyResult::Invalid;
-        }
+        let by_account = match self.query_type {
+            QueryType::BlocksByAccount => true,
+            QueryType::BlocksByHash => false,
+            _ => return VerifyResult::Invalid,
+        };
 
         let blocks = response.blocks();
-        if blocks.is_empty() {
-            return VerifyResult::NothingNew;
-        }
-        if blocks.len() == 1 && blocks.front().unwrap().hash() == self.start.into() {
-            return VerifyResult::NothingNew;
-        }
+
         if blocks.len() > self.count {
             return VerifyResult::Invalid;
         }
 
-        let first = blocks.front().unwrap();
-        match self.query_type {
-            QueryType::BlocksByHash => {
-                if first.hash() != self.start.into() {
-                    // TODO: Stat & log
-                    return VerifyResult::Invalid;
-                }
-            }
-            QueryType::BlocksByAccount => {
-                // Open & state blocks always contain account field
-                if first.account_field().unwrap() != self.start.into() {
-                    // TODO: Stat & log
-                    return VerifyResult::Invalid;
-                }
-            }
-            QueryType::AccountInfoByHash | QueryType::Frontiers | QueryType::Invalid => {
+        let Some(first) = blocks.front() else {
+            return VerifyResult::NothingNew;
+        };
+
+        if by_account {
+            // Open & state blocks always contain account field
+            if first.account_field().unwrap_or_default() != self.start.into() {
                 return VerifyResult::Invalid;
+            }
+        } else {
+            // Blocks by hash
+            if first.hash() != self.start.into() {
+                return VerifyResult::Invalid;
+            }
+
+            if blocks.len() == 1 {
+                return VerifyResult::NothingNew;
             }
         }
 

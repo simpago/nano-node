@@ -66,7 +66,7 @@ impl<'a> FrontierChecker<'a> {
     }
 
     fn check_frontier(&mut self, frontier: &Frontier) -> FrontierCheckResult {
-        self.advance_to(&frontier.account);
+        self.advance_to(frontier.account);
 
         // Check if account exists in our ledger
         if let Some((account, info)) = &self.account_crawler.current {
@@ -101,7 +101,7 @@ impl<'a> FrontierChecker<'a> {
         self.pending_crawler.seek(start);
     }
 
-    fn advance_to(&mut self, account: &Account) {
+    fn advance_to(&mut self, account: Account) {
         self.account_crawler.advance_to(account);
         self.pending_crawler.advance_to(account);
     }

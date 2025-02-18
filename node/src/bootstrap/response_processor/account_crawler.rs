@@ -21,55 +21,57 @@ impl<'a> AccountDatabaseCrawler<'a> {
         }
     }
 
-    pub fn seek(&mut self, start: Account) {
-        self.it = Some(Box::new(
-            self.ledger.store.account.iter_range(self.tx, start..),
-        ));
-        self.advance();
+    pub fn seek(&mut self, target: Account) {
+        let mut it = Box::new(self.ledger.store.account.iter_range(self.tx, target..));
+        self.current = it.next();
+        self.it = if self.current.is_some() {
+            Some(it)
+        } else {
+            None
+        };
     }
 
-    fn advance(&mut self) {
-        if let Some(it) = &mut self.it {
-            self.current = it.next();
-            if self.current.is_none() {
-                self.it = None;
-            }
-        } else {
-            self.current = None;
+    pub fn advance_to(&mut self, target: Account) {
+        if Self::target_reached(&self.current, &target) {
+            return;
+        }
+
+        if !self.advance_sequentially(target) {
+            // perform a fresh lookup
+            self.seek(target);
         }
     }
 
-    pub fn advance_to(&mut self, account: &Account) {
+    fn target_reached(current: &Option<(Account, AccountInfo)>, target: &Account) -> bool {
+        if let Some((account, _)) = current {
+            if account >= target {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// It is faster to try to reuse the existing iterator than to
+    /// perform a fresh seek.
+    /// Only if this doesn't succeed we perform a fresh seek.
+    fn advance_sequentially(&mut self, target: Account) -> bool {
         let Some(it) = &mut self.it else {
-            return;
+            return false;
         };
 
-        if let Some((acc, _)) = &self.current {
-            if acc == account {
-                return; // already at correct account
-            }
-        }
-
-        // First try advancing sequentially
         for _ in 0..Self::SEQUENTIAL_ATTEMPTS {
             self.current = it.next();
-            match &self.current {
-                Some((acc, _)) => {
-                    // Break if we've reached or overshoot the target account
-                    if acc.number() >= account.number() {
-                        return;
-                    }
-                }
-                None => {
-                    self.it = None;
-                    self.current = None;
-                    break;
-                }
+            if Self::target_reached(&self.current, &target) {
+                return true;
+            }
+
+            if self.current.is_none() {
+                self.it = None;
+                return true;
             }
         }
 
-        // If that fails, perform a fresh lookup
-        self.seek(*account);
+        false
     }
 }
 
@@ -135,7 +137,7 @@ mod tests {
         let tx = ledger.read_txn();
         let mut crawler = AccountDatabaseCrawler::new(&ledger, &tx);
         crawler.seek(Account::from(2));
-        crawler.advance_to(&Account::from(99999));
+        crawler.advance_to(Account::from(99999));
         assert_eq!(crawler.current, None);
     }
 
@@ -151,7 +153,7 @@ mod tests {
         let tx = ledger.read_txn();
         let mut crawler = AccountDatabaseCrawler::new(&ledger, &tx);
         crawler.seek(account1);
-        crawler.advance_to(&account2);
+        crawler.advance_to(account2);
         assert_eq!(crawler.current, Some((account2, info)));
     }
 
@@ -171,7 +173,7 @@ mod tests {
         let mut crawler = AccountDatabaseCrawler::new(&ledger, &tx);
         crawler.seek(first_account);
         let target = Account::from(AccountDatabaseCrawler::SEQUENTIAL_ATTEMPTS as u64 + 1);
-        crawler.advance_to(&target);
+        crawler.advance_to(target);
         assert_eq!(crawler.current, Some((target, info)));
     }
 
@@ -185,7 +187,7 @@ mod tests {
         let tx = ledger.read_txn();
         let mut crawler = AccountDatabaseCrawler::new(&ledger, &tx);
         crawler.seek(account);
-        crawler.advance_to(&account);
+        crawler.advance_to(account);
         assert_eq!(crawler.current, Some((account, info)));
     }
 
@@ -199,9 +201,9 @@ mod tests {
         let tx = ledger.read_txn();
         let mut crawler = AccountDatabaseCrawler::new(&ledger, &tx);
         crawler.seek(account);
-        crawler.advance_to(&account.inc_or_max());
+        crawler.advance_to(account.inc_or_max());
         assert_eq!(crawler.current, None);
-        crawler.advance_to(&account.inc_or_max());
+        crawler.advance_to(account.inc_or_max());
         assert_eq!(crawler.current, None);
     }
 }
