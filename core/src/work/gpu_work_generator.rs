@@ -1,0 +1,216 @@
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Condvar, Mutex,
+    },
+    thread::{spawn, JoinHandle},
+};
+
+use rand::Rng;
+
+use super::{gpu::Gpu, WorkGenerator, WorkItem, WorkTicket};
+use crate::Root;
+
+#[derive(Default)]
+struct WorkState {
+    work_item: Option<WorkItem>,
+    task_complete: Arc<AtomicBool>,
+    unsuccessful_workers: usize,
+    random_mode: bool,
+    future_work: Vec<WorkItem>,
+}
+
+impl WorkState {
+    fn set_task(&mut self, cond_var: &Condvar) {
+        if self.work_item.is_none() {
+            self.task_complete.store(true, Ordering::Relaxed);
+            if self.future_work.len() > 0 {
+                let max_range = if self.random_mode {
+                    self.future_work.len()
+                } else {
+                    1
+                };
+                let i = rand::rng().random_range(0..max_range);
+                let work_item = self.future_work.remove(i);
+                self.work_item = Some(work_item);
+                self.task_complete = Arc::new(AtomicBool::new(false));
+                cond_var.notify_all();
+            }
+        }
+    }
+}
+
+enum WorkError {
+    Canceled,
+    Errored,
+}
+/// Generates the proof of work using a GPU with OpenCL
+pub struct GpuWorkGenerator {
+    handle: Option<JoinHandle<()>>,
+    work_state: Arc<(Mutex<WorkState>, Condvar)>,
+}
+
+const N_WORKERS: usize = 1;
+const GPU_I: usize = 0;
+const PLATFORM_IDX: usize = 0;
+const DEVICE_IDX: usize = 0;
+const THREADS: usize = 1048576;
+
+impl GpuWorkGenerator {
+    pub fn new() -> Self {
+        Self {
+            handle: None,
+            work_state: Arc::new((Mutex::new(Default::default()), Condvar::new())),
+        }
+    }
+
+    pub fn start(&mut self) {
+        let work_state = self.work_state.clone();
+        self.handle = Some(spawn(move || {
+            let mut gpu =
+                Gpu::new(PLATFORM_IDX, DEVICE_IDX, THREADS, None).expect("failed to create GPU");
+            let mut failed = false;
+            let mut root = Root::zero();
+            let mut difficulty = 0u64;
+            let mut consecutive_gpu_errors = 0;
+            let mut consecutive_gpu_invalid_work_errors = 0;
+            let task_complete = work_state.0.lock().unwrap().task_complete.clone();
+            loop {
+                if failed || task_complete.load(Ordering::Relaxed) {
+                    let mut state = work_state.0.lock().unwrap();
+                    if root != state.root {
+                        failed = false;
+                    }
+                    if failed {
+                        state.unsuccessful_workers += 1;
+                        if state.unsuccessful_workers == N_WORKERS {
+                            if let Some(callback) = state.callback.take() {
+                                let _ = callback.send(Err(WorkError::Errored));
+                                state.set_task(&work_state.1);
+                            }
+                        }
+                        state = work_state.1.wait(state).unwrap();
+                    }
+                    while state.work_item.is_none() {
+                        state = work_state.1.wait(state).unwrap();
+                    }
+                    let work_item = state.work_item.as_ref().unwrap();
+                    root = work_item.root;
+                    difficulty = work_item.min_difficulty;
+                    task_complete = state.task_complete.clone();
+                    if failed {
+                        state.unsuccessful_workers -= 1;
+                    }
+                    if let Err(err) = gpu.set_task(root.as_bytes(), difficulty) {
+                        eprintln!(
+                            "Failed to set GPU {}'s task, abandoning it for this work: {:?}",
+                            GPU_I, err,
+                        );
+                        failed = true;
+                        continue;
+                    }
+                    failed = false;
+                    consecutive_gpu_errors = 0;
+                }
+
+                let attempt = rand::rng().random();
+                let mut out = [0u8; 8];
+                match gpu.run(&mut out, attempt) {
+                    Ok(true) => {
+                        if work_valid(root, out, difficulty).0 {
+                            let mut state = work_state.0.lock();
+                            if root == state.root {
+                                if let Some(callback) = state.callback.take() {
+                                    let _ = callback.send(Ok(out));
+                                    state.set_task(&work_state.1);
+                                }
+                            }
+                            consecutive_gpu_errors = 0;
+                            consecutive_gpu_invalid_work_errors = 0;
+                        } else {
+                            eprintln!(
+                                "GPU {} returned invalid work {} for root {}",
+                                GPU_I,
+                                hex::encode(&out),
+                                hex::encode_upper(&root),
+                            );
+                            if consecutive_gpu_invalid_work_errors >= 3 {
+                                eprintln!("GPU {} returned invalid work 3 consecutive times, abandoning it for this work", GPU_I);
+                                failed = true;
+                            } else {
+                                consecutive_gpu_errors += 1;
+                                consecutive_gpu_invalid_work_errors += 1;
+                            }
+                        }
+                    }
+                    Ok(false) => {
+                        consecutive_gpu_errors = 0;
+                    }
+                    Err(err) => {
+                        eprintln!("Error computing work on GPU {}: {:?}", GPU_I, err);
+                        if let Err(err) = gpu.reset_bufs() {
+                            eprintln!(
+                                    "Failed to reset GPU {}'s buffers, abandoning it for this work: {:?}",
+                                    GPU_I, err,
+                                );
+                            failed = true;
+                        }
+                        consecutive_gpu_errors += 1;
+                    }
+                }
+                if consecutive_gpu_errors >= 3 {
+                    eprintln!(
+                        "3 consecutive GPU {} errors, abandoning it for this work",
+                        GPU_I,
+                    );
+                    failed = true;
+                }
+            }
+        }));
+    }
+
+    pub fn stop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.join().unwrap();
+        }
+    }
+}
+
+impl Drop for GpuWorkGenerator {
+    fn drop(&mut self) {
+        self.stop()
+    }
+}
+
+impl WorkGenerator for GpuWorkGenerator {
+    fn create(
+        &mut self,
+        root: &Root,
+        min_difficulty: u64,
+        work_ticket: &WorkTicket,
+    ) -> Option<u64> {
+        todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicI32;
+
+    use crate::work::WorkThresholds;
+
+    use super::*;
+
+    #[test]
+    fn gpu_work() {
+        let mut work_generator = GpuWorkGenerator::new();
+        let t = AtomicI32::new(1);
+        let ticket = WorkTicket::new(&t);
+
+        work_generator.create(
+            &Root::from(123),
+            WorkThresholds::publish_full().threshold_base(),
+            &ticket,
+        );
+    }
+}

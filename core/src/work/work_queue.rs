@@ -37,7 +37,7 @@ impl<'a> WorkTicket<'a> {
 }
 
 pub(crate) struct WorkItem {
-    pub item: Root,
+    pub root: Root,
     pub min_difficulty: u64,
     pub callback: Option<Box<dyn FnOnce(Option<u64>) + Send>>,
 }

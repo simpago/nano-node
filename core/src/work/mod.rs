@@ -1,4 +1,6 @@
 mod cpu_work_generator;
+mod gpu;
+mod gpu_work_generator;
 mod opencl_work_generator;
 mod stub_work_pool;
 mod work_pool;
