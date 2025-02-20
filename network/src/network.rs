@@ -7,7 +7,7 @@ use crate::{
     Channel, ChannelId, ChannelMode, DataReceiver, DataReceiverFactory, NetworkObserver,
     NullDataReceiverFactory, NullNetworkObserver,
 };
-use rand::{seq::SliceRandom, thread_rng};
+use rand::seq::SliceRandom;
 use rsnano_core::{utils::ContainerInfo, Networks, NodeId};
 use rsnano_nullable_clock::Timestamp;
 use std::{
@@ -304,7 +304,7 @@ impl Network {
 
     pub fn shuffled_channels(&self) -> Vec<Arc<Channel>> {
         let mut channels: Vec<_> = self.channels().cloned().collect();
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         channels.shuffle(&mut rng);
         channels
     }
@@ -592,7 +592,7 @@ impl Network {
             .cloned()
             .collect();
 
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         peers.shuffle(&mut rng);
         peers.truncate(endpoints.len());
 

@@ -49,7 +49,7 @@ impl PullTypeDecider {
     /// Safe requests start from the confirmed frontier and given enough time
     /// will eventually resolve forks
     pub fn decide_pull_type(&mut self) -> PullType {
-        if self.rng.gen_range(0..100) < self.optimistic_request_percentage {
+        if self.rng.random_range(0..100) < self.optimistic_request_percentage {
             PullType::Optimistic
         } else {
             PullType::Safe
@@ -73,10 +73,10 @@ mod tests {
 
     #[test]
     fn rng() {
-        assert_eq!(rng_that_returns(75).gen_range(0..=100), 75_u8);
-        assert_eq!(rng_that_returns(74).gen_range(0..=100), 74_u8);
-        assert_eq!(rng_that_returns(0).gen_range(0..=100), 0_u8);
-        assert_eq!(rng_that_returns(100).gen_range(0..=100), 100_u8);
+        assert_eq!(rng_that_returns(75).random_range(0..=100), 75_u8);
+        assert_eq!(rng_that_returns(74).random_range(0..=100), 74_u8);
+        assert_eq!(rng_that_returns(0).random_range(0..=100), 0_u8);
+        assert_eq!(rng_that_returns(100).random_range(0..=100), 100_u8);
     }
 
     #[test]

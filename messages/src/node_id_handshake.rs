@@ -2,7 +2,7 @@ use super::MessageVariant;
 use crate::Cookie;
 use anyhow::Result;
 use bitvec::prelude::BitArray;
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use rsnano_core::{
     utils::{BufferWriter, Deserialize, FixedSizeSerialize, MemoryStream, Serialize, Stream},
     write_hex_bytes, Account, BlockHash, NodeId, PrivateKey, PublicKey, Signature,
@@ -51,7 +51,7 @@ impl NodeIdHandshakeResponse {
 
     pub fn new_v2(cookie: &Cookie, node_id: &PrivateKey, genesis: BlockHash) -> Self {
         let mut salt = [0; 32];
-        thread_rng().fill(&mut salt);
+        rand::rng().fill(&mut salt);
 
         let mut response = Self {
             node_id: node_id.public_key().into(),

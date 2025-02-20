@@ -15,11 +15,11 @@ impl HardenedConstants {
 }
 
 static INSTANCE: Lazy<HardenedConstants> = Lazy::new(|| {
-    let mut rng = rand::thread_rng();
-    let not_an_account = Account::from_bytes(rng.gen::<[u8; 32]>());
+    let mut rng = rand::rng();
+    let not_an_account = Account::from_bytes(rng.random::<[u8; 32]>());
     HardenedConstants {
         not_an_account_key: not_an_account.into(),
         not_an_account,
-        random_128: u128::from_ne_bytes(rng.gen::<[u8; 16]>()),
+        random_128: u128::from_ne_bytes(rng.random::<[u8; 16]>()),
     }
 });

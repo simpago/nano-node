@@ -3,7 +3,6 @@ use crate::{
     PRUNED_TEST_DATABASE,
 };
 use lmdb::{DatabaseFlags, WriteFlags};
-use rand::{thread_rng, Rng};
 use rsnano_core::{BlockHash, NoValue};
 use rsnano_nullable_lmdb::ConfiguredDatabase;
 use std::{ops::RangeBounds, sync::Arc};
@@ -57,7 +56,7 @@ impl LmdbPrunedStore {
     }
 
     pub fn random(&self, tx: &dyn Transaction) -> Option<BlockHash> {
-        let random_hash = BlockHash::from_bytes(thread_rng().gen());
+        let random_hash = BlockHash::random();
         self.iter_range(tx, random_hash..)
             .next()
             .or_else(|| self.iter(tx).next())

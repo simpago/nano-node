@@ -40,7 +40,7 @@ impl SynCookies {
         let ip_cookies = lock.cookies_per_ip.entry(*ip_addr).or_default();
         if *ip_cookies < self.max_cookies_per_ip {
             *ip_cookies += 1;
-            let cookie = rand::thread_rng().gen::<Cookie>();
+            let cookie = rand::rng().random::<Cookie>();
             lock.cookies.insert(
                 *endpoint,
                 SynCookieInfo {

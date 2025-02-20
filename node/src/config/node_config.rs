@@ -16,7 +16,7 @@ use crate::{
     transport::MessageProcessorConfig,
 };
 use once_cell::sync::Lazy;
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use rsnano_core::{
     utils::{get_env_or_default_string, Peer},
     Account, Amount, PublicKey,
@@ -335,7 +335,7 @@ impl NodeConfig {
     }
 
     pub fn random_representative(&self) -> PublicKey {
-        let i = thread_rng().gen_range(0..self.preconfigured_representatives.len());
+        let i = rand::rng().random_range(0..self.preconfigured_representatives.len());
         return self.preconfigured_representatives[i];
     }
 

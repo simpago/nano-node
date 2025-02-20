@@ -1,4 +1,4 @@
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use rsnano_core::RawKey;
 
 /// The fan spreads a key out over the heap to decrease the likelihood of it being recovered by memory inspection
@@ -10,9 +10,9 @@ impl Fan {
     pub fn new(key: RawKey, count: usize) -> Self {
         let mut first = Box::new(key);
         let mut values = Vec::with_capacity(count);
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         for _ in 1..count {
-            let entry = Box::new(RawKey::from_bytes(rng.gen()));
+            let entry = Box::new(RawKey::from_bytes(rng.random()));
             *first.as_mut() ^= entry.as_ref().clone();
             values.push(entry);
         }

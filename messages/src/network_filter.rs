@@ -1,4 +1,4 @@
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use siphasher::{prelude::*, sip128::SipHasher};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -139,7 +139,7 @@ pub struct DefaultNetworkFilterHasher {
 impl DefaultNetworkFilterHasher {
     pub fn new() -> Self {
         Self {
-            key: thread_rng().gen::<[u8; 16]>(),
+            key: rand::rng().random::<[u8; 16]>(),
         }
     }
 }

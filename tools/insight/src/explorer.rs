@@ -41,10 +41,6 @@ impl Explorer {
     pub(crate) fn state(&self) -> &ExplorerState {
         &self.state
     }
-
-    pub(crate) fn reset(&mut self) {
-        self.state = ExplorerState::Empty;
-    }
 }
 
 pub(crate) enum ExplorerState {

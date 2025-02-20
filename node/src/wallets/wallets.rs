@@ -9,7 +9,7 @@ use crate::{
     utils::{ThreadPool, ThreadPoolImpl},
     work::DistributedWorkFactory,
 };
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use rsnano_core::{
     utils::{get_env_or_default_string, ContainerInfo},
     work::{WorkPoolImpl, WorkThresholds},
@@ -813,7 +813,7 @@ impl Wallets {
             .get(&wallet_id)
             .ok_or_else(|| anyhow!("wallet not found"))?;
         let mut tx = self.env.tx_begin_write();
-        let id = WalletId::from_bytes(thread_rng().gen());
+        let id = WalletId::from_bytes(rand::rng().random());
         let temp = LmdbWalletStore::new_from_json(
             1,
             self.kdf.clone(),

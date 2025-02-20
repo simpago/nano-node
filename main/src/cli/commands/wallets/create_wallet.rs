@@ -1,7 +1,7 @@
 use crate::cli::build_node;
 use anyhow::{anyhow, Result};
 use clap::{ArgGroup, Parser};
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use rsnano_core::{RawKey, WalletId};
 use rsnano_node::wallets::WalletsExt;
 
@@ -26,7 +26,7 @@ pub(crate) struct CreateWalletArgs {
 impl CreateWalletArgs {
     pub(crate) fn create_wallet(&self) -> Result<()> {
         let node = build_node(&self.data_path, &self.network)?;
-        let wallet_id = WalletId::from_bytes(thread_rng().gen());
+        let wallet_id = WalletId::from_bytes(rand::rng().random());
 
         node.wallets.create(wallet_id);
         println!("{:?}", wallet_id);

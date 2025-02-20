@@ -1,4 +1,4 @@
-use rand::{seq::IteratorRandom, thread_rng};
+use rand::seq::IteratorRandom;
 use rsnano_messages::Keepalive;
 use rsnano_network::{ChannelId, DeadChannelCleanupStep};
 use std::{
@@ -40,7 +40,7 @@ impl LatestKeepalives {
 
     //TODO: randomize
     pub fn pop_random(&mut self) -> Option<Keepalive> {
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         if let Some(&channel_id) = self.entries.keys().choose(&mut rng) {
             self.entries.remove(&channel_id)
         } else {

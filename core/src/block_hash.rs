@@ -4,7 +4,6 @@ use crate::u256_struct;
 use blake2::digest::Update;
 use blake2::digest::VariableOutput;
 use blake2::Blake2bVar;
-use rand::thread_rng;
 use rand::Rng;
 
 u256_struct!(BlockHash);
@@ -12,7 +11,7 @@ serialize_32_byte_string!(BlockHash);
 
 impl BlockHash {
     pub fn random() -> Self {
-        BlockHash::from_bytes(thread_rng().gen())
+        BlockHash::from_bytes(rand::rng().random())
     }
 }
 

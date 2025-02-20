@@ -1,5 +1,5 @@
 use super::WorkRng;
-use rand::{thread_rng, Rng};
+use rand::Rng;
 
 pub(crate) struct XorShift1024Star {
     s: [u64; 16],
@@ -9,7 +9,7 @@ pub(crate) struct XorShift1024Star {
 impl XorShift1024Star {
     pub fn new() -> Self {
         Self {
-            s: thread_rng().gen(),
+            s: rand::rng().random(),
             p: 0,
         }
     }

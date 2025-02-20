@@ -6,7 +6,7 @@ use crate::{
     stats::{DetailType, StatType, Stats},
     transport::MessageSender,
 };
-use rand::{thread_rng, RngCore};
+use rand::RngCore;
 use rsnano_messages::{AscPullReq, Message};
 use rsnano_network::TrafficType;
 use rsnano_nullable_clock::SteadyClock;
@@ -55,7 +55,7 @@ impl QuerySender {
             self.send_listener.emit(spec.clone());
         }
 
-        let id = thread_rng().next_u64();
+        let id = rand::rng().next_u64();
         let now = self.clock.now();
         let query_type = spec.query_type();
         let mut query = RunningQuery::from_spec(id, &spec, now, self.request_timeout);
