@@ -6,7 +6,6 @@ use rsnano_websocket_messages::{OutgoingMessageEnvelope, Topic};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    borrow::Cow,
     net::SocketAddr,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -251,7 +250,7 @@ async fn accept_connection(
             ws_stream
                 .close(Some(CloseFrame {
                     code: CloseCode::Normal,
-                    reason: Cow::Borrowed("Shutting down"),
+                    reason: "Shutting down".into(),
                 }))
                 .await?;
         }

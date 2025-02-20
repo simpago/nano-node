@@ -12,7 +12,7 @@ aes = "0"
 anyhow = "1"
 blake2 = "0"
 ctr = "0"
-ed25519-dalek = { git = "https://github.com/rsnano-node/ed25519-dalek.git", rev = "e967e3792ed5aa4d67b89e98c2be1d719ef57aab", features = ["legacy_compatibility", "rand_core"] }
+ed25519-dalek = { git = "https://github.com/rsnano-node/ed25519-dalek.git", rev = "1f9d706d7033d34bdc1ed7c1789498c82ec0df10", features = ["legacy_compatibility", "rand_core"] }
 hex = "0"
 num = "0"
 num-traits = "0"

@@ -140,13 +140,16 @@ impl WebsocketSession {
                 }
             };
 
-            trace!(message = msg_text, "Received text websocket message");
+            trace!(
+                message = msg_text.as_str(),
+                "Received text websocket message"
+            );
 
             let incoming = match serde_json::from_str::<IncomingMessage>(&msg_text) {
                 Ok(i) => i,
                 Err(e) => {
                     warn!(
-                        text = msg_text,
+                        text = msg_text.as_str(),
                         "Could not deserialize JSON message: {:?}", e
                     );
                     return false;

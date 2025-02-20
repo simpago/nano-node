@@ -1,4 +1,4 @@
-use rand::{thread_rng, CryptoRng, RngCore};
+use rand::{rng, CryptoRng, RngCore};
 
 pub struct NullableRng {
     strategy: RngStrategy,
@@ -21,7 +21,7 @@ impl NullableRng {
         }
     }
 
-    pub fn thread_rng() -> Self {
+    pub fn rng() -> Self {
         Self {
             strategy: RngStrategy::Thread,
         }
@@ -31,29 +31,22 @@ impl NullableRng {
 impl RngCore for NullableRng {
     fn next_u32(&mut self) -> u32 {
         match &mut self.strategy {
-            RngStrategy::Thread => thread_rng().next_u32(),
+            RngStrategy::Thread => rng().next_u32(),
             RngStrategy::Nulled(i) => i.next_u32(),
         }
     }
 
     fn next_u64(&mut self) -> u64 {
         match &mut self.strategy {
-            RngStrategy::Thread => thread_rng().next_u64(),
+            RngStrategy::Thread => rng().next_u64(),
             RngStrategy::Nulled(i) => i.next_u64(),
         }
     }
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
         match &mut self.strategy {
-            RngStrategy::Thread => thread_rng().fill_bytes(dest),
+            RngStrategy::Thread => rng().fill_bytes(dest),
             RngStrategy::Nulled(i) => i.fill_bytes(dest),
-        }
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-        match &mut self.strategy {
-            RngStrategy::Thread => thread_rng().try_fill_bytes(dest),
-            RngStrategy::Nulled(i) => i.try_fill_bytes(dest),
         }
     }
 }
@@ -98,11 +91,6 @@ impl RngCore for RngStub {
             }
         }
     }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-        self.fill_bytes(dest);
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -111,7 +99,7 @@ mod tests {
 
     #[test]
     fn real_rng() {
-        let mut rng = NullableRng::thread_rng();
+        let mut rng = NullableRng::rng();
         let a1 = rng.next_u64();
         let a2 = rng.next_u64();
         let a3 = rng.next_u64();
@@ -128,7 +116,7 @@ mod tests {
         assert_eq!(buffer.iter().all(|&b| b == 0), false);
 
         buffer = [0; 32];
-        rng.try_fill_bytes(&mut buffer).unwrap();
+        rng.fill_bytes(&mut buffer);
         assert_eq!(buffer.iter().all(|&b| b == 0), false);
     }
 
@@ -151,7 +139,7 @@ mod tests {
         );
 
         buffer = [0; 32];
-        rng.try_fill_bytes(&mut buffer).unwrap();
+        rng.fill_bytes(&mut buffer);
         assert_eq!(
             buffer,
             [

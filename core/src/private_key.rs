@@ -35,7 +35,7 @@ impl PrivateKeyFactory {
 impl Default for PrivateKeyFactory {
     fn default() -> Self {
         Self {
-            rng: NullableRng::thread_rng(),
+            rng: NullableRng::rng(),
         }
     }
 }

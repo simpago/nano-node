@@ -21,7 +21,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1.0.40"
-rand = { version = "0.8.4" }
+rand = { version = "0.9" }
 tokio = { version = "1", features = ["signal"] }
 toml = "0.8.15"
 

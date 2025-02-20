@@ -33,7 +33,7 @@ impl PullTypeDecider {
     }
 
     pub(super) fn new(optimistic_request_percentage: u8) -> Self {
-        Self::with(NullableRng::thread_rng(), optimistic_request_percentage)
+        Self::with(NullableRng::rng(), optimistic_request_percentage)
     }
 
     fn with(rng: NullableRng, optimistic_request_percentage: u8) -> Self {
