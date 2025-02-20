@@ -83,7 +83,7 @@ impl VoteGenerator {
             vote_generation_queue: ProcessingQueue::new(
                 Arc::clone(&stats),
                 StatType::VoteGenerator,
-                "Voting que".to_string(),
+                Self::thread_name(is_final),
                 1,         // single threaded
                 1024 * 32, // max queue size
                 256,       // max batch size,
@@ -95,11 +95,19 @@ impl VoteGenerator {
         }
     }
 
+    fn thread_name(is_final: bool) -> String {
+        if is_final {
+            "Voting final".to_owned()
+        } else {
+            "Voting".to_owned()
+        }
+    }
+
     pub(crate) fn start(&self) {
         let shared_state_clone = Arc::clone(&self.shared_state);
         *self.thread.lock().unwrap() = Some(
             thread::Builder::new()
-                .name("voting".to_owned())
+                .name(Self::thread_name(self.shared_state.is_final))
                 .spawn(move || shared_state_clone.run())
                 .unwrap(),
         );
