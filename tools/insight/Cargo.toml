@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-eframe = "0.29.1"
-egui_extras = "0.29.1"
+eframe = "0.31.0"
+egui_extras = "0.31.0"
 rsnano_core = { path = "../../core" }
 rsnano_messages = { path = "../../messages" }
 rsnano_network = { path = "../../network" }
