@@ -33,7 +33,7 @@ bitvec = "1"
 blake2 = "0"
 bounded-vec-deque = "0"
 chrono = "0"
-dirs = "5"
+dirs = "6"
 num = "0"
 num-derive = "0"
 num-traits = "0"
@@ -61,7 +61,7 @@ tokio = { version = "1", features = [
 ] }
 async-trait = "0"
 tracing = "0"
-ordered-float = "4"
+ordered-float = "5"
 tokio-tungstenite = "0"
 futures-util = { version = "0", features = ["sink"] }
 tokio-util = "0"
