@@ -4,7 +4,9 @@ use rsnano_node::{
     stats::{DetailType, Direction, StatType},
 };
 use std::{net::SocketAddrV6, thread::sleep, time::Duration};
-use test_helpers::{assert_always_eq, assert_never, assert_timely, make_fake_channel, System};
+use test_helpers::{
+    assert_always_eq, assert_never, assert_timely, assert_timely2, make_fake_channel, System,
+};
 
 #[test]
 fn invalid_signature() {
@@ -52,7 +54,7 @@ fn basic() {
         .unwrap()
         .clone();
 
-    assert_timely(Duration::from_secs(5), || {
+    assert_timely2(|| {
         node_client
             .telemetry
             .get_telemetry(&channel.peer_addr())

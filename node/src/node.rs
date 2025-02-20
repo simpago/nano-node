@@ -278,7 +278,7 @@ impl Node {
             Arc::new(ThreadPoolImpl::create(1, "Election work"));
 
         let network_observer = Arc::new(NetworkStats::new(stats.clone()));
-        let mut network = Network::new(global_config.into());
+        let mut network = Network::new(config.network.clone());
         network.set_observer(network_observer.clone());
         let network = Arc::new(RwLock::new(network));
 
@@ -288,7 +288,7 @@ impl Node {
             network_params.network.cleanup_cutoff(),
         );
 
-        let mut network_filter = NetworkFilter::new(1024 * 1024);
+        let mut network_filter = NetworkFilter::new(config.network_duplicate_filter_size);
         network_filter.age_cutoff = config.network_duplicate_filter_cutoff;
         let network_filter = Arc::new(network_filter);
 
@@ -907,6 +907,7 @@ impl Node {
             peer_connector.clone(),
             flags.clone(),
             network_params.clone(),
+            config.network.clone(),
             stats.clone(),
             syn_cookies.clone(),
             network_filter.clone(),
@@ -918,7 +919,6 @@ impl Node {
         )));
 
         let message_processor = Mutex::new(MessageProcessor::new(
-            flags.clone(),
             config.clone(),
             inbound_message_queue.clone(),
             realtime_message_handler.clone(),
@@ -1143,7 +1143,7 @@ impl Node {
             ledger.clone(),
             peer_connector.clone(),
             stats.clone(),
-            network_params.network.merge_period,
+            config.network.cached_peer_reachout,
         );
 
         let ledger_pruning = Arc::new(LedgerPruning::new(
@@ -1500,9 +1500,7 @@ impl Node {
             self.rep_crawler.start();
         }
 
-        if self.config.tcp.max_inbound_connections > 0
-            && !(self.flags.disable_bootstrap_listener && self.flags.disable_tcp_realtime)
-        {
+        if self.config.tcp.max_inbound_connections > 0 {
             self.tcp_listener.start();
         } else {
             warn!("Peering is disabled");
@@ -1548,9 +1546,9 @@ impl Node {
             .start_delayed(peer_cache_update_interval);
         self.ledger_notification_thread.start();
 
-        if !self.network_params.network.merge_period.is_zero() {
+        if !self.config.network.peer_reachout.is_zero() {
             self.peer_cache_connector
-                .start(self.network_params.network.merge_period);
+                .start(self.config.network.cached_peer_reachout);
         }
         self.vote_router.start();
 
@@ -1682,7 +1680,7 @@ mod tests {
     #[test]
     fn start_peer_cache_connector() {
         let mut node = TestNode::new();
-        let merge_period = node.network_params.network.merge_period;
+        let merge_period = node.config.network.cached_peer_reachout;
         let start_tracker = node.peer_cache_connector.track_start();
 
         node.start();

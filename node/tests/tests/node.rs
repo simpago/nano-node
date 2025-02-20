@@ -307,9 +307,7 @@ fn deferred_dependent_elections() {
 #[test]
 fn rollback_gap_source() {
     let mut system = System::new();
-    let mut node_config = System::default_config();
-    node_config.peering_port = Some(get_available_port());
-    let node = system.build_node().config(node_config).finish();
+    let node = system.build_node().finish();
 
     let mut lattice = UnsavedBlockLatticeBuilder::new();
     let key = PrivateKey::new();
@@ -593,7 +591,7 @@ fn bootstrap_fork_open() {
     node_config.enable_optimistic_scheduler = false;
 
     let node0 = system.build_node().config(node_config.clone()).finish();
-    node_config.peering_port = Some(get_available_port());
+    node_config.network.listening_port = get_available_port();
     let node1 = system.build_node().config(node_config).finish();
 
     let mut lattice = UnsavedBlockLatticeBuilder::new();
@@ -787,7 +785,7 @@ fn fork_multi_flip() {
         .flags(flags.clone())
         .finish();
 
-    config.peering_port = Some(get_available_port());
+    config.network.listening_port = get_available_port();
     // Reduce cooldown to speed up fork resolution
     config.bootstrap.candidate_accounts.cooldown = Duration::from_millis(100);
     let node2 = system.build_node().config(config).flags(flags).finish();

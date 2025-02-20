@@ -13,8 +13,6 @@ pub struct NodeToml {
     pub backup_before_upgrade: Option<bool>,
     pub bandwidth_limit: Option<usize>,
     pub bandwidth_limit_burst_ratio: Option<f64>,
-    pub max_peers_per_ip: Option<u16>,
-    pub max_peers_per_subnetwork: Option<u16>,
     pub block_processor_batch_max_time: Option<i64>,
     pub bootstrap_bandwidth_burst_ratio: Option<f64>,
     pub bootstrap_bandwidth_limit: Option<usize>,
@@ -33,7 +31,6 @@ pub struct NodeToml {
     pub network_threads: Option<u32>,
     pub online_weight_minimum: Option<String>,
     pub password_fanout: Option<u32>,
-    pub peering_port: Option<u16>,
     pub pow_sleep_interval: Option<i64>,
     pub preconfigured_peers: Option<Vec<String>>,
     pub preconfigured_representatives: Option<Vec<String>>,
@@ -71,6 +68,7 @@ pub struct NodeToml {
     pub bounded_backlog: Option<BoundedBacklogToml>,
     pub tcp: Option<TcpToml>,
     pub max_ledger_notifications: Option<usize>,
+    pub network: Option<NetworkToml>,
 }
 
 impl NodeConfig {
@@ -86,12 +84,6 @@ impl NodeConfig {
         }
         if let Some(bandwidth_limit) = toml.bandwidth_limit {
             self.bandwidth_limit = bandwidth_limit;
-        }
-        if let Some(max) = toml.max_peers_per_ip {
-            self.max_peers_per_ip = max;
-        }
-        if let Some(max) = toml.max_peers_per_subnetwork {
-            self.max_peers_per_subnetwork = max;
         }
         if let Some(bandwidth_limit_burst_ratio) = toml.bandwidth_limit_burst_ratio {
             self.bandwidth_limit_burst_ratio = bandwidth_limit_burst_ratio;
@@ -155,9 +147,6 @@ impl NodeConfig {
         }
         if let Some(password_fanout) = toml.password_fanout {
             self.password_fanout = password_fanout;
-        }
-        if let Some(peering_port) = toml.peering_port {
-            self.peering_port = Some(peering_port);
         }
         if let Some(pow_sleep_interval_ns) = toml.pow_sleep_interval {
             self.pow_sleep_interval_ns = pow_sleep_interval_ns;
@@ -353,6 +342,30 @@ impl NodeConfig {
         if let Some(i) = toml.max_ledger_notifications {
             self.max_ledger_notifications = i;
         }
+
+        if let Some(network) = &toml.network {
+            if let Some(i) = network.peer_reachout {
+                self.network.peer_reachout = Duration::from_millis(i as u64);
+            }
+            if let Some(i) = network.cached_peer_reachout {
+                self.network.cached_peer_reachout = Duration::from_millis(i as u64);
+            }
+            if let Some(i) = network.max_peers_per_ip {
+                self.network.max_peers_per_ip = i;
+            }
+            if let Some(i) = network.max_peers_per_subnetwork {
+                self.network.max_peers_per_subnetwork = i;
+            }
+            if let Some(i) = network.duplicate_filter_size {
+                self.network_duplicate_filter_size = i;
+            }
+            if let Some(i) = network.duplicate_filter_cutoff {
+                self.network_duplicate_filter_cutoff = i as u64;
+            }
+            if let Some(i) = network.minimum_fanout {
+                self.network.minimum_fanout = i;
+            }
+        }
     }
 }
 
@@ -364,8 +377,6 @@ impl From<&NodeConfig> for NodeToml {
             backup_before_upgrade: Some(config.backup_before_upgrade),
             bandwidth_limit: Some(config.bandwidth_limit),
             bandwidth_limit_burst_ratio: Some(config.bandwidth_limit_burst_ratio),
-            max_peers_per_ip: Some(config.max_peers_per_ip),
-            max_peers_per_subnetwork: Some(config.max_peers_per_subnetwork),
             block_processor_batch_max_time: Some(config.block_processor_batch_max_time_ms),
             bootstrap_bandwidth_burst_ratio: Some(config.bootstrap_bandwidth_burst_ratio),
             bootstrap_bandwidth_limit: Some(config.bootstrap_bandwidth_limit),
@@ -384,7 +395,6 @@ impl From<&NodeConfig> for NodeToml {
             network_threads: Some(config.network_threads),
             online_weight_minimum: Some(config.online_weight_minimum.to_string_dec()),
             password_fanout: Some(config.password_fanout),
-            peering_port: config.peering_port,
             pow_sleep_interval: Some(config.pow_sleep_interval_ns),
             preconfigured_peers: Some(
                 config
@@ -455,6 +465,7 @@ impl From<&NodeConfig> for NodeToml {
             bounded_backlog: Some(config.into()),
             tcp: Some((&config.tcp).into()),
             max_ledger_notifications: Some(config.max_ledger_notifications),
+            network: Some(config.into()),
         }
     }
 }

@@ -243,6 +243,15 @@ mod tests {
         threads = 999
         max_queue = 999
 
+        [node.network]
+        peer_reachout = 999
+        cached_peer_reachout = 9999
+        max_peers_per_ip = 99
+        max_peers_per_subnetwork = 99
+        duplicate_filter_size = 9999999
+        duplicate_filter_cutoff = 999
+        minimum_fanout = 99
+
         [node.tcp]
         max_inbound_connections = 999
 	    max_outbound_connections = 999
@@ -361,10 +370,6 @@ mod tests {
         assert_ne!(
             deserialized.node.password_fanout,
             default_cfg.node.password_fanout
-        );
-        assert_ne!(
-            deserialized.node.peering_port,
-            default_cfg.node.peering_port
         );
         assert_ne!(
             deserialized.node.pow_sleep_interval_ns,
@@ -857,6 +862,35 @@ mod tests {
         assert_ne!(
             deserialized.node.tcp.connect_timeout,
             default_cfg.node.tcp.connect_timeout
+        );
+
+        assert_ne!(
+            deserialized.node.network.peer_reachout,
+            default_cfg.node.network.peer_reachout
+        );
+        assert_ne!(
+            deserialized.node.network.cached_peer_reachout,
+            default_cfg.node.network.cached_peer_reachout
+        );
+        assert_ne!(
+            deserialized.node.network.max_peers_per_ip,
+            default_cfg.node.network.max_peers_per_ip
+        );
+        assert_ne!(
+            deserialized.node.network.max_peers_per_subnetwork,
+            default_cfg.node.network.max_peers_per_subnetwork
+        );
+        assert_ne!(
+            deserialized.node.network_duplicate_filter_size,
+            default_cfg.node.network_duplicate_filter_size
+        );
+        assert_ne!(
+            deserialized.node.network_duplicate_filter_cutoff,
+            default_cfg.node.network_duplicate_filter_cutoff
+        );
+        assert_ne!(
+            deserialized.node.network.minimum_fanout,
+            default_cfg.node.network.minimum_fanout
         );
     }
 

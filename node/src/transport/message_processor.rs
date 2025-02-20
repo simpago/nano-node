@@ -1,5 +1,5 @@
 use super::{InboundMessageQueue, RealtimeMessageHandler};
-use crate::config::{NodeConfig, NodeFlags};
+use crate::config::NodeConfig;
 use rsnano_messages::Message;
 use rsnano_network::{Channel, ChannelId};
 use std::{
@@ -31,7 +31,6 @@ impl MessageProcessorConfig {
 
 /// Process inbound messages from other nodes
 pub struct MessageProcessor {
-    flags: NodeFlags,
     config: NodeConfig,
     processing_threads: Vec<JoinHandle<()>>,
     state: Arc<State>,
@@ -39,13 +38,11 @@ pub struct MessageProcessor {
 
 impl MessageProcessor {
     pub fn new(
-        flags: NodeFlags,
         config: NodeConfig,
         inbound_queue: Arc<InboundMessageQueue>,
         realtime_handler: Arc<RealtimeMessageHandler>,
     ) -> Self {
         Self {
-            flags,
             config,
             processing_threads: Vec::new(),
             state: Arc::new(State {
@@ -57,18 +54,16 @@ impl MessageProcessor {
     }
 
     pub fn start(&mut self) {
-        if !self.flags.disable_tcp_realtime {
-            for _ in 0..self.config.network_threads {
-                let state = self.state.clone();
-                self.processing_threads.push(
-                    std::thread::Builder::new()
-                        .name("Msg processing".to_string())
-                        .spawn(move || {
-                            state.run();
-                        })
-                        .unwrap(),
-                );
-            }
+        for _ in 0..self.config.network_threads {
+            let state = self.state.clone();
+            self.processing_threads.push(
+                std::thread::Builder::new()
+                    .name("Msg processing".to_string())
+                    .spawn(move || {
+                        state.run();
+                    })
+                    .unwrap(),
+            );
         }
     }
 

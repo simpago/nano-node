@@ -46,10 +46,8 @@ fn quorum_minimum_update_weight_before_quorum_checks() {
     node1.process(send2.clone());
     assert_timely_eq(Duration::from_secs(5), || node1.ledger.block_count(), 4);
 
-    let config2 = NodeConfig {
-        peering_port: Some(get_available_port()),
-        ..config
-    };
+    let mut config2 = config.clone();
+    config2.network.listening_port = get_available_port();
     let node2 = system.build_node().config(config2).finish();
     let wallet_id2 = node2.wallets.wallet_ids()[0];
     node2

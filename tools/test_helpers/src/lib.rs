@@ -116,10 +116,7 @@ impl System {
         node.start();
 
         // Check that we don't start more nodes than limit for single IP address
-        debug_assert!(
-            self.nodes.len() < node.config.max_peers_per_ip.into()
-                || node.flags.disable_max_peers_per_ip
-        );
+        debug_assert!(self.nodes.len() < node.config.network.max_peers_per_ip.into());
         let node = Arc::new(node);
         self.nodes.push(node.clone());
 

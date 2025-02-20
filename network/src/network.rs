@@ -19,30 +19,41 @@ use std::{
 };
 use tracing::{debug, warn};
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct NetworkConfig {
+    /// Time between attempts to reach out to peers.
+    pub peer_reachout: Duration,
+
+    /// Time between attempts to reach out to cached peers.
+    pub cached_peer_reachout: Duration,
+
     pub max_inbound_connections: usize,
     pub max_outbound_connections: usize,
 
-    /** Maximum number of peers per IP. It is also the max number of connections per IP*/
+    /// Maximum number of peers per IP. It is also the max number of connections per IP
     pub max_peers_per_ip: u16,
 
-    /** Maximum number of peers per subnetwork */
+    /// Maximum number of peers per subnetwork
     pub max_peers_per_subnetwork: u16,
     pub max_attempts_per_ip: usize,
 
     pub allow_local_peers: bool,
     pub min_protocol_version: u8,
-    pub disable_max_peers_per_ip: bool,         // For testing only
-    pub disable_max_peers_per_subnetwork: bool, // For testing only
-    pub disable_network: bool,
     pub listening_port: u16,
     pub limiter: BandwidthLimiterConfig,
+    pub minimum_fanout: usize,
 }
 
 impl NetworkConfig {
     pub fn default_for(network: Networks) -> Self {
         let is_dev = network == Networks::NanoDevNetwork;
         Self {
+            peer_reachout: if is_dev {
+                Duration::from_millis(10)
+            } else {
+                Duration::from_millis(250)
+            },
+            cached_peer_reachout: Duration::from_secs(1),
             max_inbound_connections: if is_dev { 128 } else { 2048 },
             max_outbound_connections: if is_dev { 128 } else { 2048 },
             allow_local_peers: true,
@@ -56,9 +67,6 @@ impl NetworkConfig {
             },
             max_attempts_per_ip: if is_dev { 128 } else { 1 },
             min_protocol_version: 0x14, //TODO don't hard code
-            disable_max_peers_per_ip: false,
-            disable_max_peers_per_subnetwork: false,
-            disable_network: false,
             listening_port: match network {
                 Networks::NanoDevNetwork => 44000,
                 Networks::NanoBetaNetwork => 54000,
@@ -66,6 +74,7 @@ impl NetworkConfig {
                 _ => 7075,
             },
             limiter: BandwidthLimiterConfig::default(),
+            minimum_fanout: 2,
         }
     }
 }
@@ -379,7 +388,7 @@ impl Network {
     /// Desired fanout for a given scale
     /// Simulating with sqrt_broadcast_simulate shows we only need to broadcast to sqrt(total_peers) random peers in order to successfully publish to everyone with high probability
     pub fn fanout(&self, scale: f32) -> usize {
-        let fanout = 2.0_f32.max(self.size_ln());
+        let fanout = (self.network_config.minimum_fanout as f32).max(self.size_ln());
         (scale * fanout).ceil() as usize
     }
 
@@ -463,19 +472,12 @@ impl Network {
     }
 
     fn max_ip_connections(&self, endpoint: &SocketAddrV6) -> bool {
-        if self.network_config.disable_max_peers_per_ip {
-            return false;
-        }
         let count =
             self.count_by_ip(&endpoint.ip()) + self.attempts.count_by_address(&endpoint.ip());
         count >= self.network_config.max_peers_per_ip as usize
     }
 
     fn max_subnetwork_connections(&self, peer: &SocketAddrV6) -> bool {
-        if self.network_config.disable_max_peers_per_subnetwork {
-            return false;
-        }
-
         // If the address is IPv4 we don't check for a network limit, since its address space isn't big as IPv6/64.
         if is_ipv4_mapped(&peer.ip()) {
             return false;
@@ -494,10 +496,6 @@ impl Network {
         direction: ChannelDirection,
         now: Timestamp,
     ) -> Result<(), NetworkError> {
-        if self.network_config.disable_network {
-            return Err(NetworkError::MaxConnections);
-        }
-
         let count = self.count_by_direction(direction);
         if count >= self.max_connections(direction) {
             return Err(NetworkError::MaxConnections);
@@ -507,11 +505,9 @@ impl Network {
             return Err(NetworkError::PeerExcluded);
         }
 
-        if !self.network_config.disable_max_peers_per_ip {
-            let count = self.count_by_ip(peer.ip());
-            if count >= self.network_config.max_peers_per_ip as usize {
-                return Err(NetworkError::MaxConnectionsPerIp);
-            }
+        let count = self.count_by_ip(peer.ip());
+        if count >= self.network_config.max_peers_per_ip as usize {
+            return Err(NetworkError::MaxConnectionsPerIp);
         }
 
         // Don't overload single IP

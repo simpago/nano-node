@@ -10,20 +10,16 @@ pub struct NodeFlags {
     pub disable_lazy_bootstrap: bool,
     pub disable_legacy_bootstrap: bool,
     pub disable_wallet_bootstrap: bool,
-    pub disable_bootstrap_listener: bool,
     pub disable_bootstrap_bulk_pull_server: bool,
     pub disable_bootstrap_bulk_push_client: bool,
     pub disable_ongoing_bootstrap: bool, // For testing only
     pub disable_rep_crawler: bool,
     pub disable_request_loop: bool, // For testing only
-    pub disable_tcp_realtime: bool,
     pub disable_providing_telemetry_metrics: bool,
     pub disable_block_processor_unchecked_deletion: bool,
     pub disable_block_processor_republishing: bool,
     pub allow_bootstrap_peers_duplicates: bool,
-    pub disable_max_peers_per_ip: bool,         // For testing only
-    pub disable_max_peers_per_subnetwork: bool, // For testing only
-    pub disable_search_pending: bool,           // For testing only
+    pub disable_search_pending: bool, // For testing only
     pub enable_pruning: bool,
     pub fast_bootstrap: bool,
     pub read_only: bool,
@@ -47,19 +43,15 @@ impl NodeFlags {
             disable_lazy_bootstrap: false,
             disable_legacy_bootstrap: false,
             disable_wallet_bootstrap: false,
-            disable_bootstrap_listener: false,
             disable_bootstrap_bulk_pull_server: false,
             disable_bootstrap_bulk_push_client: false,
             disable_ongoing_bootstrap: false,
             disable_rep_crawler: false,
             disable_request_loop: false,
-            disable_tcp_realtime: false,
             disable_providing_telemetry_metrics: false,
             disable_block_processor_unchecked_deletion: false,
             disable_block_processor_republishing: false,
             allow_bootstrap_peers_duplicates: false,
-            disable_max_peers_per_ip: false,
-            disable_max_peers_per_subnetwork: false,
             disable_search_pending: false,
             enable_pruning: false,
             fast_bootstrap: false,

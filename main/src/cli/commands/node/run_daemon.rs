@@ -29,10 +29,6 @@ pub(crate) struct RunDaemonArgs {
     /// Turn off use of wallet-based bootstrap
     #[arg(long)]
     disable_wallet_bootstrap: bool,
-    /// Turn off listener on the bootstrap network so incoming TCP (bootstrap) connections are rejected
-    /// Note: this does not impact TCP traffic for the live network.
-    #[arg(long, verbatim_doc_comment)]
-    disable_bootstrap_listener: bool,
     /// Disables the legacy bulk pull server for bootstrap operations
     #[arg(long)]
     disable_bootstrap_bulk_pull_server: bool,
@@ -48,9 +44,6 @@ pub(crate) struct RunDaemonArgs {
     /// Turn off the rep crawler process
     #[arg(long)]
     disable_rep_crawler: bool,
-    /// Turn off use of TCP live network (TCP for bootstrap will remain available)
-    #[arg(long)]
-    disable_tcp_realtime: bool,
     /// Do not provide any telemetry data to nodes requesting it. Responses are still made to requests, but they will have an empty payload.
     #[arg(long)]
     disable_providing_telemetry_metrics: bool,
@@ -116,13 +109,11 @@ impl RunDaemonArgs {
         flags.disable_lazy_bootstrap = self.disable_lazy_bootstrap;
         flags.disable_legacy_bootstrap = self.disable_legacy_bootstrap;
         flags.disable_wallet_bootstrap = self.disable_wallet_bootstrap;
-        flags.disable_bootstrap_listener = self.disable_bootstrap_listener;
         flags.disable_bootstrap_bulk_pull_server = self.disable_bootstrap_bulk_pull_server;
         flags.disable_bootstrap_bulk_push_client = self.disable_bootstrap_bulk_push_client;
         flags.disable_ongoing_bootstrap = self.disable_ongoing_bootstrap;
         flags.disable_rep_crawler = self.disable_rep_crawler;
         flags.disable_request_loop = self.disable_request_loop;
-        flags.disable_tcp_realtime = self.disable_tcp_realtime;
         flags.disable_providing_telemetry_metrics = self.disable_providing_telemetry_metrics;
         flags.disable_block_processor_unchecked_deletion =
             self.disable_block_processor_unchecked_deletion;

@@ -15,8 +15,6 @@ pub struct NetworkConstants {
     pub cleanup_period: Duration,
     /** How often to send keepalive messages */
     pub keepalive_period: Duration,
-    /// How often to connect to other peers
-    pub merge_period: Duration,
     /** Default maximum idle time for a socket before it's automatically closed */
     pub idle_timeout: Duration,
     pub sync_cookie_cutoff: Duration,
@@ -97,7 +95,6 @@ impl NetworkConstants {
             aec_loop_interval: Duration::from_millis(300),
             cleanup_period,
             keepalive_period: Duration::from_secs(15),
-            merge_period: Duration::from_millis(250),
             idle_timeout: cleanup_period * 2,
             sync_cookie_cutoff: Duration::from_secs(5),
             bootstrap_interval_s: 15 * 60,
@@ -166,7 +163,6 @@ impl NetworkConstants {
             aec_loop_interval: Duration::from_millis(20),
             cleanup_period,
             keepalive_period: Duration::from_secs(1),
-            merge_period: Duration::from_millis(10),
             idle_timeout: cleanup_period * 15,
             max_peers_per_ip: 256, // During tests, all peers are on localhost
             max_peers_per_subnetwork: 256,
