@@ -25,7 +25,7 @@ where
         let mut queue_lock = self.work_queue.lock_work_queue();
         while !self.work_queue.should_stop() {
             if let Some(current) = queue_lock.first() {
-                let item = current.item;
+                let root = current.root;
                 let min_difficulty = current.min_difficulty;
                 let work_ticket = self.work_queue.create_work_ticket();
 
@@ -34,7 +34,7 @@ where
 
                 let result = self
                     .work_generator
-                    .create(&item, min_difficulty, &work_ticket);
+                    .create(&root, min_difficulty, &work_ticket);
 
                 queue_lock = Self::handle_work_result(result, &self.work_queue, &work_ticket);
             } else {

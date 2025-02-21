@@ -92,7 +92,7 @@ mod tests {
 
         let done = OneShotNotification::new();
         let done2 = done.clone();
-        rebroadcaster.on_vote_processed(move || done2.notify());
+        rebroadcaster.on_vote_processed(move || done2.notify(()));
         rebroadcaster.start();
 
         queue.enqueue(Arc::new(Vote::new_test_instance()));

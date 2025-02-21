@@ -153,7 +153,7 @@ impl WorkPool for WorkPoolImpl {
         debug_assert!(!root.is_zero());
         if !self.threads.is_empty() {
             self.work_queue.enqueue(WorkItem {
-                item: root,
+                root,
                 min_difficulty: difficulty,
                 callback: done,
             });

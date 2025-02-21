@@ -96,7 +96,7 @@ mod tests {
 
         spawn(move || {
             runner.run(promise);
-            finished2.notify();
+            finished2.notify(());
         });
 
         polled.wait();
@@ -128,7 +128,7 @@ mod tests {
     }
 
     struct StubPromise {
-        polled: Arc<OneShotNotification>,
+        polled: Arc<OneShotNotification<()>>,
         result: Option<i32>,
     }
 
@@ -143,7 +143,7 @@ mod tests {
 
     impl BootstrapPromise<i32> for StubPromise {
         fn poll(&mut self, _state: &mut BootstrapState) -> PollResult<i32> {
-            self.polled.notify();
+            self.polled.notify(());
             if let Some(result) = self.result.take() {
                 PollResult::Finished(result)
             } else {

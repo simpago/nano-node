@@ -238,21 +238,27 @@ pub fn new_test_timestamp() -> SystemTime {
     UNIX_EPOCH + Duration::from_secs(1_000_000)
 }
 
+/// contains (done, Option<result>)
 #[derive(Clone)]
-pub struct OneShotNotification(Arc<(Mutex<bool>, Condvar)>);
+pub struct OneShotNotification<T>(Arc<(Mutex<(bool, Option<T>)>, Condvar)>);
 
-impl OneShotNotification {
+impl<T> OneShotNotification<T> {
     pub fn new() -> Self {
-        Self(Arc::new((Mutex::new(false), Condvar::new())))
+        Self(Arc::new((Mutex::new((false, None)), Condvar::new())))
     }
 
-    pub fn notify(&self) {
-        *self.0 .0.lock().unwrap() = true;
+    pub fn notify(&self, t: T) {
+        *self.0 .0.lock().unwrap() = (true, Some(t));
         self.0 .1.notify_one();
     }
 
-    pub fn wait(&self) {
+    pub fn cancel(&self) {
+        *self.0 .0.lock().unwrap() = (true, None);
+        self.0 .1.notify_one();
+    }
+
+    pub fn wait(&self) -> Option<T> {
         let guard = self.0 .0.lock().unwrap();
-        drop(self.0 .1.wait_while(guard, |i| !*i).unwrap())
+        self.0 .1.wait_while(guard, |i| !i.0).unwrap().1.take()
     }
 }
