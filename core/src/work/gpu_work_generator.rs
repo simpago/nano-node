@@ -33,7 +33,6 @@ impl WorkState {
                 let i = rand::rng().random_range(0..max_range);
                 let work_item = self.future_work.remove(i);
                 self.work_item = Some(work_item);
-                self.task_complete = Arc::new(AtomicBool::new(false));
                 cond_var.notify_all();
             }
         }
@@ -75,9 +74,10 @@ impl GpuWorkGenerator {
             let mut difficulty = 0u64;
             let mut consecutive_gpu_errors = 0;
             let mut consecutive_gpu_invalid_work_errors = 0;
-            let mut task_complete = work_state.0.lock().unwrap().task_complete.clone();
+            let mut attempts = 0;
+            let task_complete = work_state.0.lock().unwrap().task_complete.clone();
+            task_complete.store(true, Ordering::SeqCst);
             loop {
-                println!("loop");
                 if failed || task_complete.load(Ordering::Relaxed) {
                     println!("inside failed branch");
                     let mut state = work_state.0.lock().unwrap();
@@ -102,10 +102,12 @@ impl GpuWorkGenerator {
                     let work_item = state.work_item.as_ref().unwrap();
                     root = work_item.root;
                     difficulty = work_item.min_difficulty;
-                    task_complete = state.task_complete.clone();
                     if failed {
                         state.unsuccessful_workers -= 1;
                     }
+                    task_complete.store(false, Ordering::SeqCst);
+                    println!("Calling gpu.set_task");
+                    attempts = 0;
                     if let Err(err) = gpu.set_task(root.as_bytes(), difficulty) {
                         eprintln!(
                             "Failed to set GPU {}'s task, abandoning it for this work: {:?}",
@@ -119,6 +121,7 @@ impl GpuWorkGenerator {
                 }
 
                 let attempt = rand::rng().random();
+                attempts += 1;
                 let mut out = [0u8; 8];
                 match gpu.run(&mut out, attempt) {
                     Ok(true) => {
@@ -126,6 +129,7 @@ impl GpuWorkGenerator {
                         let work_valid =
                             DifficultyV1 {}.get_difficulty(&root, work.into()) >= difficulty;
                         if work_valid {
+                            println!("attempts taken: {attempts}");
                             let mut state = work_state.0.lock().unwrap();
                             if let Some(mut work_item) = state.work_item.take() {
                                 if root == work_item.root {
@@ -222,30 +226,19 @@ impl WorkGenerator for GpuWorkGenerator {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicI32;
-
-    use crate::work::WorkThresholds;
-
     use super::*;
 
     #[test]
     fn gpu_work() {
         let mut work_generator = GpuWorkGenerator::new();
         work_generator.start();
-        let t = AtomicI32::new(1);
-        let ticket = WorkTicket::new(&t);
-
-        work_generator.create(
-            &Root::from(123),
-            WorkThresholds::publish_full().threshold_base(),
-            &ticket,
-        );
-
         let min_difficulty = 0xfffffff800000000;
         let work_ticket = WorkTicket::never_expires();
 
-        let result = work_generator.create(&Root::from(123), min_difficulty, &work_ticket);
+        let root = Root::from(123);
+        let result = work_generator.create(&root, min_difficulty, &work_ticket);
 
-        println!("result is: {:?}", result);
+        let nonce = WorkNonce::from(result.unwrap_or_default());
+        println!("result is: {nonce} for root {root}");
     }
 }
