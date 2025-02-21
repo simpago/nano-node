@@ -15,7 +15,6 @@ use crate::{utils::OneShotNotification, Difficulty, DifficultyV1, Root, WorkNonc
 struct WorkState {
     work_item: Option<WorkItem>,
     task_complete: Arc<AtomicBool>,
-    unsuccessful_workers: usize,
     random_mode: bool,
     future_work: Vec<WorkItem>,
 }
@@ -49,7 +48,6 @@ pub struct GpuWorkGenerator {
     work_state: Arc<(Mutex<WorkState>, Condvar)>,
 }
 
-const N_WORKERS: usize = 1;
 const GPU_I: usize = 0;
 const PLATFORM_IDX: usize = 0;
 const DEVICE_IDX: usize = 0;
@@ -85,13 +83,10 @@ impl GpuWorkGenerator {
                         failed = false;
                     }
                     if failed {
-                        state.unsuccessful_workers += 1;
-                        if state.unsuccessful_workers == N_WORKERS {
-                            if let Some(mut work_item) = state.work_item.take() {
-                                if let Some(callback) = work_item.callback.take() {
-                                    callback(None);
-                                    state.set_task(&work_state.1);
-                                }
+                        if let Some(mut work_item) = state.work_item.take() {
+                            if let Some(callback) = work_item.callback.take() {
+                                callback(None);
+                                state.set_task(&work_state.1);
                             }
                         }
                         state = work_state.1.wait(state).unwrap();
@@ -102,9 +97,6 @@ impl GpuWorkGenerator {
                     let work_item = state.work_item.as_ref().unwrap();
                     root = work_item.root;
                     difficulty = work_item.min_difficulty;
-                    if failed {
-                        state.unsuccessful_workers -= 1;
-                    }
                     task_complete.store(false, Ordering::SeqCst);
                     println!("Calling gpu.set_task");
                     attempts = 0;
@@ -226,13 +218,15 @@ impl WorkGenerator for GpuWorkGenerator {
 
 #[cfg(test)]
 mod tests {
+    use crate::work::WorkThresholds;
+
     use super::*;
 
     #[test]
     fn gpu_work() {
         let mut work_generator = GpuWorkGenerator::new();
         work_generator.start();
-        let min_difficulty = 0xfffffff800000000;
+        let min_difficulty = WorkThresholds::publish_beta().threshold_base();
         let work_ticket = WorkTicket::never_expires();
 
         let root = Root::from(123);
